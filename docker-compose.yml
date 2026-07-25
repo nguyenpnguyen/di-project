@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: di
+      POSTGRES_PASSWORD: di
+      POSTGRES_DB: jobdi
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U di -d jobdi"]
+      interval: 5s
+      retries: 10
+
+  search:
+    image: opensearchproject/opensearch:2.13.0
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    ports: ["9200:9200"]
+
+  graph:                      # tuỳ chọn, chỉ chạy khi thêm --profile graph
+    profiles: ["graph"]
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/jobdi1234
+    ports: ["7474:7474", "7687:7687"]
+
+  api:
+    build: .
+    depends_on:
+      db: {condition: service_healthy}
+      search: {condition: service_started}
+    environment:
+      PG_DSN: postgresql://di:di@db:5432/jobdi
+      OS_URL: http://search:9200
+    ports: ["8000:8000"]
+    volumes: ["./:/srv"]
+    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  pgdata:

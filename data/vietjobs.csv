@@ -1,0 +1,6 @@
+id,url,job_title,company_name,location,employment_type,salary,experience,description,requirement,skills,posted_date
+vj001,https://example.vn/j/1,Backend Engineer,FPT Software,Hà Nội,Full-time,20 - 30 triệu,3 năm,"Phát triển dịch vụ backend cho hệ thống ngân hàng số","Thành thạo Java, Spring Boot, SQL; có kinh nghiệm Docker; giao tiếp tốt","Java,Spring,SQL,Docker,Teamwork",2026-06-01
+vj002,https://example.vn/j/2,Data Engineer,VNG,TP.HCM,Full-time,25 - 40 triệu,2 năm,"Xây dựng pipeline dữ liệu lớn","Python, Spark, Kafka, Airflow; tiếng Anh đọc hiểu tài liệu","Python,Spark,Kafka,Airflow,English",2026-06-03
+vj003,https://example.vn/j/3,Machine Learning Engineer,VinAI,Ha Noi,Full-time,Thoả thuận,1 năm,"Nghiên cứu mô hình thị giác máy tính","PyTorch hoặc TensorFlow, Python; kỹ năng thuyết trình","Python,PyTorch,Presentation",2026-06-05
+vj004,https://example.vn/j/4,Backend Developer,FPT Software,HN,Full-time,20 - 32 triệu,3 năm,"Phát triển dịch vụ backend ngân hàng","Java, Spring, PostgreSQL, k8s; làm việc nhóm","Java,Spring,SQL,Kubernetes,Teamwork",2026-06-02
+vj005,https://example.vn/j/5,Frontend Engineer,Momo,Sai Gon,Full-time,18 - 28 triệu,2 năm,"Xây dựng giao diện ví điện tử","ReactJS, JS ES6; quản lý thời gian tốt","React,JavaScript,Time Management",2026-06-06

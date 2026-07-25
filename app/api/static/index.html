@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bảng điều khiển tích hợp việc làm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F6F4FF; --card:#FFFFFF; --line:#EBE7F8;
+  --text:#2E2A45; --muted:#7E799B;
+  --violet:#A78BFA; --sky:#7DD3FC; --mint:#6EE7B7; --peach:#FDBA74; --rose:#FDA4AF;
+  --grad:linear-gradient(120deg,#A78BFA 0%,#7DD3FC 100%);
+  --grad-soft:linear-gradient(120deg,#EDE9FE 0%,#E0F2FE 60%,#D1FAE5 100%);
+  --r:18px; --shadow:0 1px 2px rgba(46,42,69,.04), 0 8px 24px rgba(126,121,155,.08);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:Outfit;margin:0;letter-spacing:-.01em}
+h1{font-size:22px;font-weight:700} h2{font-size:17px;font-weight:600} h3{font-size:15px;font-weight:600}
+.mono,code,td.mono,th{font-family:"JetBrains Mono",monospace;font-size:12.5px}
+a{color:#7C5CE0}
+
+/* ---------- khung ---------- */
+.shell{display:flex;min-height:100vh;flex-wrap:wrap}
+aside{width:236px;flex:0 0 236px;padding:22px 16px;background:var(--card);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:22px}
+.brand{display:flex;gap:11px;align-items:center}
+.mark{width:38px;height:38px;border-radius:12px;background:var(--grad);flex:none;position:relative}
+.mark::after{content:"";position:absolute;inset:11px;border-radius:5px;background:rgba(255,255,255,.85)}
+.brand small{display:block;color:var(--muted);font-size:11.5px;line-height:1.35}
+nav{display:flex;flex-direction:column;gap:3px}
+nav button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;padding:10px 12px;border-radius:11px;color:var(--muted);font:500 14px Inter;cursor:pointer;transition:background .18s,color .18s}
+nav button:hover{background:var(--bg);color:var(--text)}
+nav button[aria-selected=true]{background:var(--grad-soft);color:#4B3F8C;font-weight:600}
+nav button .dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.5;flex:none}
+main{flex:1;min-width:0;padding:26px clamp(16px,3vw,34px) 60px}
+.topbar{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+.topbar p{margin:4px 0 0;color:var(--muted);font-size:13.5px;max-width:60ch}
+
+/* ---------- thẻ ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px;box-shadow:var(--shadow);margin-bottom:16px}
+.card>h2{margin-bottom:4px}
+.card>.hint{color:var(--muted);font-size:13px;margin:0 0 14px}
+
+/* ---------- dải pipeline ---------- */
+.flow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+.step{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.step::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--grad)}
+.step:nth-child(2)::before{background:linear-gradient(180deg,#7DD3FC,#6EE7B7)}
+.step:nth-child(3)::before{background:linear-gradient(180deg,#6EE7B7,#FDE68A)}
+.step:nth-child(4)::before{background:linear-gradient(180deg,#FDE68A,#FDBA74)}
+.step:nth-child(5)::before{background:linear-gradient(180deg,#FDBA74,#FDA4AF)}
+.step:nth-child(6)::before{background:linear-gradient(180deg,#FDA4AF,#A78BFA)}
+.step .k{color:var(--muted);font-size:11.5px;font-weight:500}
+.step .v{font-family:Outfit;font-size:27px;font-weight:700;line-height:1.15}
+
+/* ---------- điều khiển ---------- */
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input,select,textarea{background:#FBFAFF;border:1px solid var(--line);color:var(--text);padding:10px 13px;border-radius:12px;font:14px Inter;transition:border-color .18s,box-shadow .18s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--violet);box-shadow:0 0 0 4px rgba(167,139,250,.16)}
+input:focus-visible,button:focus-visible{outline:2px solid #7C5CE0;outline-offset:2px}
+button{font-family:Inter}
+.btn{background:var(--grad);color:#fff;border:0;padding:10px 18px;border-radius:12px;font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 4px 14px rgba(124,92,224,.25);transition:transform .15s,box-shadow .15s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 7px 20px rgba(124,92,224,.3)}
+.btn:disabled{opacity:.6;transform:none;cursor:progress}
+.btn.ghost{background:#fff;color:#5B4FA8;border:1px solid var(--line);box-shadow:none}
+.btn.ghost:hover{background:var(--grad-soft)}
+.btn.sm{padding:6px 12px;font-size:12.5px;border-radius:9px}
+
+/* ---------- nhãn kỹ năng ---------- */
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;font-size:12.5px;font-weight:500;margin:2px 4px 2px 0;border:1px solid transparent;cursor:pointer}
+.chip.hard{background:#EDE9FE;color:#5B3FC4;border-color:#DDD6FE}
+.chip.soft{background:#FFF1E6;color:#B4622A;border-color:#FDE1CC}
+.chip.plain{background:#F1F5F9;color:#51607A;border-color:#E2E8F0}
+.chip.src{background:#E0F2FE;color:#1E6C99;border-color:#CDE9FA}
+
+/* ---------- bảng ---------- */
+.tw{overflow-x:auto;margin:0 -4px}
+table{width:100%;border-collapse:separate;border-spacing:0}
+th{text-align:left;color:var(--muted);font:600 11.5px Inter;text-transform:uppercase;letter-spacing:.07em;padding:9px 12px;white-space:nowrap}
+td{padding:11px 12px;border-top:1px solid var(--line);vertical-align:top;font-size:13.5px}
+tbody tr:hover td{background:#FBFAFF}
+.pill{padding:2px 10px;border-radius:999px;font-size:11.5px;font-weight:600;display:inline-block}
+.pill.ok{background:#D1FAE5;color:#0F766E} .pill.warn{background:#FEF3C7;color:#92400E}
+.pill.bad{background:#FFE4E6;color:#9F1239} .pill.idle{background:#EEF2F7;color:#64748B}
+.empty{padding:30px 6px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--text);font-family:Outfit;margin-bottom:4px}
+.bar{height:6px;border-radius:99px;background:#EEF2F7;overflow:hidden;min-width:70px}
+.bar i{display:block;height:100%;background:var(--grad)}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+@media (max-width:820px){
+  aside{width:100%;flex:1 1 100%;border-right:0;border-bottom:1px solid var(--line);flex-direction:column}
+  nav{flex-direction:row;overflow-x:auto;padding-bottom:4px}
+  nav button{white-space:nowrap}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside>
+  <div class="brand">
+    <div class="mark"></div>
+    <div><strong style="font-family:Outfit;font-size:15px">Job Skill Hub</strong>
+      <small>Tích hợp tin tuyển dụng<br>theo kỹ năng</small></div>
+  </div>
+  <nav id="tabs">
+    <button data-t="search" aria-selected="true"><span class="dot"></span>Tìm theo kỹ năng</button>
+    <button data-t="tree"><span class="dot"></span>Cây kỹ năng</button>
+    <button data-t="sources"><span class="dot"></span>Nguồn dữ liệu</button>
+    <button data-t="schema"><span class="dot"></span>Cấu trúc &amp; ánh xạ</button>
+    <button data-t="ontology"><span class="dot"></span>Từ điển kỹ năng</button>
+    <button data-t="review"><span class="dot"></span>Duyệt khớp</button>
+    <button data-t="runs"><span class="dot"></span>Lịch sử nạp</button>
+  </nav>
+  <div style="margin-top:auto">
+    <button class="btn ghost" style="width:100%" onclick="refresh()">Làm mới số liệu</button>
+  </div>
+</aside>
+
+<main>
+  <div class="topbar">
+    <div>
+      <h1 id="title">Tìm theo kỹ năng</h1>
+      <p id="sub">Kết quả đã gộp trùng liên nguồn và chuẩn hoá theo ontology ESCO.</p>
+    </div>
+    <div class="row" id="quickActions"></div>
+  </div>
+
+  <div class="flow" id="flow"></div>
+
+  <section id="p-search">
+    <div class="card">
+      <div class="row">
+        <input id="q" placeholder="Python, Docker, Leadership" style="flex:1 1 240px">
+        <select id="mode"><option value="any">Có bất kỳ kỹ năng nào</option><option value="all">Có đủ mọi kỹ năng</option></select>
+        <select id="expand"><option value="true">Gồm cả kỹ năng con</option><option value="false">Đúng kỹ năng đã nhập</option></select>
+        <button class="btn" onclick="doSearch()">Tìm việc</button>
+      </div>
+      <div id="facets" style="margin-top:14px"></div>
+    </div>
+    <div id="results"></div>
+  </section>
+
+  <section id="p-tree" hidden><div class="card"><h2>Cây kỹ năng</h2>
+    <p class="hint">Bấm một kỹ năng để tìm việc theo kỹ năng đó. Kỹ năng cứng nền tím, kỹ năng mềm nền cam.</p>
+    <div id="tree"></div></div></section>
+
+  <section id="p-sources" hidden>
+    <div class="card"><h2>Thêm hoặc sửa nguồn</h2>
+      <p class="hint">Lịch chạy dùng cú pháp cron. Độ tin cậy quyết định giá trị của nguồn nào được giữ khi hai nguồn mâu thuẫn.</p>
+      <div class="row">
+        <input id="s_name" placeholder="tên nguồn, vd itviec" style="flex:1 1 150px">
+        <select id="s_kind"><option value="crawler">crawler</option><option value="dataset">dataset</option><option value="ontology">ontology</option></select>
+        <input id="s_url" placeholder="https://…" style="flex:1 1 180px">
+        <input id="s_cron" placeholder="0 2 * * *" style="flex:0 1 130px">
+        <input id="s_trust" type="number" step="0.05" min="0" max="1" value="0.7" style="flex:0 1 90px" title="độ tin cậy">
+        <button class="btn" onclick="saveSource()">Lưu nguồn</button>
+      </div>
+    </div>
+    <div class="card"><h2>Ngân sách cho lần nạp</h2>
+      <p class="hint">Không bao giờ lấy hết một lượt. Mỗi lần chạy chỉ đi trong ngân sách này, gặp tin đã có hoặc tin quá cũ là dừng sớm; nếu nguồn chặn thì phần đã lấy vẫn được giữ và lần sau chạy tiếp từ trang dừng.</p>
+      <div class="row">
+        <label class="mono" style="color:var(--muted)">Số tin tối đa</label>
+        <input id="g_limit" type="number" min="10" max="1000" step="10" value="100" style="flex:0 1 110px">
+        <label class="mono" style="color:var(--muted)">Chỉ tin trong</label>
+        <select id="g_days"><option value="">không giới hạn ngày</option><option value="1">1 ngày qua</option>
+          <option value="7" selected>7 ngày qua</option><option value="30">30 ngày qua</option></select>
+        <label class="row" style="gap:6px"><input type="checkbox" id="g_new" checked style="width:16px;height:16px">
+          <span style="font-size:13.5px">Bỏ qua tin đã có</span></label>
+      </div>
+    </div>
+    <div class="card"><h2>Nguồn đang có</h2><div id="sources"></div></div>
+    <div class="card"><h2>Lịch chạy tự động</h2>
+      <p class="hint">Bộ lập lịch chạy sẵn trong tiến trình API, đọc trực tiếp từ cấu hình cron ở trên.</p>
+      <div id="schedule"></div></div>
+  </section>
+
+  <section id="p-schema" hidden>
+    <div class="card"><h2>Ánh xạ trường đang hiệu lực</h2>
+      <p class="hint">Mỗi lần nạp, bản ánh xạ cũ được đóng theo thời gian nên luôn truy vết được lược đồ từng dùng ở thời điểm nào.</p>
+      <div id="mappings"></div></div>
+    <div class="card"><h2>Gợi ý ánh xạ tự động</h2>
+      <p class="hint">Hệ thống chấm điểm dựa trên tên trường, mẫu giá trị và hình dạng dữ liệu, rồi so với ánh xạ đang khai báo.</p>
+      <div class="row"><select id="sm_src"></select><button class="btn ghost" onclick="loadSuggest()">Phân tích nguồn</button></div>
+      <div id="suggest" style="margin-top:14px"></div></div>
+    <div class="card"><h2>Hồ sơ dữ liệu của trường</h2>
+      <p class="hint">Thống kê thu được ở lần nạp gần nhất: số giá trị, độ dài trung bình, tỉ lệ số, mẫu giá trị.</p>
+      <div id="profile"></div></div>
+  </section>
+
+  <section id="p-ontology" hidden>
+    <div class="card"><h2>Thêm khái niệm kỹ năng</h2>
+      <p class="hint">Dùng khi ESCO thiếu một kỹ năng đặc thù thị trường Việt Nam, hoặc cần thêm cách viết khác.</p>
+      <div class="row">
+        <input id="k_label" placeholder="Tên chuẩn, vd Flutter" style="flex:1 1 160px">
+        <select id="k_type"><option value="hard">kỹ năng cứng</option><option value="soft">kỹ năng mềm</option></select>
+        <input id="k_parent" placeholder="Kỹ năng cha, vd Programming" style="flex:1 1 160px">
+        <input id="k_alias" placeholder="cách gọi khác, cách nhau bởi dấu phẩy" style="flex:2 1 220px">
+        <button class="btn" onclick="addSkill()">Thêm vào từ điển</button>
+      </div>
+    </div>
+    <div class="card"><h2>Từ điển hiện tại</h2><div id="ontoList"></div></div>
+  </section>
+
+  <section id="p-review" hidden>
+    <div class="card"><h2>Cặp khớp cần người quyết</h2>
+      <p class="hint">Điểm nằm giữa hai ngưỡng nên hệ thống không tự gộp. Duyệt xong, quyết định được lưu lại kèm thời điểm.</p>
+      <div id="reviews"></div></div>
+    <div class="card"><h2>Xung đột giá trị giữa các nguồn</h2>
+      <p class="hint">Giá trị được chọn theo chiến lược ghi ở cột cuối, không ghi đè âm thầm.</p>
+      <div id="conflicts"></div></div>
+  </section>
+
+  <section id="p-runs" hidden>
+    <div class="card"><h2>Các lần nạp</h2><div id="runs"></div></div>
+    <div class="card"><h2>Nhật ký thay đổi</h2><div id="changes"></div></div>
+  </section>
+</main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = (u,o) => fetch(u,o).then(r => r.json());
+const post = (u,b) => api(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});
+const esc = s => String(s ?? '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+const dt = s => esc(String(s||'').replace('T',' ').slice(0,16));
+const empty = (t,h) => `<div class="empty"><b>${t}</b>${h||''}</div>`;
+
+const TABS = {
+  search:['Tìm theo kỹ năng','Kết quả đã gộp trùng liên nguồn và chuẩn hoá theo ontology ESCO.'],
+  tree:['Cây kỹ năng','Quan hệ tổng quát – cụ thể lấy từ ESCO, bổ sung bằng từ điển nội bộ.'],
+  sources:['Nguồn dữ liệu','Bật tắt, đặt lịch nạp và chấm độ tin cậy cho từng nguồn.'],
+  schema:['Cấu trúc & ánh xạ','Lược đồ mỗi nguồn được ánh xạ về lược đồ thống nhất, có phiên bản theo thời gian.'],
+  ontology:['Từ điển kỹ năng','Khái niệm, cách gọi khác và quan hệ cha con dùng cho chuẩn hoá kỹ năng.'],
+  review:['Duyệt khớp','Những quyết định máy không đủ chắc chắn sẽ chuyển cho người.'],
+  runs:['Lịch sử nạp','Mỗi lần nạp ghi lại số tin đọc vào, tin mới, tin gộp và mọi thay đổi.']
+};
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#tabs button').forEach(x => x.setAttribute('aria-selected', x===b));
+  Object.keys(TABS).forEach(t => $('#p-'+t).hidden = (t !== b.dataset.t));
+  $('#title').textContent = TABS[b.dataset.t][0]; $('#sub').textContent = TABS[b.dataset.t][1];
+  ({tree:loadTree,sources:loadSources,schema:loadSchema,ontology:loadOnto,review:loadReview,runs:loadRuns}[b.dataset.t]||(()=>{}))();
+});
+
+async function refresh(){
+  const q = await api('/api/admin/quality');
+  const cov = q.jobs ? Math.round(100*q.jobs_with_skill/q.jobs) : 0;
+  const steps = [['Tin sau tích hợp',q.jobs],['Tin có kỹ năng',`${q.jobs_with_skill} · ${cov}%`],
+    ['Khái niệm kỹ năng',q.skills],['Liên kết job–skill',q.skill_links],
+    ['Khớp gần đúng',q.fuzzy_matches],['Tin từ nhiều nguồn',q.multi_source_jobs]];
+  $('#flow').innerHTML = steps.map(([k,v]) => `<div class="step"><div class="k">${k}</div><div class="v">${v ?? 0}</div></div>`).join('');
+}
+
+/* ---------- tìm kiếm ---------- */
+async function doSearch(){
+  const p = new URLSearchParams({mode:$('#mode').value, expand:$('#expand').value});
+  $('#q').value.split(',').map(s=>s.trim()).filter(Boolean).forEach(s => p.append('skill', s));
+  const d = await api('/api/search?'+p);
+  $('#facets').innerHTML = (d.facets?.top_skills||[]).map(b =>
+    `<span class="chip plain" onclick="$('#q').value='${esc(b.key)}';doSearch()">${esc(b.key)} · ${b.doc_count}</span>`).join('');
+  $('#results').innerHTML = !d.total ? `<div class="card">${empty('Chưa có tin nào khớp','Thử bớt kỹ năng, hoặc bật “Gồm cả kỹ năng con”.')}</div>` :
+    `<div class="card"><h2>${d.total} tin phù hợp</h2><div class="tw"><table>
+      <thead><tr><th>Vị trí</th><th>Công ty</th><th>Nơi làm</th><th>Kỹ năng</th><th>Nguồn</th></tr></thead><tbody>` +
+    d.items.map(j => `<tr><td><strong>${esc(j.title)}</strong></td><td>${esc(j.company)}</td><td>${esc(j.location)}</td>
+      <td>${(j.hard_skills||[]).map(s=>`<span class="chip hard">${esc(s)}</span>`).join('')}
+          ${(j.soft_skills||[]).map(s=>`<span class="chip soft">${esc(s)}</span>`).join('')}</td>
+      <td>${(j.sources||[]).map(s=>`<span class="chip src">${esc(s)}</span>`).join('')}
+        <a class="mono" href="/api/job/${j.job_id}/provenance" target="_blank">nguồn gốc</a></td></tr>`).join('') +
+    '</tbody></table></div></div>';
+}
+
+/* ---------- cây kỹ năng ---------- */
+async function loadTree(){
+  const rows = await api('/api/skills'), by = {};
+  rows.forEach(r => (by[r.parent || 'Nhóm gốc'] ||= []).push(r));
+  $('#tree').innerHTML = Object.entries(by).map(([p,ch]) =>
+    `<div style="margin-bottom:14px"><h3 style="margin-bottom:6px">${esc(p)}</h3>` +
+    ch.map(c => `<span class="chip ${c.skill_type}" onclick="pick('${esc(c.pref_label)}')">${esc(c.pref_label)}</span>`).join('') +
+    '</div>').join('') || empty('Từ điển kỹ năng đang trống','Nạp ontology ở tab Nguồn dữ liệu.');
+}
+function pick(s){ $('#q').value = s; document.querySelector('[data-t=search]').click(); doSearch(); }
+
+/* ---------- nguồn ---------- */
+async function loadSources(){
+  const rows = await api('/api/admin/sources');
+  $('#sources').innerHTML = `<div class="tw"><table><thead><tr><th>Nguồn</th><th>Kiểu</th><th>Lịch</th><th>Tin cậy</th>
+    <th>Bản ghi thô</th><th>Lần nạp gần nhất</th><th></th></tr></thead><tbody>` +
+    rows.map(s => `<tr>
+      <td><strong>${esc(s.name)}</strong>${s.enabled?'':' <span class="pill idle">đã tắt</span>'}<br>
+        <span class="mono" style="color:var(--muted)">${esc(s.base_url||'')}</span></td>
+      <td><span class="chip plain">${esc(s.kind)}</span></td><td class="mono">${esc(s.schedule_cron||'—')}</td>
+      <td><div class="bar"><i style="width:${(s.trust_score||0)*100}%"></i></div></td>
+      <td>${s.raw_rows}</td>
+      <td><span class="pill ${s.last_status==='success'?'ok':(s.last_status==='partial'?'warn':(s.last_status?'bad':'idle'))}">${esc(s.last_status||'chưa chạy')}</span>
+        ${s.cursor_state && s.cursor_state.blocked_until ? '<span class="pill bad">bị chặn tới '+dt(s.cursor_state.blocked_until)+'</span>' : ''}<br>
+        ${s.cursor_state && s.cursor_state.next_page ? '<span class="mono" style="color:var(--muted)">trang kế: '+s.cursor_state.next_page+'</span><br>' : ''}
+        <span class="mono" style="color:var(--muted)">${dt(s.last_run_at)}</span></td>
+      <td class="row" style="gap:6px">
+        <button class="btn sm" onclick="ingest('${esc(s.name)}',this)">Nạp dữ liệu mới</button>
+        <button class="btn sm ghost" onclick="api('/api/admin/source/${esc(s.name)}',{method:'DELETE'}).then(loadSources)">Tắt</button>
+      </td></tr>`).join('') + '</tbody></table></div>' +
+    `<div class="row" style="margin-top:14px">
+      <button class="btn ghost" onclick="post('/api/admin/ontology').then(()=>{refresh();alert('Đã nạp lại ontology')})">Nạp lại ontology</button>
+      <button class="btn ghost" onclick="post('/api/admin/reindex').then(()=>{refresh();alert('Đã đánh lại chỉ mục')})">Đánh lại chỉ mục</button></div>`;
+  $('#schedule').innerHTML = (await api('/api/admin/schedule')).map(j =>
+    `<span class="chip plain">${esc(j.source)} → ${dt(j.next_run)}</span>`).join('') ||
+    empty('Chưa có nguồn nào đặt lịch','Điền cron vào ô Lịch rồi lưu nguồn.');
+  $('#sm_src').innerHTML = rows.map(s => `<option>${esc(s.name)}</option>`).join('');
+}
+async function ingest(n, btn){
+  const p = new URLSearchParams({limit:$('#g_limit').value||100, only_new:$('#g_new').checked});
+  if($('#g_days').value) p.set('days', $('#g_days').value);
+  btn.disabled = true; btn.textContent = 'Đang nạp…';
+  const r = await post(`/api/admin/ingest/${n}?${p}`);
+  btn.disabled = false;
+  if(r.error){ btn.textContent = 'Chưa có wrapper'; return; }
+  if(r.status === 'hoãn'){ btn.textContent = 'Đang bị chặn'; alert(r.note); return; }
+  btn.textContent = `+${r.new} mới · ${r.merged} gộp · ${r.skipped} không đổi`;
+  if(r.stop_reason) btn.title = 'Dừng vì: ' + r.stop_reason;
+  if(r.status === 'partial') alert('Nguồn chặn giữa chừng. Phần đã lấy vẫn được lưu, lần sau sẽ chạy tiếp từ trang dừng.\n' + (r.stop_reason||''));
+  refresh(); loadSources();
+}
+async function saveSource(){
+  await post('/api/admin/source', {name:$('#s_name').value.trim(), kind:$('#s_kind').value,
+    base_url:$('#s_url').value.trim()||null, schedule_cron:$('#s_cron').value.trim()||null,
+    trust_score:parseFloat($('#s_trust').value)});
+  loadSources();
+}
+
+/* ---------- cấu trúc & ánh xạ ---------- */
+async function loadSchema(){
+  const m = await api('/api/admin/mappings');
+  $('#mappings').innerHTML = `<div class="tw"><table><thead><tr><th>Nguồn</th><th>Trường ở nguồn</th><th>Trường thống nhất</th>
+    <th>Hàm chuẩn hoá</th><th>Hiệu lực từ</th></tr></thead><tbody>` +
+    m.map(r => `<tr><td>${esc(r.source)}</td><td class="mono">${esc(r.source_field)}</td>
+      <td><span class="chip hard">${esc(r.global_field)}</span></td><td class="mono">${esc(r.transform)}</td>
+      <td class="mono">${dt(r.valid_from)}</td></tr>`).join('') + '</tbody></table></div>';
+  if(!$('#sm_src').innerHTML){
+    const rows = await api('/api/admin/sources');
+    $('#sm_src').innerHTML = rows.map(s => `<option>${esc(s.name)}</option>`).join('');
+  }
+}
+async function loadSuggest(){
+  const name = $('#sm_src').value;
+  const d = await api('/api/admin/schema/suggest/'+name);
+  $('#suggest').innerHTML = d.error ? empty('Chưa phân tích được', esc(d.error)) :
+    `<div class="tw"><table><thead><tr><th>Trường ở nguồn</th><th>Gợi ý</th><th>Điểm</th><th>Đang khai báo</th><th>Mẫu giá trị</th><th></th></tr></thead><tbody>` +
+    d.map(r => `<tr><td class="mono">${esc(r.source_field)}</td>
+      <td><span class="chip hard">${esc(r.global_field)}</span></td>
+      <td><div class="bar" style="width:70px"><i style="width:${Math.round(r.score*100)}%"></i></div><span class="mono">${r.score}</span></td>
+      <td>${r.declared ? `<span class="pill ${r.agrees?'ok':'warn'}">${esc(r.declared)}</span>` : '<span class="pill idle">chưa có</span>'}</td>
+      <td class="mono" style="max-width:260px;overflow:hidden;text-overflow:ellipsis">${esc((r.samples||[]).join(' | ').slice(0,90))}</td>
+      <td><button class="btn sm ghost" onclick="applyMap('${esc(name)}','${esc(r.source_field)}','${esc(r.global_field)}')">Áp dụng</button></td>
+      </tr>`).join('') + '</tbody></table></div>';
+  const prof = await api('/api/admin/schema/profile/'+name);
+  $('#profile').innerHTML = prof.length ? `<div class="tw"><table><thead><tr><th>Trường</th><th>Số giá trị</th><th>Giá trị khác nhau</th>
+    <th>Độ dài TB</th><th>Tỉ lệ số</th><th>Mẫu</th></tr></thead><tbody>` +
+    prof.map(p => `<tr><td class="mono">${esc(p.field)}</td><td>${p.n_values}</td><td>${p.n_distinct}</td>
+      <td>${p.avg_len}</td><td>${Math.round(p.pct_numeric*100)}%</td>
+      <td class="mono" style="max-width:280px">${esc((p.samples||[]).join(' | ').slice(0,100))}</td></tr>`).join('') +
+    '</tbody></table></div>' : empty('Chưa có hồ sơ dữ liệu','Nạp nguồn này một lần để hệ thống thu thập thống kê.');
+}
+async function applyMap(source, sf, gf){
+  await post('/api/admin/mapping', {source, source_field:sf, global_field:gf, transform:'text'});
+  loadSchema(); alert('Đã ghi ánh xạ mới, bản cũ được lưu lại theo thời gian.');
+}
+
+/* ---------- ontology ---------- */
+async function loadOnto(){
+  const rows = await api('/api/skills');
+  $('#ontoList').innerHTML = `<div class="tw"><table><thead><tr><th>Kỹ năng</th><th>Loại</th><th>Cha</th><th></th></tr></thead><tbody>` +
+    rows.map(r => `<tr><td><strong>${esc(r.pref_label)}</strong></td>
+      <td><span class="chip ${r.skill_type}">${r.skill_type==='soft'?'mềm':'cứng'}</span></td>
+      <td>${esc(r.parent||'—')}</td>
+      <td><button class="btn sm ghost" onclick="api('/api/admin/skill/${r.skill_id}',{method:'DELETE'}).then(loadOnto)">Xoá</button></td>
+      </tr>`).join('') + '</tbody></table></div>';
+}
+async function addSkill(){
+  await post('/api/admin/skill', {label:$('#k_label').value.trim(), skill_type:$('#k_type').value,
+    parent:$('#k_parent').value.trim()||null,
+    aliases:$('#k_alias').value.split(',').map(s=>s.trim()).filter(Boolean)});
+  $('#k_label').value=$('#k_alias').value=''; loadOnto(); refresh();
+}
+
+/* ---------- duyệt khớp ---------- */
+async function loadReview(){
+  const rs = await api('/api/admin/reviews');
+  $('#reviews').innerHTML = rs.length ? `<div class="tw"><table><thead><tr><th>Loại</th><th>Bên trái</th><th>Bên phải</th>
+    <th>Điểm</th><th>Căn cứ</th><th></th></tr></thead><tbody>` +
+    rs.map(r => `<tr><td><span class="chip plain">${esc(r.kind)}</span></td><td class="mono">${esc(r.left_ref)}</td>
+      <td class="mono">${esc(r.right_ref)}</td>
+      <td><div class="bar" style="width:70px"><i style="width:${Math.round(r.score*100)}%"></i></div><span class="mono">${r.score}</span></td>
+      <td class="mono">${esc(JSON.stringify(r.evidence))}</td>
+      <td class="row" style="gap:6px"><button class="btn sm" onclick="decide(${r.review_id},'accepted')">Đúng</button>
+      <button class="btn sm ghost" onclick="decide(${r.review_id},'rejected')">Sai</button></td></tr>`).join('') +
+    '</tbody></table></div>' : empty('Không còn cặp nào chờ duyệt','Máy đã tự quyết được toàn bộ ở lần nạp gần nhất.');
+  const cf = await api('/api/admin/conflicts');
+  $('#conflicts').innerHTML = cf.length ? `<div class="tw"><table><thead><tr><th>Tin</th><th>Trường</th><th>Các giá trị</th>
+    <th>Đã chọn</th><th>Chiến lược</th></tr></thead><tbody>` +
+    cf.map(c => `<tr><td>${esc(c.title)}</td><td class="mono">${esc(c.field)}</td>
+      <td class="mono">${esc(JSON.stringify(c.values_by_source).slice(0,120))}</td>
+      <td class="mono">${esc(String(c.resolved).slice(0,60))}</td>
+      <td><span class="chip plain">${esc(c.strategy)}</span></td></tr>`).join('') +
+    '</tbody></table></div>' : empty('Chưa ghi nhận xung đột','Các nguồn hiện đang khớp nhau về giá trị.');
+}
+async function decide(id, status){ await post('/api/admin/review/'+id, {status}); loadReview(); }
+
+/* ---------- lịch sử ---------- */
+async function loadRuns(){
+  const runs = await api('/api/admin/runs'), ch = await api('/api/admin/changes');
+  $('#runs').innerHTML = `<div class="tw"><table><thead><tr><th>#</th><th>Nguồn</th><th>Đọc vào</th><th>Mới</th>
+    <th>Đổi/gộp</th><th>Trạng thái</th><th>Kết thúc</th></tr></thead><tbody>` +
+    runs.map(r => `<tr><td class="mono">${r.run_id}</td><td>${esc(r.source)}</td><td>${r.rows_in}</td>
+      <td>${r.rows_new}</td><td>${r.rows_changed}</td>
+      <td><span class="pill ${r.status==='success'?'ok':'warn'}">${esc(r.status)}</span></td>
+      <td class="mono">${dt(r.finished_at)||'đang chạy'}</td></tr>`).join('') + '</tbody></table></div>';
+  $('#changes').innerHTML = `<div class="tw"><table><thead><tr><th>Thời điểm</th><th>Đối tượng</th><th>Loại</th><th>Chi tiết</th></tr></thead><tbody>` +
+    ch.map(c => `<tr><td class="mono">${dt(c.changed_at)}</td><td>${esc(c.entity)} #${esc(c.entity_id)}</td>
+      <td><span class="pill ${c.change_type==='insert'?'ok':(c.change_type==='merge'?'warn':'idle')}">${esc(c.change_type)}</span></td>
+      <td class="mono">${esc(JSON.stringify(c.diff))}</td></tr>`).join('') + '</tbody></table></div>';
+}
+
+refresh(); doSearch();
+</script>
+</body>
+</html>

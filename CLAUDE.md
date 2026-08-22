@@ -24,19 +24,44 @@ Ba tầng tách rời, tải và parse không ràng buộc nhau:
 | `read_raw.py` | mở kho thô: thống kê, tìm, soát thiếu, xuất danh sách link |
 | `crawl_hust.py` | wrapper có parse: bóc bài ra 17 trường JSONL/CSV |
 
+## Đang làm tới đâu (cập nhật 22/08/2026)
+
+Chia **hai việc rời nhau**:
+
+| | Việc | Trạng thái |
+|---|---|---|
+| 1 | Lấy danh sách link | **XONG** — 14.597 link, 52 host, trong `data/raw/N1-links` |
+| 2 | Tải nội dung bài | **còn 4.216 bài** trong hàng đợi, ~3 giờ |
+
+Kho hiện có 2.070 trang / 201 MB HTML thô, 5.640 bài đã phát hiện.
+
 ```bash
 cd hust-crawler
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
-.venv/bin/python crawl_all.py --resume                  # crawl tiếp
-.venv/bin/python crawl_all.py --resume --only listing   # chỉ chốt danh mục url
-.venv/bin/python read_raw.py --stats                    # kho có gì
-.venv/bin/python read_raw.py --audit                    # chuyên mục nào còn thiếu trang
-.venv/bin/python read_raw.py --links                    # xuất danh sách link
+# xem đang ở đâu
+.venv/bin/python read_raw.py --stats
+.venv/bin/python read_raw.py --audit
+
+# VIỆC 2: tải nốt nội dung bài
+.venv/bin/python crawl_all.py --resume --prefer article
+
+# sau mỗi mẻ dài: soát rồi cập nhật danh sách link
+.venv/bin/python read_raw.py --fix-roots     # chuyên mục rơi khỏi hàng đợi?
+.venv/bin/python read_raw.py --audit         # chuyên mục tải thiếu trang?
+.venv/bin/python read_raw.py --check         # kho lệch state?
+.venv/bin/python read_raw.py --links         # xuất lại N1-links
+.venv/bin/python read_raw.py --verify-links  # soát độc lập file link
+
+# lấy link của một subdomain (danh sách ở data/raw/subdomains.txt)
+.venv/bin/python crawl_all.py --site bulletin.hust.edu.vn --only listing
 ```
 
 Dữ liệu ở `hust-crawler/data/` — **gitignored**, đừng commit (kho HTML thô hàng
-trăm MB). Sinh lại được bằng `--resume`.
+trăm MB). Mỗi site một kho riêng `data/raw-<host>`. Sinh lại được bằng `--resume`.
+
+`N1-links` cố ý **không có đuôi file** — người dùng đặt tên vậy. `--links` tìm
+file `*links*` không đuôi trong `data/raw` mà ghi đè, đừng đẻ file mới bên cạnh.
 
 ## Ràng buộc phải nhớ khi sửa crawler
 
@@ -56,6 +81,17 @@ ghi (đo được: 301/301 dòng cứu được khi flush từng dòng, 0 khi kh
 (gồm `/vi/news/tin-tuc-su-kien/` 295 trang và cả phần tiếng Anh) do một lần
 `--seed-file` xoá frontier. Sau mỗi mẻ dài chạy `read_raw.py --fix-roots` và
 `--audit` để soát.
+
+**Danh sách link chỉ lấy `href`, không lấy `src`.** Gộp `src` vào thì ảnh nhúng
+`/uploads/` làm file phình từ 14k lên 24k dòng mà chẳng thêm link nào đi tới được.
+
+**Mọi nguồn url phải đi qua `crawl_all.norm()`.** `--links` và `--verify-links`
+mà chuẩn hoá khác nhau thì báo lệch giả — từng thấy "thiếu 17 link" chỉ vì một
+bên giữ `http://` còn bên kia đổi sang `https://`.
+
+**Crawler chỉ đi trong MỘT host.** Nên link subdomain không bao giờ vào hàng đợi
+của nó; muốn có thì phải bóc lại `href` từ HTML đã lưu (`--subdomains`,
+`--links`) hoặc crawl riêng subdomain đó bằng `--site`.
 
 ## Vận hành
 

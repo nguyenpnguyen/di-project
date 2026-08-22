@@ -71,6 +71,13 @@ def load_crawler():
     return mod
 
 
+def link_file(d: pathlib.Path):
+    """Tìm file danh sách link đang dùng. File này cố ý KHÔNG có đuôi, nên loại
+    hết .txt để không nhầm sang links_missing.txt hay assets.txt."""
+    cand = [x for x in sorted(d.glob("*links*")) if x.is_file() and not x.suffix]
+    return cand[0] if cand else None
+
+
 def hrefs_in(html: str, with_src=False):
     """Link trong trang.
 
@@ -239,8 +246,7 @@ def main():
         # rồi đối chiếu với file link. Nếu hai bên khớp thì file link đã đủ so với
         # những gì crawler thật sự nhìn thấy; lệch chỗ nào là chỗ đó bị bỏ sót.
         ca = load_crawler()
-        f = pathlib.Path(args.out) if args.out else next(
-            (x for x in sorted(d.glob("*links*")) if x.is_file()), None)
+        f = pathlib.Path(args.out) if args.out else link_file(d)
         if not f or not f.exists():
             sys.exit("Chưa có file link. Chạy read_raw.py --links trước.")
         listed = {l for l in f.read_text(encoding="utf-8").split("\n") if l}
@@ -287,12 +293,16 @@ def main():
         # bóc lại từ HTML (chỗ này mới ra được link của subdomain, vì crawler chỉ
         # đi trong một host nên subdomain không bao giờ vào hàng đợi của nó).
         from urllib.parse import urljoin, urlparse
-        out: set[str] = set()
+        ca = load_crawler()          # dùng chung norm() với crawler, nếu không thì
+        out: set[str] = set()        # --verify-links sẽ báo lệch giả vì hai bên
+                                     # chuẩn hoá khác nhau (http/https, #fragment…)
 
-        def take(it):
+        def take(it, base=None):
             for u in it:
-                u = str(u or "")
-                if not u.startswith("http"):
+                # chuẩn hoá MỌI nguồn, không chỉ href bóc từ HTML: url đọc từ
+                # assets.txt vẫn còn dạng http:// và sẽ lọt ra thành dòng lạc loài
+                u = ca.norm(str(u or ""), base)
+                if not u or not u.startswith("http"):
                     continue
                 h = urlparse(u).netloc.lower()
                 # "@" trong netloc = mailto: bị urljoin nuốt nhầm, không phải host
@@ -325,12 +335,11 @@ def main():
                     continue
                 pages += 1
                 html = html_of(r).decode(r.get("encoding") or "utf-8", "replace")
-                take(urljoin(r["url"], h) for h in hrefs_in(html))
+                take(hrefs_in(html), base=r["url"])
         print(f"quét {len(kho)} kho, {pages} trang HTML")
 
         # ghi đè đúng file cũ nếu đã đổi tên, để lần cập nhật sau không đẻ file mới
-        p = pathlib.Path(args.out) if args.out else next(
-            (x for x in sorted(d.glob("*links*")) if x.is_file()), d / "links")
+        p = pathlib.Path(args.out) if args.out else (link_file(d) or d / "links")
         p.write_text("\n".join(sorted(out)) + "\n", encoding="utf-8")
         kinds = collections.Counter()
         for u in out:

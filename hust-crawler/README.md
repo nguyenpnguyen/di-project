@@ -1,7 +1,51 @@
 # Crawler hust.edu.vn
 
 Bộ công cụ thu thập dữ liệu từ cổng thông tin Đại học Bách khoa Hà Nội, làm cho
-môn Tích hợp dữ liệu (IT5420). Gồm ba tầng tách rời:
+môn Tích hợp dữ liệu (IT5420).
+
+---
+
+## 0. LẦN SAU MỞ LÊN THÌ CHẠY GÌ
+
+Công việc chia làm **hai việc rời nhau**:
+
+| | Việc | Trạng thái |
+|---|---|---|
+| **1** | Lấy danh sách link | **xong** — 14.597 link trong `data/raw/N1-links` |
+| **2** | Tải nội dung bài | **còn 4.216 bài**, ~3 giờ |
+
+```bash
+cd hust-crawler
+source .venv/bin/activate 2>/dev/null || python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+# xem đang ở đâu
+.venv/bin/python read_raw.py --stats        # kho có gì
+.venv/bin/python read_raw.py --audit        # chuyên mục nào còn thiếu trang
+
+# VIỆC 2: tải nốt nội dung bài (ngắt lúc nào cũng được, chạy lại là đi tiếp)
+.venv/bin/python crawl_all.py --resume --prefer article
+
+# sau mỗi mẻ dài, soát rồi cập nhật danh sách link
+.venv/bin/python read_raw.py --fix-roots
+.venv/bin/python read_raw.py --audit
+.venv/bin/python read_raw.py --links
+.venv/bin/python read_raw.py --verify-links
+```
+
+Muốn lấy link của một subdomain (`bulletin`, `svbk`, `tuyendung`… — xem
+`data/raw/subdomains.txt`):
+
+```bash
+.venv/bin/python crawl_all.py --site bulletin.hust.edu.vn --only listing
+.venv/bin/python read_raw.py --links        # tự gộp mọi kho vào N1-links
+```
+
+**Dừng crawler:** `ps -A -o pid=,command= | grep "[c]rawl_all.py"` rồi
+`kill -TERM <pid>`. Đừng `pkill -f crawl_all.py` — nó giết nhầm cả terminal.
+
+---
+
+Gồm ba tầng tách rời:
 
 ```
 crawl_all.py   → tải thô toàn site, lưu HTML nguyên xi (base64) vào JSONL
@@ -54,14 +98,32 @@ en/admissions   en/about   en/organization   en/quality-assurance   en/work-with
 
 ## 3. Kết quả thực tế
 
-Số liệu chốt lúc dừng crawl (kiểm chứng lại bất cứ lúc nào bằng
-`read_raw.py --stats` và `read_raw.py --check`):
+Số liệu chốt (kiểm chứng lại bất cứ lúc nào bằng `read_raw.py --stats`,
+`--audit`, `--check`, `--verify-links`):
 
 ```
-10 shard | 946 trang khác nhau | 88 MB HTML thô | 42 MB trên đĩa sau nén
-theo loại  : article 389 | listing 332 | listing-page 225
-theo status: 200 cho cả 946 trang, 0 lỗi
+16 shard | 2.070 trang khác nhau | 201 MB HTML thô | 90 MB trên đĩa sau nén
+theo loại  : listing-page 1.181 | listing 500 | article 389
+theo status: 2.062 trang OK, 8 trang 404
 ```
+
+**Danh sách link — `data/raw/N1-links`** (mỗi dòng một link, file không đuôi):
+
+| | |
+|---|---|
+| Tổng link | **14.597** |
+| Bài viết | 10.825 |
+| Trang phân trang | 1.181 |
+| Trang danh sách | 658 |
+| File đính kèm | 197 |
+| Khác (tag, trang lẻ) | 1.736 |
+| Host | **52** — `hust.edu.vn` 13.746 + 851 link subdomain |
+
+Chất lượng: 0 dòng trùng, 0 dòng hỏng, 0 link ngoài họ `hust.edu.vn`, và
+`--verify-links` báo **0 link có trong HTML mà thiếu ở file**.
+
+Trong `state.json`: **5.640 bài** đã phát hiện, 4.639 url phụ, 4.220 url còn
+trong hàng đợi chờ tải nội dung.
 
 **Phủ 30 nhóm chuyên mục**, cả tiếng Việt lẫn tiếng Anh:
 
@@ -198,11 +260,17 @@ pages-0001.jsonl.gz   mỗi dòng một trang; HTML thô nằm ở trường htm
 pages-0002.jsonl.gz   ... mỗi shard 250 trang
 state.json            hàng đợi + đã tải + bảng khoá bài, dùng cho --resume
 manifest.json         tổng kết mẻ chạy gần nhất
-assets.txt            192 url file đính kèm (pdf/doc/xls) đã lập danh mục, không tải
+N1-links              DANH SÁCH LINK, mỗi dòng một link, cố ý KHÔNG có đuôi file.
+                      read_raw.py --links ghi đè đúng file này dù đã đổi tên.
+assets.txt            197 url file đính kèm (pdf/doc/xls) đã lập danh mục, không tải
+subdomains.txt        58 host thuộc hust.edu.vn thấy trong kho
 missing.txt           read_raw.py --check sinh ra khi có url khuyết; hết khuyết thì tự xoá
-links                 read_raw.py --links: MỌI url đã biết, mỗi dòng một link, không đuôi file
+links_missing.txt     read_raw.py --verify-links sinh ra khi file link còn sót
 sample_articles.txt   danh sách url dùng cho mẻ lấy mẫu bài
 ```
+
+Site khác nằm ở kho riêng: `data/raw-svbk.hust.edu.vn/`,
+`data/raw-library.hust.edu.vn/`… cùng cấu trúc file như trên.
 
 **Một dòng trong `pages-*.jsonl.gz`:**
 
@@ -377,6 +445,28 @@ Xuất lại danh sách link sau khi vá:
 .venv/bin/python read_raw.py --links                 # ghi đè file *links* đang có
 .venv/bin/python read_raw.py --links --out /tmp/abc  # hoặc chỉ định thẳng
 ```
+
+### 6.2c. Chạy trên subdomain / site khác
+
+```bash
+.venv/bin/python read_raw.py --subdomains                      # họ hust có những site nào
+.venv/bin/python crawl_all.py --site svbk.hust.edu.vn --only listing
+.venv/bin/python crawl_all.py --resume --site svbk.hust.edu.vn # chạy tiếp site đó
+```
+
+Mỗi site một kho riêng `data/raw-<host>`, không lẫn nhau. `read_raw.py --links`
+gom từ **mọi** kho nên `N1-links` tự có link của mọi site đã crawl.
+
+Không cần sửa code cho CMS khác: kiểu phân trang được nhận theo 6 mẫu
+(`/page-N/`, `/page/N/`, `?page=N`, `?paged=N`, `/trang-N/`, `/pN/`) và crawler
+dùng **đúng khuôn url mà chính trang đó in ra** thay vì đoán. Thử thật:
+
+| Site | Kết quả |
+|---|---|
+| `svbk.hust.edu.vn` | có sitemap index → 6 sitemap con, 243 url |
+| `library.hust.edu.vn` | không sitemap → bò từ trang chủ, tự nhận `?page=265`, nở 260 trang |
+
+Site không có sitemap thì thêm hạt giống bằng tay: `--seed-url <url> <url>`.
 
 ### 6.3. Đối chiếu khuyết và vá
 

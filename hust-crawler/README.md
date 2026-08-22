@@ -81,7 +81,7 @@ Kèm theo:
 * **192 file đính kèm** đã lập danh mục url trong `assets.txt` (166 `.pdf`,
   18 `.docx`, 7 `.doc`, 1 `.rar`) — bóc ra từ HTML đã lưu, không tốn request nào.
 * **4.185 bài** đã phát hiện và **988 url phụ** trỏ cùng bài, nằm trong
-  `state.json` — tức phần *phát hiện* coi như xong.
+  `state.json`. Đây **chưa** phải toàn bộ site — xem mục 4.
 * **0 trang khuyết**, **0 lần dính 429** ở các mẻ chạy cuối.
 
 Cách 946 trang này được lấy, theo ba mẻ:

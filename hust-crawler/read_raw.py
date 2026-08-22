@@ -71,6 +71,8 @@ def main():
                     help="đối chiếu state.json với shard, ghi url khuyết ra missing.txt")
     ap.add_argument("--assets", action="store_true",
                     help="bóc url file đính kèm (pdf/doc/xls…) từ HTML đã lưu, ghi ra assets.txt")
+    ap.add_argument("--fix-roots", action="store_true",
+                    help="suy chuyên mục gốc từ kho, trả những cái biến mất khỏi frontier về hàng đợi")
     ap.add_argument("--links", action="store_true",
                     help="xuất MỌI url đã biết ra file 'links' (không đuôi), mỗi dòng một link")
     ap.add_argument("--limit", type=int, default=0)
@@ -79,6 +81,44 @@ def main():
 
     if not shards(d):
         sys.exit(f"Không thấy shard nào trong {d}. Chạy crawl_all.py trước.")
+
+    if args.fix_roots:
+        # Chuyên mục có thể biến mất khỏi kế hoạch crawl (không done, không
+        # frontier, có khi không cả queued) — khi đó cả nhánh đó vô hình vĩnh
+        # viễn với --resume. Mọi url bài đều ngụ ý chuyên mục chứa nó, nên suy
+        # ngược từ kho ra danh sách chuyên mục rồi trả những cái thiếu về hàng đợi.
+        sp = d / "state.json"
+        st = json.loads(sp.read_text(encoding="utf-8"))
+        done, front = set(st["done"]), {u for u, _, _ in st["frontier"]}
+
+        roots = set()
+        for r in records(d, quiet=True):
+            u = r["url"]
+            if re.search(r"-\d+\.html$", u):
+                roots.add(u.rsplit("/", 1)[0] + "/")
+            m = re.match(r"(.*/)page-\d+/$", u)
+            if m:
+                roots.add(m.group(1))
+        for u in list(st.get("by_key", {}).values()) + list(front) + list(done):
+            if re.search(r"-\d+\.html$", u):
+                roots.add(u.rsplit("/", 1)[0] + "/")
+
+        missing = sorted(r for r in roots if r not in done and r not in front)
+        print(f"suy ra {len(roots)} chuyên mục gốc từ kho")
+        print(f"thiếu khỏi kế hoạch crawl: {len(missing)}")
+        for r in missing[:15]:
+            print(f"   {r}")
+        if len(missing) > 15:
+            print(f"   … còn {len(missing) - 15}")
+        if missing:
+            st["frontier"] += [[r, 1, "fix-roots"] for r in missing]
+            st["queued"] = sorted(set(st["queued"]) | set(missing))
+            sp.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
+            print(f"-> đã trả về frontier, giờ có {len(st['frontier'])} url. "
+                  f"Chạy: python crawl_all.py --resume")
+        else:
+            print("-> không thiếu chuyên mục nào.")
+        return
 
     if args.links:
         # Gom MỌI url đã biết, không phân biệt đã tải hay chưa, không phân cấp.

@@ -309,6 +309,9 @@ File `.csv` là bản dẹt của cùng dữ liệu, bỏ các trường mảng,
 # chạy tiếp lần trước
 .venv/bin/python crawl_all.py --resume
 
+# CHỈ tải trang danh sách để chốt danh mục url, chưa tải nội dung bài
+.venv/bin/python crawl_all.py --resume --only listing
+
 # ưu tiên bài viết thay vì trang danh sách
 .venv/bin/python crawl_all.py --resume --prefer article
 
@@ -322,6 +325,7 @@ File `.csv` là bản dẹt của cùng dữ liệu, bỏ các trường mảng,
 | `--max-depth` | 6 | độ sâu tối đa tính từ hạt giống |
 | `--max-pages-per-cat` | 400 | trần số trang phân trang nở ra cho một chuyên mục |
 | `--lang` | all | `vi` / `en` / `all` |
+| `--only` | all | `listing` chỉ tải trang danh sách; url bài vẫn được ghi nhận nhưng không tải |
 | `--prefer` | listing | `listing` phủ chuyên mục trước, `article` lấy bài trước |
 | `--delay` | 2.5 | nhịp nhanh nhất, giây/request, **đừng hạ dưới 2** |
 | `--max-delay` | 30 | trần nhịp khi bị chặn liên tục |
@@ -344,10 +348,35 @@ File `.csv` là bản dẹt của cùng dữ liệu, bỏ các trường mảng,
 .venv/bin/python read_raw.py --assets                   # lập danh mục pdf/doc/xls
 .venv/bin/python read_raw.py --links                    # xuất mọi url ra file 'links'
 .venv/bin/python read_raw.py --check                    # đối chiếu kho với state
+.venv/bin/python read_raw.py --audit                    # chuyên mục nào còn thiếu trang
+.venv/bin/python read_raw.py --fix-roots                # vá chuyên mục biến mất khỏi hàng đợi
 ```
 
 Đọc được **ngay trong lúc crawler đang chạy**: shard cuối đang ghi dở thì đọc tới
 đâu trả tới đó.
+
+### 6.2b. Ba lệnh soát nên chạy sau mỗi mẻ dài
+
+```bash
+.venv/bin/python read_raw.py --fix-roots   # chuyên mục nào rơi khỏi kế hoạch crawl?
+.venv/bin/python read_raw.py --audit       # chuyên mục nào tải thiếu trang?
+.venv/bin/python read_raw.py --check       # url nào state khai đã tải mà kho không có?
+```
+
+Ba câu hỏi khác nhau, đừng nhầm:
+
+* `--fix-roots` — chuyên mục **biến mất** khỏi cả `done` lẫn `frontier`, tức
+  `--resume` sẽ không bao giờ chạm tới. Lệnh này trả chúng về hàng đợi.
+* `--audit` — chuyên mục **có trong kế hoạch nhưng tải thiếu trang**; bài nằm
+  trên những trang chưa tải thì chưa hề được nhìn thấy.
+* `--check` — kho và `state.json` **lệch nhau**, thường do kill cứng.
+
+Xuất lại danh sách link sau khi vá:
+
+```bash
+.venv/bin/python read_raw.py --links                 # ghi đè file *links* đang có
+.venv/bin/python read_raw.py --links --out /tmp/abc  # hoặc chỉ định thẳng
+```
 
 ### 6.3. Đối chiếu khuyết và vá
 

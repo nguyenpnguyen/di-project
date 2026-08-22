@@ -58,6 +58,30 @@ def html_of(rec: dict) -> bytes:
     return base64.b64decode(rec["html_b64"]) if rec.get("html_b64") else b""
 
 
+def load_crawler():
+    """Nạp crawl_all.py để dùng chung norm()/in_scope() — hai bên phải cùng
+    một luật chuẩn hoá, nếu không so sánh sẽ lệch giả."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "crawl_all", pathlib.Path(__file__).resolve().parent / "crawl_all.py")
+    mod = importlib.util.module_from_spec(spec)
+    argv, sys.argv = sys.argv, ["crawl_all"]
+    spec.loader.exec_module(mod)
+    sys.argv = argv
+    return mod
+
+
+def hrefs_in(html: str, with_src=False):
+    """Link trong trang.
+
+    Mặc định chỉ lấy href — đó mới là "link" theo nghĩa người ta đi tới được.
+    src là tài nguyên nhúng (ảnh, script); gộp vào làm danh sách link phình lên
+    vì mỗi bài kéo theo cả chục ảnh /uploads/.
+    """
+    attrs = "href|src" if with_src else "href"
+    return re.findall(rf'(?:{attrs})=["\']([^"\'>\s]+)["\']', html)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Đọc kho HTML thô base64")
     ap.add_argument("--dir", default=str(RAW))
@@ -71,10 +95,22 @@ def main():
                     help="đối chiếu state.json với shard, ghi url khuyết ra missing.txt")
     ap.add_argument("--assets", action="store_true",
                     help="bóc url file đính kèm (pdf/doc/xls…) từ HTML đã lưu, ghi ra assets.txt")
+    ap.add_argument("--audit", action="store_true",
+                    help="soát từng chuyên mục: phân trang nở tới đâu, tải thiếu trang nào")
     ap.add_argument("--fix-roots", action="store_true",
                     help="suy chuyên mục gốc từ kho, trả những cái biến mất khỏi frontier về hàng đợi")
+    ap.add_argument("--verify-links", action="store_true",
+                    help="soát độc lập: bóc lại mọi href từ HTML đã lưu, đối chiếu với file link")
     ap.add_argument("--links", action="store_true",
                     help="xuất MỌI url đã biết ra file 'links' (không đuôi), mỗi dòng một link")
+    ap.add_argument("--domain", default="hust.edu.vn",
+                    help="chỉ giữ link thuộc tên miền này và mọi subdomain của nó")
+    ap.add_argument("--all-sites", action="store_true", default=True,
+                    help="gom từ mọi kho data/raw* (mặc định bật)")
+    ap.add_argument("--one-site", dest="all_sites", action="store_false",
+                    help="chỉ gom từ kho được chỉ định bằng --dir")
+    ap.add_argument("--subdomains", action="store_true",
+                    help="liệt kê các subdomain của --domain xuất hiện trong kho")
     ap.add_argument("--out", help="đường dẫn file kết quả cho --links "
                                   "(mặc định: ghi đè file *links* đang có trong data/raw)")
     ap.add_argument("--limit", type=int, default=0)
@@ -83,6 +119,82 @@ def main():
 
     if not shards(d):
         sys.exit(f"Không thấy shard nào trong {d}. Chạy crawl_all.py trước.")
+
+    if args.subdomains:
+        # Crawler chỉ đi trong MỘT host, nên subdomain không bao giờ vào hàng đợi
+        # của nó. Muốn biết họ hust.edu.vn có những site nào thì phải bóc lại
+        # href từ HTML đã lưu — đây là nguồn duy nhất có thông tin đó.
+        from urllib.parse import urljoin, urlparse
+        hosts = collections.Counter()
+        for k in sorted(p for p in d.parent.glob("raw*") if p.is_dir()):
+            for r in records(k, quiet=True):
+                if not r.get("html_b64"):
+                    continue
+                html = html_of(r).decode(r.get("encoding") or "utf-8", "replace")
+                for h in hrefs_in(html):
+                    try:
+                        n = urlparse(urljoin(r["url"], h)).netloc.lower().replace("www.", "")
+                    except ValueError:
+                        continue
+                    if "@" not in n and n.endswith(args.domain):
+                        hosts[n] += 1
+        p = d / "subdomains.txt"
+        p.write_text("\n".join(sorted(hosts)) + "\n", encoding="utf-8")
+        print(f"{len(hosts)} host thuộc {args.domain} (số lần được trỏ tới):\n")
+        for h, c in hosts.most_common():
+            print(f"{c:>8}  {h}")
+        print(f"\n-> {p}")
+        return
+
+    if args.audit:
+        # Soát từng chuyên mục: trang gốc đã tải chưa, phân trang nở tới đâu,
+        # đã tải bao nhiêu trang trong dải đó, gom được bao nhiêu bài.
+        # Chuyên mục nào tải thiếu trang thì phần bài trên những trang ấy
+        # chưa hề được nhìn thấy — đó chính là "sub link còn thiếu".
+        st = json.loads((d / "state.json").read_text(encoding="utf-8"))
+        done = set(st["done"])
+        front = {u for u, _, _ in st["frontier"]}
+        known = done | front | set(st["queued"])
+
+        PGN = re.compile(r"^(.*/)page-(\d+)/$")
+        cats: dict[str, dict] = collections.defaultdict(
+            lambda: {"max": 1, "pages": set(), "fetched": set(), "arts": 0, "root": False})
+        for u in known:
+            p = u.replace("https://hust.edu.vn", "")
+            m = PGN.match(p)
+            if m:
+                c = cats[m.group(1)]
+                n = int(m.group(2))
+                c["max"] = max(c["max"], n)
+                c["pages"].add(n)
+                if u in done:
+                    c["fetched"].add(n)
+            elif re.search(r"-\d+\.html$", p):
+                cats[p.rsplit("/", 1)[0] + "/"]["arts"] += 1
+            elif p.endswith("/"):
+                cats[p]["root"] = u in done
+
+        rows = []
+        for c, v in cats.items():
+            need = v["max"]                       # page-1 là chính trang gốc
+            got = len(v["fetched"]) + (1 if v["root"] else 0)
+            rows.append((need - got, need, got, v["arts"], v["root"], c))
+        rows.sort(reverse=True)
+
+        thieu = [r for r in rows if r[0] > 0]
+        print(f"{len(cats)} chuyên mục | {len(thieu)} chuyên mục còn thiếu trang\n")
+        print(f"{'thiếu':>6} {'tải/tổng':>10} {'bài':>6}  chuyên mục")
+        for miss, need, got, arts, root, c in rows[:30]:
+            flag = "" if root else "  [chưa tải trang gốc]"
+            print(f"{miss:>6} {got:>4}/{need:<5} {arts:>6}  {c}{flag}")
+        if len(rows) > 30:
+            print(f"   … còn {len(rows) - 30} chuyên mục (đa số đã đủ)")
+        tm = sum(r[0] for r in thieu)
+        print(f"\nTổng còn thiếu {tm} trang danh sách "
+              f"(~{tm * 6} bài chưa nhìn thấy, ước theo 6 bài/trang của module news)")
+        if tm:
+            print("Chạy tiếp: python crawl_all.py --resume --only listing")
+        return
 
     if args.fix_roots:
         # Chuyên mục có thể biến mất khỏi kế hoạch crawl (không done, không
@@ -122,31 +234,99 @@ def main():
             print("-> không thiếu chuyên mục nào.")
         return
 
+    if args.verify_links:
+        # Soát ĐỘC LẬP: không tin state.json, mà bóc lại mọi href từ HTML đã lưu
+        # rồi đối chiếu với file link. Nếu hai bên khớp thì file link đã đủ so với
+        # những gì crawler thật sự nhìn thấy; lệch chỗ nào là chỗ đó bị bỏ sót.
+        ca = load_crawler()
+        f = pathlib.Path(args.out) if args.out else next(
+            (x for x in sorted(d.glob("*links*")) if x.is_file()), None)
+        if not f or not f.exists():
+            sys.exit("Chưa có file link. Chạy read_raw.py --links trước.")
+        listed = {l for l in f.read_text(encoding="utf-8").split("\n") if l}
+
+        seen: set[str] = set()
+        assets: set[str] = set()
+        pages = 0
+        for r in records(d, quiet=True):
+            if not r.get("html_b64"):
+                continue
+            pages += 1
+            html = html_of(r).decode(r.get("encoding") or "utf-8", "replace")
+            for h in hrefs_in(html):
+                u = ca.norm(h, r["url"])
+                if not u:
+                    continue
+                if ca.urlparse(u).netloc != ca.HOST:
+                    continue                       # link ra ngoài, không thuộc phạm vi
+                (assets if not ca.in_scope(u) else seen).add(u)
+
+        missing = sorted(seen - listed)
+        extra = len(listed - seen - assets)
+        print(f"quét {pages} trang HTML trong kho")
+        print(f"  href nội bộ trong phạm vi : {len(seen)}")
+        print(f"  file/đường dẫn ngoài phạm vi: {len(assets)} (pdf, /rss/, /export/… — bỏ là đúng)")
+        print(f"  file link đang liệt kê     : {len(listed)}")
+        print(f"  CÓ trong HTML mà THIẾU ở file link: {len(missing)}")
+        print(f"  có ở file link mà HTML chưa thấy  : {extra} (từ sitemap/hàng đợi, bình thường)")
+        if missing:
+            p = d / "links_missing.txt"
+            p.write_text("\n".join(missing), encoding="utf-8")
+            for u in missing[:12]:
+                print(f"     {u}")
+            if len(missing) > 12:
+                print(f"     … còn {len(missing) - 12}, xem {p}")
+            print(f"\n-> chạy lại: python read_raw.py --links")
+        else:
+            print("\n-> file link đã phủ hết mọi href crawler nhìn thấy.")
+        return
+
     if args.links:
-        # Gom MỌI url đã biết, không phân biệt đã tải hay chưa, không phân cấp.
-        # Mỗi dòng một link, file không đuôi.
-        st = json.loads((d / "state.json").read_text(encoding="utf-8"))
+        # Gom MỌI url đã biết trong họ hust.edu.vn, không phân biệt đã tải hay
+        # chưa, không phân cấp: hàng đợi + kho của MỌI site đã crawl + mọi href
+        # bóc lại từ HTML (chỗ này mới ra được link của subdomain, vì crawler chỉ
+        # đi trong một host nên subdomain không bao giờ vào hàng đợi của nó).
+        from urllib.parse import urljoin, urlparse
         out: set[str] = set()
 
         def take(it):
             for u in it:
-                if u and str(u).startswith("http"):
-                    out.add(u)
+                u = str(u or "")
+                if not u.startswith("http"):
+                    continue
+                h = urlparse(u).netloc.lower()
+                # "@" trong netloc = mailto: bị urljoin nuốt nhầm, không phải host
+                if "@" in h or not h.replace("www.", "").endswith(args.domain):
+                    continue
+                out.add(u)
 
-        take(st.get("done", {}))
-        take(u for u, _, _ in st.get("frontier", []))
-        take(st.get("queued", []))
-        take(st.get("by_key", {}).values())
-        take(st.get("origin", {}))
-        take(st.get("aliases", {}))
-        take(a for v in st.get("aliases", {}).values() for a in v)
-        take(st.get("assets", []))
-        for name in ("assets.txt", "sample_articles.txt", "lost_articles.txt",
-                     "roots_todo.txt", "missing.txt"):
-            f = d / name
-            if f.exists():
-                take(f.read_text(encoding="utf-8").split())
-        take(r["url"] for r in records(d, quiet=True))
+        kho = sorted(p for p in d.parent.glob("raw*") if p.is_dir()) if args.all_sites else [d]
+        pages = 0
+        for k in kho:
+            sp = k / "state.json"
+            if sp.exists():
+                st = json.loads(sp.read_text(encoding="utf-8"))
+                take(st.get("done", {}))
+                take(u for u, _, _ in st.get("frontier", []))
+                take(st.get("queued", []))
+                take(st.get("by_key", {}).values())
+                take(st.get("origin", {}))
+                take(st.get("aliases", {}))
+                take(a for v in st.get("aliases", {}).values() for a in v)
+                take(st.get("assets", []))
+            for name in ("assets.txt", "sample_articles.txt", "lost_articles.txt",
+                         "roots_todo.txt", "missing.txt", "links_missing.txt"):
+                f = k / name
+                if f.exists():
+                    take(f.read_text(encoding="utf-8").split())
+            for r in records(k, quiet=True):
+                take([r["url"]])
+                if not r.get("html_b64"):
+                    continue
+                pages += 1
+                html = html_of(r).decode(r.get("encoding") or "utf-8", "replace")
+                take(urljoin(r["url"], h) for h in hrefs_in(html))
+        print(f"quét {len(kho)} kho, {pages} trang HTML")
 
         # ghi đè đúng file cũ nếu đã đổi tên, để lần cập nhật sau không đẻ file mới
         p = pathlib.Path(args.out) if args.out else next(

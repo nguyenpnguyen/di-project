@@ -58,8 +58,51 @@ UA = "hust-research-crawler/1.0 (nghien cuu mon IT5420; lien he: student@sis.hus
 ROOT = pathlib.Path(__file__).resolve().parent
 RAW = ROOT / "data" / "raw"
 
+# Menu là lối vào duy nhất của những module có sitemap rỗng. Danh sách này gắn
+# với hust.edu.vn; site khác để trống, crawler tự bò từ trang chủ.
+SEED_MENU = {
+    "hust.edu.vn": ("/vi/van-ban/", "/vi/media/", "/vi/videoclips/", "/vi/events/",
+                    "/vi/du-an/", "/vi/mangluoi/", "/vi/doi-tac-hoc-thuat/",
+                    "/vi/doi-tac-doanh-nghiep/", "/vi/trao-doi-can-bo/",
+                    "/vi/trao-doi-sinh-vien/", "/vi/san-pham-khoa-hoc-cong-nghe/",
+                    "/vi/van-bang-so-huu-tri-tue/", "/vi/tai-nguyen-so/",
+                    "/vi/lich-lam-viec/Truong-dai-hoc-BKHN/", "/vi/contact/"),
+}
+
+
+def set_site(host: str):
+    """Trỏ crawler sang site khác. Mỗi site một thư mục kho riêng, không lẫn nhau."""
+    global BASE, HOST, RAW
+    HOST = host.lower().removeprefix("https://").removeprefix("http://").strip("/")
+    BASE = f"https://{HOST}"
+    RAW = ROOT / "data" / ("raw" if HOST == "hust.edu.vn" else f"raw-{HOST}")
+
 ART_ID = re.compile(r"-(\d+)\.html$")
-PAGE_N = re.compile(r"/page-(\d+)/?$")
+
+# Phân trang mỗi CMS một kiểu. Bắt bằng mẫu kèm khuôn dựng lại url, để đọc được
+# số trang cuối ở site này thì sinh được cả dải ở site khác mà không sửa code.
+PAGE_PATTERNS = [
+    (re.compile(r"^(?P<a>.*/)page-(?P<n>\d+)/?$"), "{a}page-{n}/"),      # NukeViet
+    (re.compile(r"^(?P<a>.*/)trang-(?P<n>\d+)/?$"), "{a}trang-{n}/"),    # vài site VN
+    (re.compile(r"^(?P<a>.*/)p(?P<n>\d+)/?$"), "{a}p{n}/"),
+    (re.compile(r"^(?P<a>.*?[?&])page=(?P<n>\d+)$"), "{a}page={n}"),     # WordPress, query
+    (re.compile(r"^(?P<a>.*?[?&])paged=(?P<n>\d+)$"), "{a}paged={n}"),
+    (re.compile(r"^(?P<a>.*/)page/(?P<n>\d+)/?$"), "{a}page/{n}/"),      # WordPress, path
+]
+
+
+def page_of(url: str):
+    """url -> (khuôn có {n}, số trang, gốc) nếu là trang phân trang, không thì None.
+
+    'gốc' là phần url trước chỗ đánh số, dùng để chắc chắn hai trang phân trang
+    thuộc cùng một chuyên mục.
+    """
+    for pat, tpl in PAGE_PATTERNS:
+        m = pat.match(url)
+        if m:
+            a = m.group("a")
+            return tpl.replace("{a}", a), int(m.group("n")), a
+    return None
 ASSET = re.compile(r"\.(pdf|docx?|xlsx?|pptx?|zip|rar|jpe?g|png|gif|svg|webp|mp4|mp3|css|js|ico)$", re.I)
 SKIP_PREFIX = ("/admin/", "/users/", "/data/", "/includes/", "/modules/", "/install/",
                "/statistics/", "/seek/", "/rss/", "/print/")
@@ -70,8 +113,13 @@ SKIP_QUERY = re.compile(r"(^|&)(download|submit)=1(&|$)")
 
 
 # ------------------------------------------------------------------- tiện ích
-def norm(url: str, base: str = BASE) -> str | None:
-    """Chuẩn hoá URL để hai đường dẫn cùng trỏ một trang không bị đếm hai lần."""
+def norm(url: str, base: str | None = None) -> str | None:
+    """Chuẩn hoá URL để hai đường dẫn cùng trỏ một trang không bị đếm hai lần.
+
+    base phải đọc lúc GỌI chứ không phải lúc định nghĩa hàm: --site đổi BASE sau
+    khi module đã nạp, để mặc định là BASE thì đổi site xong vẫn ghép host cũ.
+    """
+    base = base or BASE
     if not url or url.startswith(("javascript:", "mailto:", "tel:", "#")):
         return None
     p = urlparse(urljoin(base, url.strip()))
@@ -119,11 +167,11 @@ def dedup_key(url: str) -> str | None:
 
 
 def kind_of(url: str) -> str:
+    if page_of(url):
+        return "listing-page"
     p = urlparse(url).path
     if ART_ID.search(p):
         return "article"
-    if PAGE_N.search(p):
-        return "listing-page"
     if p.endswith("/"):
         return "listing"
     return "other"
@@ -386,17 +434,27 @@ class Crawler:
                      f"{f'+{pages}p' if pages else ''}  {url[-52:]}")
 
     def expand_pagination(self, url: str, soup, depth: int) -> int:
-        """Trang danh sách nào cũng in sẵn số trang cuối -> đẩy thẳng cả dải."""
-        base = PAGE_N.sub("/", urlparse(url).path)
-        nums = [int(m.group(1)) for a in soup.select("a[href]")
-                for m in [PAGE_N.search(urlparse(urljoin(url, a["href"])).path)]
-                if m and urlparse(urljoin(url, a["href"])).path.startswith(base)]
-        if not nums:
+        """Trang danh sách in sẵn link tới trang cuối -> đẩy thẳng cả dải.
+
+        Không đoán kiểu phân trang: lấy đúng khuôn url mà chính trang này in ra,
+        nên site dùng /page-2/, ?page=2 hay /page/2/ đều chạy như nhau.
+        """
+        here = page_of(url)
+        stem = here[2] if here else url          # trang gốc thì chính nó là gốc
+        found: dict[str, int] = {}               # khuôn -> số trang lớn nhất thấy được
+        for a in soup.select("a[href]"):
+            pg = page_of(norm(a["href"], url) or "")
+            # chỉ nhận phân trang của CHÍNH chuyên mục này; khối "tin liên quan"
+            # ở sidebar hay in phân trang của chuyên mục khác
+            if not pg or pg[2] != stem:
+                continue
+            found[pg[0]] = max(found.get(pg[0], 0), pg[1])
+        if not found:
             return 0
-        last = min(max(nums), self.a.max_pages_per_cat)
         before = len(self.queued)
-        for n in range(2, last + 1):
-            self.push(f"{BASE}{base}page-{n}/", depth + 1, url)
+        for tpl, mx in found.items():
+            for n in range(2, min(mx, self.a.max_pages_per_cat) + 1):
+                self.push(tpl.replace("{n}", str(n)), depth + 1, url)
         return len(self.queued) - before
 
     # -- hạt giống ----------------------------------------------------------
@@ -415,19 +473,30 @@ class Crawler:
             self.log(f"      vá {len(self.frontier)} url từ {self.a.seed_file}")
             return
 
-        for home in (f"{BASE}/vi/", f"{BASE}/en/", f"{BASE}/", f"{BASE}/70year/index.html"):
-            self.push(home, 0, "seed")
-        # menu là nơi duy nhất liệt kê các module có sitemap rỗng
-        for path in ("/vi/van-ban/", "/vi/media/", "/vi/videoclips/", "/vi/events/",
-                     "/vi/du-an/", "/vi/mangluoi/", "/vi/doi-tac-hoc-thuat/",
-                     "/vi/doi-tac-doanh-nghiep/", "/vi/trao-doi-can-bo/",
-                     "/vi/trao-doi-sinh-vien/", "/vi/san-pham-khoa-hoc-cong-nghe/",
-                     "/vi/van-bang-so-huu-tri-tue/", "/vi/tai-nguyen-so/",
-                     "/vi/lich-lam-viec/Truong-dai-hoc-BKHN/", "/vi/contact/"):
+        self.push(f"{BASE}/", 0, "seed")
+        for path in ("/vi/", "/en/", "/70year/index.html"):
+            if HOST == "hust.edu.vn":
+                self.push(BASE + path, 0, "seed")
+        for path in SEED_MENU.get(HOST, ()):
             self.push(BASE + path, 0, "seed-menu")
+        for extra in self.a.seed_url or []:
+            self.push(extra, 0, "seed-cli")
 
         r, _ = self.fetch(BASE + "/sitemap.xml")
-        sitemaps = re.findall(r"<loc>\s*(.*?)\s*</loc>", r.text) if r else []
+        if not r or "<loc>" not in r.text:
+            self.log("      không có sitemap dùng được, chỉ bò từ trang chủ")
+            self.log(f"      hàng đợi {len(self.frontier)} url")
+            return
+        locs = re.findall(r"<loc>\s*(.*?)\s*</loc>", r.text)
+        # sitemap phẳng (urlset) thì đây đã là url trang, không phải sitemap con —
+        # đừng đi fetch từng cái như file xml, tốn mỗi url một request vô ích
+        if "<sitemapindex" not in r.text:
+            for loc in locs:
+                self.push(loc, 1, "sitemap")
+            self.log(f"      sitemap phẳng: {len(locs)} url -> hàng đợi {len(self.frontier)}")
+            return
+
+        sitemaps = locs
         self.log(f"      {len(sitemaps)} sitemap con")
         n_sm = 0
         for sm in sitemaps:
@@ -580,14 +649,19 @@ class Crawler:
         self.log(f"\nXong {self.store.n_total} trang / {self.store.bytes_raw / 1e6:.0f} MB HTML thô "
                  f"trong {dur / 60:.1f} phút -> {RAW}")
         if self.frontier:
+            site = "" if HOST == "hust.edu.vn" else f" --site {HOST}"
             self.log(f"Còn {len(self.frontier)} url chưa đi. Chạy tiếp: "
-                     f"python crawl_all.py --resume")
+                     f"python crawl_all.py --resume{site}")
 
 
 def main():
     ap = argparse.ArgumentParser(description="Crawl toàn site hust.edu.vn ra HTML base64",
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog=__doc__.split("Ví dụ:")[-1])
+    ap.add_argument("--site", default="hust.edu.vn",
+                    help="host cần crawl, vd sinhvien.hust.edu.vn. Mỗi site một kho riêng "
+                         "data/raw-<host>; kiểu phân trang tự nhận, không cần sửa code")
+    ap.add_argument("--seed-url", nargs="*", help="url hạt giống thêm, khi site không có sitemap")
     ap.add_argument("--max-pages", type=int, default=0, help="trần số trang, 0 = không giới hạn")
     ap.add_argument("--max-depth", type=int, default=6)
     ap.add_argument("--max-pages-per-cat", type=int, default=400,
@@ -616,6 +690,7 @@ def main():
                                         "(dùng với read_raw.py --check)")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
+    set_site(args.site)             # phải gọi TRƯỚC khi dựng Crawler: RAW đổi theo site
 
     if args.workers > 8:
         print("! workers > 8 là quá tay với web trường, hạ xuống 8", file=sys.stderr)

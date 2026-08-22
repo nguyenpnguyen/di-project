@@ -250,6 +250,11 @@ class Crawler:
         #                        dừng sớm thì trong kho gần như chưa có bài nào;
         #   article            — có bài đọc được ngay, đổi lại phát hiện chậm hơn.
         k = kind_of(u)
+        # --only listing: bài vẫn được ghi vào by_key/queued/origin (nên vẫn hiện
+        # trong danh sách link) nhưng KHÔNG vào hàng đợi, tức không tốn request.
+        # Dùng khi chỉ cần chốt xem site có những bài nào, chưa cần nội dung.
+        if self.a.only == "listing" and k not in ("listing", "listing-page"):
+            return
         first = k in ("listing", "listing-page") if self.a.prefer == "listing" else k == "article"
         (self.frontier.appendleft if first else self.frontier.append)((u, depth, via))
 
@@ -488,6 +493,15 @@ class Crawler:
         elif not loaded:
             self.seed()
 
+        if self.a.only == "listing":
+            # hàng đợi cũ phần lớn là bài; gác chúng sang một bên chứ đừng vứt,
+            # nếu không lần chạy sau mất sạch danh mục đã phát hiện được
+            keep = [x for x in self.frontier if kind_of(x[0]) in ("listing", "listing-page")]
+            self._parked += [x for x in self.frontier if x not in keep]
+            self.frontier = collections.deque(keep)
+            self.log(f"      --only listing: đi {len(keep)} trang danh sách, "
+                     f"gác lại {len(self._parked)} url khác")
+
         self.log(f"[2/3] Bò theo link (nhịp khởi điểm {self.a.delay}s x {self.a.workers} luồng, "
                  f"tự dò lại theo 429, trần {self.a.max_pages or '∞'} trang)…")
         t0 = self.t0 = time.time()
@@ -579,6 +593,9 @@ def main():
     ap.add_argument("--max-pages-per-cat", type=int, default=400,
                     help="trần số trang phân trang nở ra cho mỗi chuyên mục")
     ap.add_argument("--lang", choices=["vi", "en", "all"], default="all")
+    ap.add_argument("--only", choices=["all", "listing"], default="all",
+                    help="'listing' chỉ tải trang danh sách để chốt danh mục url; "
+                         "bài vẫn được ghi nhận nhưng không tải nội dung")
     ap.add_argument("--prefer", choices=["listing", "article"], default="listing",
                     help="đi trang danh sách trước (phủ chuyên mục) hay bài viết trước "
                          "(dừng sớm vẫn có bài đọc được)")

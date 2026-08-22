@@ -7,37 +7,58 @@ môn Tích hợp dữ liệu (IT5420).
 
 ## 0. LẦN SAU MỞ LÊN THÌ CHẠY GÌ
 
-Công việc chia làm **hai việc rời nhau**:
+Công việc chia làm **ba việc rời nhau**:
 
 | | Việc | Trạng thái |
 |---|---|---|
-| **1** | Lấy danh sách link | **xong** — 14.597 link trong `data/raw/N1-links` |
+| **1a** | Lấy link của `hust.edu.vn` | **XONG** — 13.745 link, hàng đợi danh mục đã cạn |
+| **1b** | Lấy link **bên trong 51 subdomain** | **MỚI 2/51** — xem mục 4.3 |
 | **2** | Tải nội dung bài | **còn 4.216 bài**, ~3 giờ |
+
+`data/raw/N1-links` hiện có 14.597 link, nhưng **851 link subdomain phần lớn chỉ
+là cửa vào** tìm được từ trang chính — 49 host mới có đúng 1 link. Muốn có link
+*bên trong* chúng thì phải chạy việc 1b.
 
 ```bash
 cd hust-crawler
-source .venv/bin/activate 2>/dev/null || python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+python3 -m venv .venv 2>/dev/null; .venv/bin/pip install -q -r requirements.txt
 
 # xem đang ở đâu
 .venv/bin/python read_raw.py --stats        # kho có gì
+.venv/bin/python read_raw.py --subdomains   # họ hust có những host nào
 .venv/bin/python read_raw.py --audit        # chuyên mục nào còn thiếu trang
+```
 
-# VIỆC 2: tải nốt nội dung bài (ngắt lúc nào cũng được, chạy lại là đi tiếp)
+**VIỆC 1b — lấy link của các subdomain.** Chạy từng host một, mỗi host một kho
+riêng, ngắt lúc nào cũng được:
+
+```bash
+.venv/bin/python crawl_all.py --site bulletin.hust.edu.vn --only listing
+.venv/bin/python crawl_all.py --resume --site library.hust.edu.vn --only listing
+```
+
+Hoặc quét cả loạt (bỏ `mail`, `e`, `ctt-sis` — cổng đăng nhập, không có nội dung):
+
+```bash
+for h in bulletin tuyendung work research svbk library ts ctsv qldt jst dlib; do
+  .venv/bin/python crawl_all.py --site $h.hust.edu.vn --only listing --max-pages 400
+done
+.venv/bin/python read_raw.py --links        # gộp mọi kho vào N1-links
+```
+
+**VIỆC 2 — tải nội dung bài** (chỉ trang chính, ~3 giờ):
+
+```bash
 .venv/bin/python crawl_all.py --resume --prefer article
+```
 
-# sau mỗi mẻ dài, soát rồi cập nhật danh sách link
+Sau mỗi mẻ dài, soát rồi cập nhật danh sách link:
+
+```bash
 .venv/bin/python read_raw.py --fix-roots
 .venv/bin/python read_raw.py --audit
 .venv/bin/python read_raw.py --links
 .venv/bin/python read_raw.py --verify-links
-```
-
-Muốn lấy link của một subdomain (`bulletin`, `svbk`, `tuyendung`… — xem
-`data/raw/subdomains.txt`):
-
-```bash
-.venv/bin/python crawl_all.py --site bulletin.hust.edu.vn --only listing
-.venv/bin/python read_raw.py --links        # tự gộp mọi kho vào N1-links
 ```
 
 **Dừng crawler:** `ps -A -o pid=,command= | grep "[c]rawl_all.py"` rồi
@@ -117,10 +138,14 @@ theo status: 2.062 trang OK, 8 trang 404
 | Trang danh sách | 658 |
 | File đính kèm | 197 |
 | Khác (tag, trang lẻ) | 1.736 |
-| Host | **52** — `hust.edu.vn` 13.746 + 851 link subdomain |
+| Host | **52** — `hust.edu.vn` 13.745 + 852 link subdomain |
 
 Chất lượng: 0 dòng trùng, 0 dòng hỏng, 0 link ngoài họ `hust.edu.vn`, và
 `--verify-links` báo **0 link có trong HTML mà thiếu ở file**.
+
+Lưu ý khi đọc con số 852: đó là link subdomain **crawler nhìn thấy từ trang
+chính**, không phải link bên trong subdomain. 49/51 host mới có đúng 1-2 link
+(cửa vào). Xem mục 4.3.
 
 Trong `state.json`: **5.640 bài** đã phát hiện, 4.639 url phụ, 4.220 url còn
 trong hàng đợi chờ tải nội dung.
@@ -192,6 +217,34 @@ chuyên mục — đều là đường dẫn tiếng Anh dạng `/admissions/…
 
 Bài học: "hàng đợi rỗng" **không** đồng nghĩa "đã phủ hết". Phải soát bằng nguồn
 độc lập (`--audit`, `--fix-roots`, `--verify-links`) mới biết mình thiếu gì.
+
+### 4.3. Subdomain: mới chạm 2/51
+
+Đây là phần **chưa xong** của việc lấy link. `--subdomains` đếm được **52 host**
+thuộc `hust.edu.vn` trong kho, nhưng crawler chỉ đi trong một host nên phần lớn
+mới có đúng **một link duy nhất** — cái cửa vào tìm thấy từ trang chính.
+
+| Host | Link trong `N1-links` | Đã tải | Hàng đợi | Trạng thái |
+|---|---|---|---|---|
+| `hust.edu.vn` | 13.745 | 1.896 | 4.220 | danh mục **xong** |
+| `library.hust.edu.vn` | 331 | 5 | 320 | mới chạy thử |
+| `svbk.hust.edu.vn` | 301 | 6 | 258 | mới chạy thử |
+| `research.hust.edu.vn` | 111 | 0 | 0 | **chưa động đến** |
+| `ts` · `en` · `ctt` · `qldt` | 6-22 | 0 | 0 | **chưa động đến** |
+| 45 host còn lại | 1-2 mỗi cái | 0 | 0 | **chưa động đến** |
+
+Nhóm đáng crawl (có nội dung thật, không phải cổng đăng nhập):
+
+```
+bulletin  tuyendung  work  research  svbk  library
+ts  ctsv  qldt  jst  dlib  soict  sem  see  smse  sami  fed  sep
+```
+
+Bỏ qua `mail`, `e`, `ctt-sis`, `demo` — cổng đăng nhập hoặc trang rỗng.
+
+Ước lượng: mỗi site 20-40 phút ở nhịp 24 trang/phút, tuỳ nó có bao nhiêu trang
+danh sách. Riêng `library` đã lộ ra 265 trang phân trang, `svbk` có 243 url trong
+sitemap. Lệnh chạy ở mục 0.
 
 **Chỉ đọc sitemap là không đủ**, ba lý do:
 

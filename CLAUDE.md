@@ -26,14 +26,23 @@ Ba tầng tách rời, tải và parse không ràng buộc nhau:
 
 ## Đang làm tới đâu (cập nhật 22/08/2026)
 
-Chia **hai việc rời nhau**:
+Chia **ba việc rời nhau**:
 
 | | Việc | Trạng thái |
 |---|---|---|
-| 1 | Lấy danh sách link | **XONG** — 14.597 link, 52 host, trong `data/raw/N1-links` |
-| 2 | Tải nội dung bài | **còn 4.216 bài** trong hàng đợi, ~3 giờ |
+| 1a | Lấy link `hust.edu.vn` | **XONG** — 13.745 link, hàng đợi danh mục cạn |
+| 1b | Lấy link bên trong 51 subdomain | **MỚI 2/51** — `library` và `svbk` chạy thử 5-6 trang |
+| 2 | Tải nội dung bài | **còn 4.216 bài**, ~3 giờ |
+
+`data/raw/N1-links` có 14.597 link / 52 host. Nhưng **852 link subdomain phần
+lớn chỉ là cửa vào** tìm từ trang chính — 49 host mới có đúng 1-2 link. Đừng
+đọc con số 52 host thành "đã phủ 52 site".
 
 Kho hiện có 2.070 trang / 201 MB HTML thô, 5.640 bài đã phát hiện.
+
+Nhóm subdomain đáng crawl: `bulletin tuyendung work research svbk library ts
+ctsv qldt jst dlib soict sem see smse sami fed sep`. Bỏ `mail`, `e`, `ctt-sis`,
+`demo` — cổng đăng nhập hoặc trang rỗng.
 
 ```bash
 cd hust-crawler
@@ -53,8 +62,11 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python read_raw.py --links         # xuất lại N1-links
 .venv/bin/python read_raw.py --verify-links  # soát độc lập file link
 
-# lấy link của một subdomain (danh sách ở data/raw/subdomains.txt)
-.venv/bin/python crawl_all.py --site bulletin.hust.edu.vn --only listing
+# VIỆC 1b: lấy link các subdomain (danh sách ở data/raw/subdomains.txt)
+for h in bulletin tuyendung work research svbk library ts ctsv qldt jst dlib; do
+  .venv/bin/python crawl_all.py --site $h.hust.edu.vn --only listing --max-pages 400
+done
+.venv/bin/python read_raw.py --links     # gộp mọi kho vào N1-links
 ```
 
 Dữ liệu ở `hust-crawler/data/` — **gitignored**, đừng commit (kho HTML thô hàng

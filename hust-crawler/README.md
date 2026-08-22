@@ -798,7 +798,170 @@ kho biết mình đến từ nguồn nào, qua đường nào.
 
 ---
 
-## 10. Ghi chú về việc thu thập
+## 10. Phương pháp khử trùng lặp
+
+Trùng lặp ở đây có **ba tầng khác nhau**, mỗi tầng một cơ chế. Nhầm tầng là hoặc
+tải thừa, hoặc mất bài.
+
+### 10.1. Trùng URL — tập `queued`
+
+Cùng một URL được nhiều trang trỏ tới. Chuẩn hoá rồi bỏ vào một tập:
+
+```python
+norm(u)          # https hoá, bỏ #fragment, bỏ www, bỏ fbclid/utm_*/PHPSESSID
+if u in queued: return
+```
+
+`queued` giữ **mọi** url đã từng vào hàng đợi, kể cả url về sau bị loại — nên một
+url không bao giờ được xử lý hai lần. Đây cũng là thứ **chặn vòng lặp vô hạn**:
+site có link vòng tròn A→B→A thì lần thứ hai A đã nằm trong `queued`.
+
+### 10.2. Trùng bài — bảng `by_key` + `aliases`
+
+Một bài xuất hiện dưới nhiều chuyên mục nên có nhiều URL **khác nhau thật sự**:
+
+```
+/vi/su-kien-noi-bat/thong-bao-chung/ke-hoach-to-chuc-...-654621.html
+/vi/su-kien-noi-bat/khoa-hoc-cong-nghe-dmst/ke-hoach-to-chuc-...-654621.html
+```
+
+Khử theo `dedup_key(u)` = **đoạn cuối đường dẫn** (slug kèm số). URL gặp đầu tiên
+thành url chính vào `by_key`, các url sau ghi vào `aliases` và **không tải**.
+
+Đo được: 5.640 bài / 4.639 url phụ — tức nếu không khử thì gần **45% request là
+tải lại nội dung đã có**.
+
+### 10.3. Trùng bản ghi trong kho — chấp nhận, đếm theo url
+
+`--resume` sau khi kill cứng có thể tải lại vài trang đã có, nên kho có bản ghi
+lặp. Không dọn, vì dọn thì phải viết lại shard. Thay vào đó **đếm theo url khác
+nhau**: 2.070 trang khác nhau trên 2.410 dòng, chênh 340 dòng là do resume.
+
+### 10.4. Chọn khoá khử trùng: đừng tin hình dạng URL
+
+Ban đầu tôi khử theo **con số cuối url** (`-654601.html`), tưởng là id bài. Sai —
+và đây là bài học chính:
+
+| URL | Tiêu đề | Body |
+|---|---|---|
+| `.../thong-bao-tuyen-dung-nam-654601.html` | THÔNG BÁO TUYỂN DỤNG 2023 | 6.035 ký tự |
+| `.../crystal-associate-programme-...-654601.html` | CRYSTAL ASSOCIATE PROGRAMME | 2.063 ký tự |
+| `.../sahep-cung-bach-khoa-...-654601.html` | SAHEP cùng Bách khoa | 5.607 ký tự |
+
+Ba bài khác hẳn nhau, cùng số, mỗi bài `og:url` riêng, không redirect. Dùng số đó
+làm khoá thì **159 bài bị coi là trùng và mất trắng**.
+
+**Cách kiểm chứng khoá — so nội dung, không suy từ url.** Tải thật rồi băm phần
+nội dung, kiểm cả hai chiều:
+
+| Giả thuyết | Cách đo | Kết quả |
+|---|---|---|
+| cùng đoạn cuối, khác chuyên mục = một bài | so `sha1(bodytext)` | **giống hệt** (`52c3381844f5`) → đúng |
+| cùng số, khác slug = một bài | so tiêu đề + độ dài body | **khác hẳn** → sai |
+
+Kết luận cho báo cáo: một trường "trông như ID" chưa chắc là ID. Phải chứng minh
+bằng nội dung — hai bản ghi cùng khoá thì nội dung có trùng không — chứ không
+suy từ hình dạng định danh. Đây đúng là *entity resolution*: xác định thực thể
+bằng bằng chứng, không bằng giả định.
+
+---
+
+## 11. Kỹ thuật truy vấn và tìm lỗi
+
+Bốn lỗi lớn của dự án đều tìm ra bằng **đo**, không bằng đọc code.
+
+### 11.1. Crawler chậm gấp 4 lần — profiler hệ thống
+
+Đặt nhịp 2,2 req/s nhưng chạy được 0,55 trang/s. Thay vì đoán, lấy stack của
+tiến trình đang chạy bằng `sample` (có sẵn trên macOS):
+
+```bash
+sample <pid> 8 -file /tmp/prof.txt
+```
+
+Kết quả: **cả 5 luồng nằm 100% trong `time.sleep`** — không phải mạng, không phải
+parse, không phải kẹt mutex. Từ đó khoanh vùng ngay vào chỗ gọi `sleep`, ra
+nguyên nhân là 429 + mỗi luồng ngủ riêng.
+
+### 11.2. Ngưỡng rate-limit — bắn thử từng nhịp
+
+Không có tài liệu nào nói site chặn bao nhiêu. Đo bằng thí nghiệm:
+
+```python
+for gap in (1.0, 1.6, 2.2):
+    gửi 14 request cách nhau `gap` giây, đếm số 429
+```
+
+| Giãn cách | Kết quả |
+|---|---|
+| 1,0s | 14/14 lọt |
+| 1,6s | 10 lọt / 4 chặn, chặn từ request thứ 11 |
+| 2,2s | 14/14 lọt |
+
+Chỗ 1,6s bị chặn mà 2,2s không, cho thấy limiter đếm theo **cửa sổ trượt** (cộng
+dồn cả request của phép đo trước) chứ không theo khoảng cách hai request liên
+tiếp. Ngưỡng thực: ~20-25 request/phút.
+
+### 11.3. Mất dữ liệu khi kill — dựng lại hiện trường
+
+`--check` báo 184 url state khai đã tải mà kho không có. Nghi flush thưa, kiểm
+bằng script tự giết chính mình giữa chừng:
+
+```python
+for i in range(400):
+    fh.write(dòng); flush theo từng chế độ
+    if i == 300: os.kill(os.getpid(), 9)
+```
+
+| Kiểu flush | Ghi 301 dòng rồi `kill -9` | Đọc lại được |
+|---|---|---|
+| từng dòng | | **301** |
+| 25 dòng một lần | | 300 |
+| không flush | | 0 |
+
+### 11.4. Chuyên mục biến mất — truy vấn chéo ba tập
+
+`/vi/news/tin-tuc-su-kien/` (295 trang) không nằm ở đâu cả. Tìm ra bằng cách so
+ba tập trong `state.json`:
+
+```python
+mồ_côi = queued - done - frontier - aliases     # đã biết nhưng không ai xử lý
+```
+
+Rồi suy ngược tập chuyên mục **từ chính dữ liệu**: mọi url bài đều ngụ ý chuyên
+mục chứa nó, nên `roots = {url.rsplit('/',1)[0] + '/'}` cho ra 162 chuyên mục,
+đối chiếu với `done ∪ frontier` thì lòi ra **111 cái thiếu**. Đóng thành lệnh
+`read_raw.py --fix-roots`.
+
+### 11.5. Soát chéo bằng nguồn độc lập
+
+Không tin một nguồn duy nhất. `N1-links` dựng từ `state.json`, nên soát lại bằng
+nguồn khác hẳn: **bóc lại mọi `href` từ HTML đã lưu** rồi so hai tập
+(`read_raw.py --verify-links`).
+
+Lần đầu chạy báo "thiếu 17 link" — hoá ra **lỗi của phép đo**, không phải của dữ
+liệu: hai bên chuẩn hoá url khác nhau (`http://` với `https://`). Sau khi cho cả
+hai dùng chung `crawl_all.norm()` thì còn **0 link thiếu**.
+
+Bài học: khi hai phép đo lệch nhau, nghi phép đo trước khi nghi dữ liệu.
+
+### 11.6. Chống lặp vô hạn
+
+Bốn lớp, độc lập nhau:
+
+| Cơ chế | Chặn cái gì |
+|---|---|
+| `queued` | url đã xử lý, kể cả link vòng tròn A→B→A |
+| `dedup_key` | cùng bài dưới nhiều chuyên mục |
+| `--max-depth 6` | nhánh sâu vô tận (lịch theo tuần, calendar…) |
+| `--max-pages-per-cat 400` | trang in ra số trang vô lý |
+
+Thêm `SKIP_SEG` loại `/feeds/`, `/rss/`, `/seek/`, `/print/`, `/export/` và
+`SKIP_QUERY` loại `?download=1` — đó là các endpoint sinh url vô hạn theo tham số.
+
+---
+
+## 12. Ghi chú về việc thu thập
 
 Dữ liệu thu được là thông tin công khai trên cổng thông tin của trường, dùng cho
 bài tập môn học. `User-Agent` để nguyên dạng có thông tin liên hệ:

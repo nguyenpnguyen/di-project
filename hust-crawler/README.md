@@ -140,23 +140,24 @@ trong hàng đợi chờ tải nội dung.
 
 Kèm theo:
 
-* **192 file đính kèm** đã lập danh mục url trong `assets.txt` (166 `.pdf`,
-  18 `.docx`, 7 `.doc`, 1 `.rar`) — bóc ra từ HTML đã lưu, không tốn request nào.
-* **4.185 bài** đã phát hiện và **988 url phụ** trỏ cùng bài, nằm trong
-  `state.json`. Đây **chưa** phải toàn bộ site — xem mục 4.
+* **197 file đính kèm** đã lập danh mục url trong `assets.txt` (166 `.pdf`,
+  18 `.docx`, 7 `.doc`, 1 `.rar`, …) — bóc ra từ HTML đã lưu, không tốn request nào.
+* **58 host** thuộc `hust.edu.vn` liệt kê trong `subdomains.txt`.
 * **0 trang khuyết**, **0 lần dính 429** ở các mẻ chạy cuối.
 
-Cách 946 trang này được lấy, theo ba mẻ:
+Kho được dựng qua năm mẻ:
 
 | Mẻ | Cách chạy | Kết quả |
 |---|---|---|
-| 1 | BFS ưu tiên trang danh sách | 557 trang danh sách, phủ hết chuyên mục và phát hiện 4.185 bài |
+| 1 | BFS ưu tiên trang danh sách | 557 trang danh sách, phát hiện 4.185 bài |
 | 2 | `--seed-file` lấy mẫu bài theo tỉ lệ từng chuyên mục | 389 bài, 16,2 phút |
 | 3 | `--seed-file missing.txt` vá chỗ khuyết | 11 trang |
+| 4 | `--fix-roots` trả 111 chuyên mục bị rơi khỏi hàng đợi | +111 url gốc |
+| 5 | `--only listing` quét nốt danh mục | 1.129 trang, 47 phút, bài 4.185 → **5.640** |
 
 Mẻ 2 lấy mẫu **theo tỉ lệ** (chuyên mục có 1.271 bài thì lấy 111, chuyên mục có
 2 bài thì lấy cả 2, sàn 5 bài cho nhóm nhỏ) để mẫu phản ánh đúng phân bố thật
-chứ không dồn vào một chuyên mục.
+chứ không dồn vào một chuyên mục — nên 389 bài đã tải nội dung trải đều 30 nhóm.
 
 ---
 
@@ -168,31 +169,29 @@ Không thể biết chính xác site có bao nhiêu bài, nhưng đếm được
 
 | Cách đếm | Con số | Ghi chú |
 |---|---|---|
-| Tổng URL trong 34 sitemap | **3.933** | thiếu, xem bên dưới |
-| Bài đã phát hiện qua BFS | **4.185** | chưa phải toàn bộ, xem dưới |
-| URL phụ trỏ cùng một bài | 988 | cùng slug, chỉ khác chuyên mục |
-| Trang danh sách đã biết | ~830 | mỗi trang 6 bài |
-| **Trang danh sách đã tải** | **223 (27%)** | phần còn lại chưa nở phân trang |
+| Tổng URL trong 34 sitemap | 3.933 | thiếu, xem bên dưới |
+| **Bài đã phát hiện** | **5.640** | sau khi quét hết trang danh sách |
+| URL phụ trỏ cùng một bài | 4.639 | cùng slug, chỉ khác chuyên mục |
+| Trang danh sách đã tải | **1.681** | 500 trang gốc + 1.181 trang phân trang |
+| Bài đã tải nội dung | 389 | phần còn lại là việc 2 |
 
-### Phần phát hiện CHƯA xong
+### Phần phát hiện: đã xong cho hust.edu.vn
 
-Đây là chỗ dễ tưởng nhầm là đã đủ. Dừng crawl giữa chừng để lại **18 trang gốc
-chuyên mục chưa tải**, mà mỗi trang gốc chưa tải nghĩa là **toàn bộ phân trang
-của nó chưa hề được sinh ra**. Đo bằng 18 request:
+Hàng đợi trang danh sách đã cạn, `--audit` còn báo **17 trang thiếu** trên 330
+chuyên mục — đều là đường dẫn tiếng Anh dạng `/admissions/…`, `/academics/…`
+(thiếu tiền tố `/en/`), mỗi cái 4-5 bài. Không đáng kể.
 
-| Chuyên mục chưa tải trang gốc | Số trang | ≈ bài |
+Đường đi tới đây không thẳng, và đó là phần đáng viết vào báo cáo:
+
+| Lần đo | Tưởng là | Thực tế |
 |---|---|---|
-| `/vi/news/hoat-dong-chung/` | **259** | ~1.554 |
-| `/vi/news/tuyen-sinh-dao-tao-cong-tac-sinh-vien/` | **123** | ~738 |
-| `/vi/news/cong-tac-dang-va-doan-the/` | **107** | ~642 |
-| 15 chuyên mục còn lại (`van-ban`, `media`, `events`, `du-an`…) | 1-2 mỗi cái | ~90 |
-| **Tổng** | **505** | **~3.030** |
+| sau mẻ 1-3 | "phát hiện coi như xong, 4.185 bài" | mới 27% trang danh sách |
+| soát `--fix-roots` | — | **111 chuyên mục** rơi khỏi hàng đợi, gồm `tin-tuc-su-kien` 295 trang và cả phần tiếng Anh |
+| đo 18 trang gốc chưa tải | — | riêng chúng chứa **505 trang danh sách** chưa nở |
+| sau mẻ 5 | | **5.640 bài**, hàng đợi danh sách cạn |
 
-Con số ~3.030 là **trần trên**, không phải số bài mới: bài xuất hiện ở nhiều
-chuyên mục nên phần lớn sẽ trùng với 4.185 bài đã biết. Muốn biết chính xác thì
-phải tải 505 trang danh sách đó rồi khử trùng — khoảng 21 phút.
-
-Cả 18 url này vẫn nằm trong `frontier`, nên `--resume` sẽ tự tải, không mất gì.
+Bài học: "hàng đợi rỗng" **không** đồng nghĩa "đã phủ hết". Phải soát bằng nguồn
+độc lập (`--audit`, `--fix-roots`, `--verify-links`) mới biết mình thiếu gì.
 
 **Chỉ đọc sitemap là không đủ**, ba lý do:
 
@@ -213,14 +212,10 @@ request/phút** (mục 7). Thực đo **24 trang/phút**. Từ đó:
 
 | Mục tiêu | Còn phải tải | Thời gian ở 24 trang/phút |
 |---|---|---|
-| **Chốt xong phần phát hiện** (505 trang danh sách của 18 chuyên mục) | 505 | **~21 phút** |
-| Nốt 3.796 bài đã biết | 3.796 | ~2,6 giờ |
-| Cả hai việc trên | ~4.300 | ~3,0 giờ |
-| Kể cả bài mới lòi ra từ 505 trang kia | ~5.000-7.300 | 3,5-5 giờ |
-| Tải luôn 192 file đính kèm | +192 | +8 phút |
-
-Nếu chỉ làm được một việc, làm việc đầu: 21 phút để biết site thật sự có bao
-nhiêu bài, thay vì đoán.
+| ~~Chốt phần phát hiện~~ | — | **đã xong** (mẻ 5, 47 phút) |
+| **Tải nốt nội dung 4.216 bài trong hàng đợi** | 4.216 | **~2,9 giờ** |
+| Tải luôn 197 file đính kèm | +197 | +8 phút |
+| Lấy link bên trong các subdomain lớn | tuỳ site | 20-40 phút mỗi site |
 
 Lệnh chạy tiếp, an toàn khi ngắt giữa chừng:
 
@@ -238,13 +233,9 @@ Kho hiện tại vẫn dùng được cho bài tập tích hợp dữ liệu, v�
 * **Đủ đa dạng để làm wrapper**: có bài của cả 30 nhóm chuyên mục, cả vi lẫn en,
   cả bài tin tức lẫn bài văn bản có file đính kèm — đủ mọi biến thể cấu trúc HTML
   mà bộ bóc tách phải chịu được.
-* **Danh mục URL đã có sẵn 4.185 bài** trong `state.json`, đủ để lấy thêm bất cứ
-  lúc nào mà không phải bò lại từ đầu.
+* **Danh mục URL đã đầy đủ**: 5.640 bài trong `state.json`, 14.597 link trong
+  `N1-links`. Lấy thêm nội dung bất cứ lúc nào mà không phải bò lại từ đầu.
 * **Bổ khuyết được bất cứ lúc nào** — `--resume` đọc `frontier` và đi tiếp.
-
-Nhưng đừng nhầm là *phát hiện đã xong*: còn 18 trang gốc chuyên mục chưa tải,
-kéo theo ~505 trang danh sách chưa nở ra (xem bảng ở trên). Muốn chốt con số
-"site có bao nhiêu bài" thì phải chạy hết phần đó trước.
 
 Thứ **không** làm được nếu thiếu dữ liệu: thống kê theo thời gian trên toàn bộ
 kho (vd. số bài mỗi tháng qua các năm), vì mẫu hiện tại thiên về bài mới.
@@ -620,7 +611,8 @@ bằng cách tải thật rồi so sha1 của phần nội dung:
 | Cùng số, khác slug | tiêu đề và nội dung khác hẳn | bài khác → phải giữ cả hai |
 
 Nên `dedup_key()` bỏ qua phần chuyên mục ở giữa url nhưng bắt buộc slug phải
-khớp. Sau khi sửa: 4.185 bài thật, 988 url phụ (trùng thật), 159 bài được cứu về.
+khớp. Ngay sau khi sửa: 4.185 bài thật, 988 url phụ, 159 bài được cứu về.
+Sau khi quét nốt danh mục (mẻ 5): **5.640 bài, 4.639 url phụ**.
 
 Bài học rút ra cho môn tích hợp dữ liệu: **một khoá "trông như id" chưa chắc là
 id**. Phải kiểm chứng bằng nội dung — hai bản ghi cùng khoá thì nội dung có
@@ -781,8 +773,8 @@ kho biết mình đến từ nguồn nào, qua đường nào.
 ## 9. Giới hạn đã biết
 
 * **Không tải file đính kèm.** PDF/DOC/ảnh chỉ được *lập danh mục* url
-  (192 file, xem `assets.txt`), không tải nội dung. Muốn tải thì viết thêm một
-  vòng đọc `assets.txt` — cùng nhịp rate-limit, 192 file ≈ 8 phút.
+  (197 file, xem `assets.txt`), không tải nội dung. Muốn tải thì viết thêm một
+  vòng đọc `assets.txt` — cùng nhịp rate-limit, 197 file ≈ 8 phút.
 * **Trang không phải HTML chỉ lưu metadata.** Endpoint kiểu
   `/vi/lich-lam-viec/export/?...` trả về PDF/DOCX; bản ghi vẫn có `url`, `status`,
   `content_type`, `sha1` nhưng `html_b64` là `null`. `read_raw.py --check` tính

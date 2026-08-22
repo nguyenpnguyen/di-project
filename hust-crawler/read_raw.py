@@ -75,6 +75,8 @@ def main():
                     help="suy chuyên mục gốc từ kho, trả những cái biến mất khỏi frontier về hàng đợi")
     ap.add_argument("--links", action="store_true",
                     help="xuất MỌI url đã biết ra file 'links' (không đuôi), mỗi dòng một link")
+    ap.add_argument("--out", help="đường dẫn file kết quả cho --links "
+                                  "(mặc định: ghi đè file *links* đang có trong data/raw)")
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
     d = pathlib.Path(args.dir)
@@ -146,7 +148,9 @@ def main():
                 take(f.read_text(encoding="utf-8").split())
         take(r["url"] for r in records(d, quiet=True))
 
-        p = d / "links"
+        # ghi đè đúng file cũ nếu đã đổi tên, để lần cập nhật sau không đẻ file mới
+        p = pathlib.Path(args.out) if args.out else next(
+            (x for x in sorted(d.glob("*links*")) if x.is_file()), d / "links")
         p.write_text("\n".join(sorted(out)) + "\n", encoding="utf-8")
         kinds = collections.Counter()
         for u in out:

@@ -200,6 +200,7 @@ state.json            hàng đợi + đã tải + bảng khoá bài, dùng cho -
 manifest.json         tổng kết mẻ chạy gần nhất
 assets.txt            192 url file đính kèm (pdf/doc/xls) đã lập danh mục, không tải
 missing.txt           read_raw.py --check sinh ra khi có url khuyết; hết khuyết thì tự xoá
+links                 read_raw.py --links: MỌI url đã biết, mỗi dòng một link, không đuôi file
 sample_articles.txt   danh sách url dùng cho mẻ lấy mẫu bài
 ```
 
@@ -341,6 +342,7 @@ File `.csv` là bản dẹt của cùng dữ liệu, bỏ các trường mảng,
 .venv/bin/python read_raw.py --grep "điểm chuẩn"        # tìm trong nội dung
 .venv/bin/python read_raw.py --extract data/html_files  # bung ra file .html rời
 .venv/bin/python read_raw.py --assets                   # lập danh mục pdf/doc/xls
+.venv/bin/python read_raw.py --links                    # xuất mọi url ra file 'links'
 .venv/bin/python read_raw.py --check                    # đối chiếu kho với state
 ```
 

@@ -71,12 +71,59 @@ def main():
                     help="đối chiếu state.json với shard, ghi url khuyết ra missing.txt")
     ap.add_argument("--assets", action="store_true",
                     help="bóc url file đính kèm (pdf/doc/xls…) từ HTML đã lưu, ghi ra assets.txt")
+    ap.add_argument("--links", action="store_true",
+                    help="xuất MỌI url đã biết ra file 'links' (không đuôi), mỗi dòng một link")
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
     d = pathlib.Path(args.dir)
 
     if not shards(d):
         sys.exit(f"Không thấy shard nào trong {d}. Chạy crawl_all.py trước.")
+
+    if args.links:
+        # Gom MỌI url đã biết, không phân biệt đã tải hay chưa, không phân cấp.
+        # Mỗi dòng một link, file không đuôi.
+        st = json.loads((d / "state.json").read_text(encoding="utf-8"))
+        out: set[str] = set()
+
+        def take(it):
+            for u in it:
+                if u and str(u).startswith("http"):
+                    out.add(u)
+
+        take(st.get("done", {}))
+        take(u for u, _, _ in st.get("frontier", []))
+        take(st.get("queued", []))
+        take(st.get("by_key", {}).values())
+        take(st.get("origin", {}))
+        take(st.get("aliases", {}))
+        take(a for v in st.get("aliases", {}).values() for a in v)
+        take(st.get("assets", []))
+        for name in ("assets.txt", "sample_articles.txt", "lost_articles.txt",
+                     "roots_todo.txt", "missing.txt"):
+            f = d / name
+            if f.exists():
+                take(f.read_text(encoding="utf-8").split())
+        take(r["url"] for r in records(d, quiet=True))
+
+        p = d / "links"
+        p.write_text("\n".join(sorted(out)) + "\n", encoding="utf-8")
+        kinds = collections.Counter()
+        for u in out:
+            if re.search(r"-\d+\.html$", u):
+                kinds["bài viết"] += 1
+            elif re.search(r"/page-\d+/$", u):
+                kinds["trang phân trang"] += 1
+            elif re.search(r"\.(pdf|docx?|xlsx?|pptx?|rar|zip)$", u, re.I):
+                kinds["file đính kèm"] += 1
+            elif u.endswith("/"):
+                kinds["trang danh sách"] += 1
+            else:
+                kinds["khác"] += 1
+        print(f"{len(out)} link -> {p}  ({p.stat().st_size / 1024:.0f} KB)")
+        for k, v in kinds.most_common():
+            print(f"   {v:>5}  {k}")
+        return
 
     if args.assets:
         # bóc từ HTML đã lưu, không phải ra mạng lại — đó là lợi ích của kho thô

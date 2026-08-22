@@ -557,7 +557,11 @@ class Crawler:
         }
         (RAW / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1),
                                           encoding="utf-8")
-        (RAW / "assets.txt").write_text("\n".join(sorted(self.assets)), encoding="utf-8")
+        # GỘP, đừng đè: mẻ chạy --seed-file không bóc link nên self.assets rỗng,
+        # ghi đè sẽ xoá sạch danh sách read_raw.py --assets đã dựng từ cả kho
+        ap = RAW / "assets.txt"
+        old = set(ap.read_text(encoding="utf-8").split()) if ap.exists() else set()
+        ap.write_text("\n".join(sorted(old | self.assets)), encoding="utf-8")
         self.log(json.dumps(manifest, ensure_ascii=False, indent=1))
         self.log(f"\nXong {self.store.n_total} trang / {self.store.bytes_raw / 1e6:.0f} MB HTML thô "
                  f"trong {dur / 60:.1f} phút -> {RAW}")

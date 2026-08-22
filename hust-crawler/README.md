@@ -80,7 +80,7 @@ Kèm theo:
 
 * **192 file đính kèm** đã lập danh mục url trong `assets.txt` (166 `.pdf`,
   18 `.docx`, 7 `.doc`, 1 `.rar`) — bóc ra từ HTML đã lưu, không tốn request nào.
-* **3.990 id bài** đã phát hiện và **1.147 url phụ** trỏ cùng bài, nằm trong
+* **4.185 bài** đã phát hiện và **988 url phụ** trỏ cùng bài, nằm trong
   `state.json` — tức phần *phát hiện* coi như xong.
 * **0 trang khuyết**, **0 lần dính 429** ở các mẻ chạy cuối.
 
@@ -88,7 +88,7 @@ Cách 946 trang này được lấy, theo ba mẻ:
 
 | Mẻ | Cách chạy | Kết quả |
 |---|---|---|
-| 1 | BFS ưu tiên trang danh sách | 557 trang danh sách, phủ hết chuyên mục và phát hiện 3.990 bài |
+| 1 | BFS ưu tiên trang danh sách | 557 trang danh sách, phủ hết chuyên mục và phát hiện 4.185 bài |
 | 2 | `--seed-file` lấy mẫu bài theo tỉ lệ từng chuyên mục | 389 bài, 16,2 phút |
 | 3 | `--seed-file missing.txt` vá chỗ khuyết | 11 trang |
 
@@ -107,8 +107,8 @@ Không thể biết chính xác site có bao nhiêu bài, nhưng đếm được
 | Cách đếm | Con số | Ghi chú |
 |---|---|---|
 | Tổng URL trong 34 sitemap | **3.933** | thiếu, xem bên dưới |
-| Bài phát hiện được qua BFS | **3.990** | và còn tăng nếu crawl tiếp |
-| URL phụ trỏ cùng một bài | 1.147 | cùng bài, khác slug chuyên mục |
+| Bài phát hiện được qua BFS | **4.185** | và còn tăng nếu crawl tiếp |
+| URL phụ trỏ cùng một bài | 988 | cùng slug, chỉ khác chuyên mục |
 | Trang danh sách đã biết | ~344 trang trên 19 chuyên mục | mỗi trang 6 bài |
 
 **Chỉ đọc sitemap là không đủ**, ba lý do:
@@ -128,11 +128,11 @@ Không thể biết chính xác site có bao nhiêu bài, nhưng đếm được
 Trần tốc độ **không nằm ở code mà ở site**: hust.edu.vn chặn quanh **20-25
 request/phút** (mục 7). Thực đo **24 trang/phút**. Từ đó:
 
-Đã có 389/3.990 bài, nên phần còn thiếu là 3.601 bài:
+Đã có 389/4.185 bài, nên phần còn thiếu là 3.796 bài:
 
 | Mục tiêu | Còn phải tải | Thời gian ở 24 trang/phút |
 |---|---|---|
-| Nốt số bài đã phát hiện | 3.601 | **~2,5 giờ** |
+| Nốt số bài đã phát hiện | 3.796 | **~2,6 giờ** |
 | Bài + trang danh sách còn lại trong hàng đợi | ~4.200 | **~2,9 giờ** |
 | Crawl kiệt cả site, kể cả trang lặt vặt | ~6.000-7.000 | ~4,5 giờ |
 | Tải luôn 192 file đính kèm | +192 | +8 phút |
@@ -153,7 +153,7 @@ Kho hiện tại vẫn dùng được cho bài tập tích hợp dữ liệu, v�
 * **Đủ đa dạng để làm wrapper**: có bài của cả 30 nhóm chuyên mục, cả vi lẫn en,
   cả bài tin tức lẫn bài văn bản có file đính kèm — đủ mọi biến thể cấu trúc HTML
   mà bộ bóc tách phải chịu được.
-* **Danh mục URL thì đã đầy đủ**: `state.json` giữ 3.990 id bài + 1.147 URL phụ.
+* **Danh mục URL thì đã đầy đủ**: `state.json` giữ 4.185 bài + 988 URL phụ.
   Nghĩa là phần *phát hiện* (discovery) coi như xong, chỉ còn phần *tải*.
 * **Bổ khuyết được bất cứ lúc nào** mà không phải bò lại từ đầu — xem mục 6.
 
@@ -169,7 +169,7 @@ kho (vd. số bài mỗi tháng qua các năm), vì mẫu hiện tại thiên v�
 ```
 pages-0001.jsonl.gz   mỗi dòng một trang; HTML thô nằm ở trường html_b64
 pages-0002.jsonl.gz   ... mỗi shard 250 trang
-state.json            hàng đợi + đã tải + bảng id bài, dùng cho --resume
+state.json            hàng đợi + đã tải + bảng khoá bài, dùng cho --resume
 manifest.json         tổng kết mẻ chạy gần nhất
 assets.txt            192 url file đính kèm (pdf/doc/xls) đã lập danh mục, không tải
 missing.txt           read_raw.py --check sinh ra khi có url khuyết; hết khuyết thì tự xoá
@@ -232,7 +232,7 @@ Shard nén gzip còn **~17%** dung lượng. Muốn `.jsonl` trần thì thêm `
 | `done` | `{url: http_status}` — url đã tải xong |
 | `frontier` | `[[url, depth, via], …]` — hàng đợi còn lại, để `--resume` |
 | `queued` | mọi url đã từng vào hàng đợi, chống lặp |
-| `by_id` | `{article_id: url_chính}` — bảng khử trùng bài |
+| `by_key` | `{slug_bài: url_chính}` — bảng khử trùng bài (xem 7.4) |
 | `aliases` | `{url_chính: [url_phụ, …]}` — cùng bài, khác slug chuyên mục |
 | `assets` | url file đính kèm đã thấy |
 | `errors` | 500 lỗi gần nhất, mỗi lỗi kèm url và lý do |
@@ -440,15 +440,44 @@ Bản hiện tại flush từng dòng — nhịp có 24 trang/phút thì tiết 
 gì, đổi lại mất tối đa một dòng. Thêm bắt `SIGTERM`/`SIGHUP` để `pkill` hay tắt
 máy vẫn kịp đóng shard và ghi state.
 
-### 7.4. Một bài, nhiều URL
+### 7.4. Một bài, nhiều URL — và cái bẫy khoá trùng
 
-NukeViet viết lại đường dẫn theo chuyên mục người dùng đang đứng, nên bài 656019
-tồn tại ở cả `/vi/news/tin-tuc-su-kien/...` lẫn
-`/vi/news/tuyen-sinh-dao-tao-cong-tac-sinh-vien/...`. Đo được **1.147 url phụ**
-trên 3.990 bài — tức gần 29% request sẽ là tải lại đúng nội dung đã có.
+NukeViet viết lại đường dẫn theo chuyên mục người dùng đang đứng, nên cùng một
+bài tồn tại ở nhiều url. Cần khử trùng, nếu không gần 20% request là tải lại thứ
+đã có. Câu hỏi là: **khử theo khoá nào?**
 
-Khử trùng theo `article_id` rút từ đuôi url, url phụ ghi vào `aliases`. Đây đúng
-là bài toán *entity resolution* thu nhỏ: cùng thực thể, nhiều định danh.
+Chọn sai một lần, và đây là bài học đắt nhất của cả dự án.
+
+**Giả định ban đầu (SAI):** con số cuối url `...-656013.html` là id bài duy nhất.
+Nghe rất hợp lý, và với chuyên mục tin tức thì đúng thật. Nhưng đo trên site:
+
+| URL | Tiêu đề | Độ dài body |
+|---|---|---|
+| `.../thong-bao-tuyen-dung-nam-654601.html` | THÔNG BÁO TUYỂN DỤNG NĂM 2023 | 6.035 ký tự |
+| `.../crystal-associate-programme-...-654601.html` | CRYSTAL ASSOCIATE PROGRAMME 2024 | 2.063 ký tự |
+| `.../sahep-cung-bach-khoa-...-654601.html` | SAHEP cùng Bách khoa nâng cao chất lượng | 5.607 ký tự |
+
+**Ba bài hoàn toàn khác nhau**, cùng đuôi `-654601.html`, mỗi bài có `og:url`
+riêng và không hề redirect. Con số cuối url **không duy nhất**.
+
+Hậu quả: 1.147 url bị đánh dấu "alias" và không tải, trong đó **159 là bài khác
+nhau bị bỏ nhầm** — mất trắng nếu không phát hiện ra.
+
+**Khoá đúng: đoạn cuối đường dẫn, tức slug kèm số.** Kiểm chứng cả hai chiều
+bằng cách tải thật rồi so sha1 của phần nội dung:
+
+| Trường hợp | Kết quả đo | Kết luận |
+|---|---|---|
+| Cùng đoạn cuối, khác chuyên mục | body sha1 **giống hệt** (`52c3381844f5`) | một bài → khử trùng |
+| Cùng số, khác slug | tiêu đề và nội dung khác hẳn | bài khác → phải giữ cả hai |
+
+Nên `dedup_key()` bỏ qua phần chuyên mục ở giữa url nhưng bắt buộc slug phải
+khớp. Sau khi sửa: 4.185 bài thật, 988 url phụ (trùng thật), 159 bài được cứu về.
+
+Bài học rút ra cho môn tích hợp dữ liệu: **một khoá "trông như id" chưa chắc là
+id**. Phải kiểm chứng bằng nội dung — hai bản ghi cùng khoá thì nội dung có
+giống nhau không — chứ không suy từ hình dạng url. Đây mới đúng là *entity
+resolution*: xác định thực thể bằng bằng chứng, không bằng giả định.
 
 ### 7.5. Thứ tự đi quyết định mẻ dở dang có gì
 
@@ -578,7 +607,7 @@ norm(u)          # tuyệt đối hoá, bỏ #fragment, bỏ fbclid/utm_*/PHPSES
 in_scope(u)      # đúng host hust.edu.vn; bỏ .pdf/.jpg/...; bỏ /feeds/ /rss/ /seek/ /print/
 robots.can_fetch # tôn trọng robots.txt
 u in queued      # đã từng vào hàng đợi thì thôi
-art_id(u)        # cùng id bài -> ghi vào aliases, không tải lại
+dedup_key(u)     # cùng slug bài -> ghi vào aliases, không tải lại
 ```
 
 ### 8.3. Lưu vết nguồn gốc (lineage)

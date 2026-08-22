@@ -16,8 +16,9 @@ Cách đi:
   2. Nở phân trang — thấy trang danh sách có ".../page-295/" thì đẩy thẳng
      page-2..page-295 vào hàng đợi, không lần mò từng nút "trang sau".
   3. Bò theo link — mọi link nội bộ trên trang đã tải đều vào hàng đợi.
-  4. Khử trùng theo id bài (đuôi -656013.html) vì NukeViet cho một bài xuất hiện
-     dưới nhiều slug chuyên mục; URL phụ được ghi lại ở trường "aliases".
+  4. Khử trùng theo ĐOẠN CUỐI đường dẫn (slug kèm số), vì NukeViet cho một bài
+     xuất hiện dưới nhiều chuyên mục; URL phụ ghi lại ở trường "aliases".
+     Đừng khử theo riêng con số cuối: nó KHÔNG duy nhất — xem dedup_key().
 
 Dừng giữa chừng vô tư: --resume đọc lại state.json và đi tiếp từ hàng đợi cũ.
 
@@ -94,8 +95,27 @@ def in_scope(url: str) -> bool:
 
 
 def art_id(url: str) -> str | None:
+    """Con số cuối url. CẢNH BÁO: KHÔNG duy nhất — chỉ giữ làm metadata.
+
+    Đo trên site: ba bài khác hẳn nhau cùng mang đuôi -654601.html
+    ("Thông báo tuyển dụng 2023", "Crystal Associate Programme 2024",
+    "SAHEP cùng Bách khoa..."), mỗi bài có og:url riêng, không redirect.
+    Dùng số này làm khoá khử trùng là mất bài. Xem dedup_key().
+    """
     m = ART_ID.search(urlparse(url).path)
     return m.group(1) if m else None
+
+
+def dedup_key(url: str) -> str | None:
+    """Khoá nhận dạng bài THẬT: đoạn cuối đường dẫn, tức slug kèm số.
+
+    Kiểm chứng cả hai chiều trên site:
+      cùng đoạn cuối, khác chuyên mục -> body sha1 giống hệt  => một bài
+      cùng số, khác slug              -> tiêu đề & nội dung khác => bài khác
+    Nên chuyên mục ở giữa url bị bỏ qua, còn slug thì phải khớp.
+    """
+    p = urlparse(url).path
+    return p.rstrip("/").rsplit("/", 1)[-1] if ART_ID.search(p) else None
 
 
 def kind_of(url: str) -> str:
@@ -180,7 +200,7 @@ class Crawler:
         self.frontier: collections.deque = collections.deque()
         self.queued: set[str] = set()        # URL đã từng vào hàng đợi
         self.done: dict[str, int] = {}       # URL -> HTTP status đã tải
-        self.by_id: dict[str, str] = {}      # id bài -> URL đầu tiên gặp
+        self.by_key: dict[str, str] = {}     # slug bài -> URL đầu tiên gặp
         self.origin: dict[str, str] = {}     # URL -> nơi PHÁT HIỆN ra nó lần đầu
         self.aliases: dict[str, list] = {}
         self.assets: set[str] = set()
@@ -213,14 +233,14 @@ class Crawler:
                 return
         if self.robots and not self.robots.can_fetch(UA, u):
             return
-        aid = art_id(u)
-        if aid:                               # một bài nằm ở nhiều chuyên mục -> nhiều URL
-            first = self.by_id.get(aid)
+        key = dedup_key(u)
+        if key:                               # một bài nằm ở nhiều chuyên mục -> nhiều URL
+            first = self.by_key.get(key)
             if first and first != u:
                 self.aliases.setdefault(first, []).append(u)
                 self.queued.add(u)
                 return
-            self.by_id[aid] = u
+            self.by_key[key] = u
         self.queued.add(u)
         # lineage: nhớ nơi phát hiện đầu tiên. Tải lại sau này (vd --seed-file)
         # không được xoá dấu vết ấy, nếu không mất luôn câu trả lời "bài này ở đâu ra"
@@ -427,7 +447,7 @@ class Crawler:
                 "done": self.done,
                 "frontier": list(self.frontier) + self._parked,
                 "queued": sorted(self.queued),
-                "by_id": self.by_id,
+                "by_key": self.by_key,
                 "origin": self.origin,
                 "aliases": self.aliases,
                 "assets": sorted(self.assets),
@@ -445,7 +465,8 @@ class Crawler:
         s = json.loads(self.state_path.read_text(encoding="utf-8"))
         self.done = s.get("done", {})
         self.queued = set(s.get("queued", []))
-        self.by_id = s.get("by_id", {})
+        # state cũ dùng khoá sai (chỉ con số); có by_key thì mới tin được
+        self.by_key = s.get("by_key", {})
         self.origin = s.get("origin", {})
         self.aliases = s.get("aliases", {})
         self.assets = set(s.get("assets", []))
@@ -524,7 +545,7 @@ class Crawler:
             "pages": self.store.n_total,
             "raw_bytes": self.store.bytes_raw,
             "by_kind": dict(by_kind),
-            "distinct_articles": len(self.by_id),
+            "distinct_articles": len(self.by_key),
             "alias_urls": sum(len(v) for v in self.aliases.values()),
             "assets_seen": len(self.assets),
             "throttle_429": self.n_429,

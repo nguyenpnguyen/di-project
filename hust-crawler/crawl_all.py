@@ -301,7 +301,13 @@ class Crawler:
         # --only listing: bài vẫn được ghi vào by_key/queued/origin (nên vẫn hiện
         # trong danh sách link) nhưng KHÔNG vào hàng đợi, tức không tốn request.
         # Dùng khi chỉ cần chốt xem site có những bài nào, chưa cần nội dung.
-        if self.a.only == "listing" and k not in ("listing", "listing-page"):
+        #
+        # Loại theo "chắc chắn là bài", KHÔNG theo "chắc chắn là danh sách":
+        # kind "listing" nhận diện bằng dấu / cuối url, chỉ đúng với NukeViet.
+        # CMS khác để url chuyên mục không có dấu / nên rơi vào "other"; lọc
+        # ngược lại thì mất sạch, research.hust.edu.vn có 31 link hợp lệ mà
+        # crawler dừng ngay sau trang chủ.
+        if self.a.only == "listing" and k == "article":
             return
         first = k in ("listing", "listing-page") if self.a.prefer == "listing" else k == "article"
         (self.frontier.appendleft if first else self.frontier.append)((u, depth, via))
@@ -345,7 +351,7 @@ class Crawler:
         while tries < self.a.retries and throttled < self.a.max_429:
             self._wait_turn()
             try:
-                r = self.session.get(url, timeout=self.a.timeout)
+                r = self.session.get(url, timeout=self.a.timeout, verify=not self.a.insecure)
             except requests.RequestException as e:
                 err = f"{type(e).__name__}: {e}"
                 tries += 1
@@ -565,8 +571,8 @@ class Crawler:
         if self.a.only == "listing":
             # hàng đợi cũ phần lớn là bài; gác chúng sang một bên chứ đừng vứt,
             # nếu không lần chạy sau mất sạch danh mục đã phát hiện được
-            keep = [x for x in self.frontier if kind_of(x[0]) in ("listing", "listing-page")]
-            self._parked += [x for x in self.frontier if x not in keep]
+            keep = [x for x in self.frontier if kind_of(x[0]) != "article"]
+            self._parked += [x for x in self.frontier if kind_of(x[0]) == "article"]
             self.frontier = collections.deque(keep)
             self.log(f"      --only listing: đi {len(keep)} trang danh sách, "
                      f"gác lại {len(self._parked)} url khác")
@@ -662,6 +668,10 @@ def main():
                     help="host cần crawl, vd sinhvien.hust.edu.vn. Mỗi site một kho riêng "
                          "data/raw-<host>; kiểu phân trang tự nhận, không cần sửa code")
     ap.add_argument("--seed-url", nargs="*", help="url hạt giống thêm, khi site không có sitemap")
+    ap.add_argument("--insecure", action="store_true",
+                    help="bỏ kiểm chứng chỉ TLS. Vài subdomain của trường không gửi kèm "
+                         "chứng chỉ trung gian nên requests từ chối; chỉ bật khi đã biết "
+                         "site đó là site thật, và biết là mất bảo đảm chống giả mạo")
     ap.add_argument("--max-pages", type=int, default=0, help="trần số trang, 0 = không giới hạn")
     ap.add_argument("--max-depth", type=int, default=6)
     ap.add_argument("--max-pages-per-cat", type=int, default=400,

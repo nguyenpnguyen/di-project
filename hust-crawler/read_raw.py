@@ -104,6 +104,8 @@ def main():
                     help="bóc url file đính kèm (pdf/doc/xls…) từ HTML đã lưu, ghi ra assets.txt")
     ap.add_argument("--audit", action="store_true",
                     help="soát từng chuyên mục: phân trang nở tới đâu, tải thiếu trang nào")
+    ap.add_argument("--rebuild-state", action="store_true",
+                    help="dựng lại state.json từ shard + file link, khi state bị hỏng hoặc ghi đè")
     ap.add_argument("--fix-roots", action="store_true",
                     help="suy chuyên mục gốc từ kho, trả những cái biến mất khỏi frontier về hàng đợi")
     ap.add_argument("--verify-links", action="store_true",
@@ -201,6 +203,54 @@ def main():
               f"(~{tm * 6} bài chưa nhìn thấy, ước theo 6 bài/trang của module news)")
         if tm:
             print("Chạy tiếp: python crawl_all.py --resume --only listing")
+        return
+
+    if args.rebuild_state:
+        # Dựng lại state.json từ chính kho. Cần khi state bị ghi đè hoặc hỏng:
+        # shard là nguồn thật cho "đã tải gì", file link là nguồn thật cho
+        # "biết những url nào", nên hai thứ đó đủ để dựng lại toàn bộ.
+        ca = load_crawler()
+        sp = d / "state.json"
+        if sp.exists():
+            bak = sp.with_suffix(".json.rebuild-bak")
+            bak.write_bytes(sp.read_bytes())
+            print(f"giữ bản cũ ở {bak.name}")
+
+        done, origin = {}, {}
+        for r in records(d, quiet=True):
+            done[r["url"]] = r.get("status") or 200
+            if r.get("via"):
+                origin.setdefault(r["url"], r["via"])
+
+        known = set(done)
+        lf = link_file(d)
+        if lf:
+            for line in lf.read_text(encoding="utf-8").splitlines():
+                u = ca.norm(line.strip())
+                if u and ca.in_scope(u):
+                    known.add(u)
+
+        by_key, aliases = {}, {}
+        for u in sorted(known):
+            k = ca.dedup_key(u)
+            if not k:
+                continue
+            first = by_key.setdefault(k, u)
+            if first != u:
+                aliases.setdefault(first, []).append(u)
+
+        alias_urls = {a for v in aliases.values() for a in v}
+        frontier = [[u, 2, "rebuild"] for u in sorted(known - set(done) - alias_urls)]
+
+        sp.write_text(json.dumps({
+            "at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
+            "done": done, "frontier": frontier, "queued": sorted(known),
+            "by_key": by_key, "origin": origin, "aliases": aliases,
+            "assets": [], "errors": [], "pages_written": len(done),
+            "shards": [p.name for p in shards(d)],
+        }, ensure_ascii=False), encoding="utf-8")
+        print(f"dựng lại xong: {len(done)} đã tải, {len(frontier)} chờ, "
+              f"{len(by_key)} bài, {len(alias_urls)} url phụ")
         return
 
     if args.fix_roots:

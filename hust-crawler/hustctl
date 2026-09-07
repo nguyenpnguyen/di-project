@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# Điều khiển crawler: chạy nền, xem tiến độ, dừng mềm, chạy tiếp.
+#
+# Vấn đề của cách chạy cũ: phải tự tìm pid bằng ps rồi kill, mà `pkill -f
+# crawl_all.py` thì khớp cả dòng lệnh shell đang gõ và giết nhầm terminal.
+# Ở đây pid được ghi ra file nên dừng đúng tiến trình, không nhầm ai.
+#
+#   ./hustctl start [--site X] [tham số khác]   chạy nền
+#   ./hustctl resume                            chạy tiếp mẻ dở
+#   ./hustctl links-only [--site X]             chỉ lấy link, không tải bài
+#   ./hustctl file <đường-dẫn>                  crawl đúng danh sách link trong file
+#   ./hustctl status                            đang chạy gì, tới đâu
+#   ./hustctl log [n]                           xem n dòng log cuối
+#   ./hustctl stop                              dừng mềm (đóng shard, ghi state)
+#   ./hustctl kill                              dừng cứng, chỉ khi stop không ăn
+#   ./hustctl index                             đẩy dữ liệu đã crawl vào Lucene
+#   ./hustctl search "từ khoá"                  tìm nhanh từ dòng lệnh
+set -uo pipefail
+cd "$(dirname "$0")" || exit 1
+
+PY=${PY:-.venv/bin/python}
+PIDFILE=data/crawler.pid
+LOG=data/crawl_all.log
+API=${API:-http://localhost:8000}
+
+[ -x "$PY" ] || PY=python3
+mkdir -p data
+
+running() {           # -> 0 nếu đang chạy, và in pid
+  [ -f "$PIDFILE" ] || return 1
+  local pid; pid=$(cat "$PIDFILE" 2>/dev/null)
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && { echo "$pid"; return 0; }
+  rm -f "$PIDFILE"; return 1
+}
+
+launch() {
+  if pid=$(running); then
+    echo "Đang có mẻ chạy rồi (pid $pid). Dừng trước bằng: ./hustctl stop"
+    exit 1
+  fi
+  echo "→ crawl_all.py $*"
+  nohup "$PY" crawl_all.py "$@" >>"$LOG" 2>&1 &
+  local shell_pid=$!
+  sleep 2
+  # nohup bọc một lớp shell; lấy pid của tiến trình python thật
+  local real
+  real=$(pgrep -f "crawl_all\.py" | tail -1)
+  echo "${real:-$shell_pid}" >"$PIDFILE"
+  echo "Đã chạy nền, pid $(cat $PIDFILE). Xem: ./hustctl status"
+}
+
+case "${1:-status}" in
+  start)      shift; launch "$@" ;;
+  resume)     shift; launch --resume "$@" ;;
+  links-only) shift; launch --resume --only listing "$@" ;;
+  file)
+    shift
+    f=${1:?dùng: ./hustctl file <đường-dẫn-danh-sách-link>}; shift
+    [ -f "$f" ] || { echo "Không thấy file: $f"; exit 1; }
+    echo "Danh sách có $(grep -c . "$f") dòng"
+    launch --from-file "$f" "$@"
+    ;;
+
+  status)
+    if pid=$(running); then
+      echo "ĐANG CHẠY  pid $pid   $(ps -o etime= -p "$pid" | tr -d ' ') "
+      tail -1 "$LOG" 2>/dev/null | sed 's/^/  /'
+    else
+      echo "Không có mẻ nào đang chạy"
+    fi
+    for d in data/raw data/raw-*; do
+      [ -d "$d" ] || continue
+      "$PY" - "$d" <<'PY' 2>/dev/null
+import json, pathlib, sys
+d = pathlib.Path(sys.argv[1]); p = d / "state.json"
+if not p.exists():
+    sys.exit()
+s = json.loads(p.read_text(encoding="utf-8"))
+host = "hust.edu.vn" if d.name == "raw" else d.name[4:]
+print(f"  {host:<32} {len(s.get('done', {})):>6} tải  {len(s.get('frontier', [])):>6} chờ")
+PY
+    done
+    ;;
+
+  log)  tail -"${2:-25}" "$LOG" ;;
+
+  stop)
+    if pid=$(running); then
+      echo "Dừng mềm pid $pid (đóng shard, ghi state)…"
+      kill -TERM "$pid"
+      for _ in $(seq 1 30); do kill -0 "$pid" 2>/dev/null || break; sleep 2; done
+      if kill -0 "$pid" 2>/dev/null; then
+        echo "Chưa thoát sau 60s. Dùng ./hustctl kill nếu cần."
+        exit 1
+      fi
+      rm -f "$PIDFILE"; echo "Đã dừng sạch."
+    else
+      echo "Không có mẻ nào đang chạy"
+    fi
+    ;;
+
+  kill)
+    if pid=$(running); then
+      kill -9 "$pid"; rm -f "$PIDFILE"
+      echo "Đã kill cứng pid $pid. Shard flush từng dòng nên mất tối đa 1 trang."
+    else
+      echo "Không có mẻ nào đang chạy"
+    fi
+    ;;
+
+  index)  shift; curl -s -X POST "$API/api/index/run" -H 'content-type: application/json' \
+                      -d "${1:-\{\}}" | "$PY" -m json.tool ;;
+  search) shift; curl -s --get "$API/api/search" --data-urlencode "q=${1:?cần từ khoá}" \
+                      | "$PY" -m json.tool | head -40 ;;
+  links)  "$PY" read_raw.py --links ;;
+  audit)  "$PY" read_raw.py --audit ;;
+
+  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//' ;;
+esac

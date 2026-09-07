@@ -5,11 +5,26 @@ Bài tập môn Tích hợp dữ liệu (IT5420). Repo chứa tài liệu môn h
 ## Bố cục
 
 ```
-hust-crawler/     crawler cho hust.edu.vn — project chính, xem hust-crawler/README.md
+hust-crawler/     engine crawl + soát kho (chạy độc lập, không cần docker)
+hust-search/      stack docker: Lucene (Java) + API/UI (Python) — xem hust-search/README.md
 job-di/           project tích hợp tin tuyển dụng — CÓ .git RIÊNG, đừng add vào repo này
 *.pdf, *.docx     slide và đề bài, để untracked
 OneDrive_*/       tài liệu tải về, để untracked
 ```
+
+## Stack tìm kiếm
+
+```bash
+cd hust-search && docker compose up -d --build   # http://localhost:8000
+./tests/integration.sh                           # 16 kiểm tra đường đi thật
+```
+
+Hai dịch vụ: `lucene` (Java 21 + Lucene 9.11, cổng 8081) và `api` (FastAPI +
+giao diện, cổng 8000). Python bóc chữ từ HTML rồi đẩy sang Java; Java chỉ lo
+index và tìm kiếm. Kho `hust-crawler/data` được mount vào container ở `/crawler`
+nên **sửa `crawl_all.py` không cần build lại image**.
+
+Test: 32 (pytest engine) + 8 (JUnit Lucene) + 16 (tích hợp) = **56 đạt**.
 
 Chỉ `hust-crawler/` được version. `job-di/` là repo lồng: `git add job-di/` sẽ tạo
 gitlink rỗng (thư mục hiện trên GitHub nhưng bấm vào không có gì).

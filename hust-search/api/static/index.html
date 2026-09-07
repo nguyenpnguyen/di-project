@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bách khoa · Tìm kiếm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Lora:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#fbf9f6; --card:#ffffff; --ink:#2f3038; --muted:#6f7180;
+  --line:#ebe6de;
+  --mint:#cfe8dd; --mint-deep:#4b8f78;
+  --blush:#f6d9d5; --blush-deep:#c2705f;
+  --sky:#d4e2f0; --sky-deep:#4d7ba6;
+  --butter:#fdf0c8; --butter-deep:#a8871f;
+  --lilac:#e2dcf0;
+  --shadow:0 1px 2px rgba(47,48,56,.05), 0 8px 24px -12px rgba(47,48,56,.18);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px;line-height:1.6}
+a{color:inherit}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+
+/* ---- đầu trang ---- */
+header{background:linear-gradient(160deg,var(--mint) 0%,var(--sky) 55%,var(--lilac) 100%);
+  border-bottom:1px solid var(--line);padding:26px 0 30px}
+.brand{display:flex;align-items:baseline;gap:12px;margin-bottom:18px}
+.brand h1{font-family:Lora,Georgia,serif;font-size:26px;font-weight:600;margin:0;letter-spacing:-.01em}
+.brand span{color:#4a5560;font-size:13px}
+.tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.tab{border:1px solid rgba(255,255,255,.75);background:rgba(255,255,255,.5);
+  padding:6px 15px;border-radius:999px;cursor:pointer;font:inherit;font-size:13.5px;
+  font-weight:500;color:#39424d;transition:.15s}
+.tab:hover{background:rgba(255,255,255,.8)}
+.tab[aria-selected=true]{background:#fff;border-color:#fff;box-shadow:var(--shadow)}
+
+/* ---- ô tìm ---- */
+.searchbar{display:flex;gap:10px;flex-wrap:wrap}
+.searchbar input[type=search]{flex:1;min-width:260px;padding:13px 18px;border-radius:14px;
+  border:1px solid rgba(255,255,255,.9);background:#fff;font:inherit;font-size:15.5px;
+  box-shadow:var(--shadow);outline:none}
+.searchbar input:focus{border-color:var(--sky-deep);box-shadow:0 0 0 3px rgba(77,123,166,.18)}
+.searchbar select{padding:13px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.9);
+  background:#fff;font:inherit;box-shadow:var(--shadow)}
+.btn{padding:13px 22px;border-radius:14px;border:0;cursor:pointer;font:inherit;font-weight:600;
+  background:var(--mint-deep);color:#fff;box-shadow:var(--shadow);transition:.15s}
+.btn:hover{filter:brightness(1.07)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn.warn{background:var(--blush-deep)}
+
+/* ---- nội dung ---- */
+main{padding:26px 0 60px}
+.panel{display:none}
+.panel.on{display:block}
+.meta{color:var(--muted);font-size:13.5px;margin-bottom:14px}
+
+.hit{background:var(--card);border:1px solid var(--line);border-radius:16px;
+  padding:16px 18px;margin-bottom:12px;box-shadow:var(--shadow);
+  border-left:4px solid var(--mint);transition:.15s}
+.hit:hover{transform:translateY(-1px);border-left-color:var(--mint-deep)}
+.hit h3{margin:0 0 4px;font-size:16.5px;font-weight:600;line-height:1.4}
+.hit h3 a{text-decoration:none}
+.hit h3 a:hover{text-decoration:underline;text-decoration-color:var(--mint-deep)}
+.hit .url{font-size:12.5px;color:var(--mint-deep);word-break:break-all;margin-bottom:8px}
+.frag{color:#4a4c57;font-size:14px;margin:4px 0}
+mark{background:var(--butter);color:#5a4708;padding:1px 3px;border-radius:4px;font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.chip{font-size:11.5px;padding:2px 9px;border-radius:999px;background:var(--sky);color:#2f4a63}
+.chip.b{background:var(--blush);color:#7d3a2c}
+.chip.g{background:var(--mint);color:#2f5a4a}
+
+/* ---- bảng điều khiển ---- */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:22px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px;
+  box-shadow:var(--shadow)}
+.stat b{display:block;font-size:27px;font-weight:700;line-height:1.2;
+  font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:12.5px}
+.stat.m{border-top:3px solid var(--mint-deep)}
+.stat.s{border-top:3px solid var(--sky-deep)}
+.stat.b{border-top:3px solid var(--blush-deep)}
+.stat.y{border-top:3px solid var(--butter-deep)}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;
+  box-shadow:var(--shadow);margin-bottom:16px}
+.card h2{margin:0 0 12px;font-size:15px;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:500;font-size:12.5px}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row label{font-size:13.5px;color:var(--muted)}
+.row input,.row select{padding:9px 12px;border-radius:10px;border:1px solid var(--line);font:inherit}
+pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:12px;
+  font-size:12px;overflow-x:auto;max-height:280px;white-space:pre-wrap;margin:0}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.dot.on{background:var(--mint-deep)}.dot.off{background:#c9ccd4}
+.empty{text-align:center;color:var(--muted);padding:50px 20px}
+.empty p{margin:6px 0}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <h1>Bách khoa · Tìm kiếm</h1>
+      <span>Lucene trên kho crawl hust.edu.vn</span>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-p="search">Tìm kiếm</button>
+      <button class="tab" role="tab" aria-selected="false" data-p="dash">Bảng điều khiển</button>
+    </div>
+    <div class="searchbar" id="sb">
+      <input type="search" id="q" placeholder="Nhập từ khoá, ví dụ: điểm chuẩn 2026" autocomplete="off">
+      <select id="host"><option value="">Mọi site</option></select>
+      <button class="btn" id="go">Tìm</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="panel on" id="p-search">
+    <div class="meta" id="meta"></div>
+    <div id="hits"></div>
+    <div class="empty" id="empty">
+      <p><strong>Nhập từ khoá để tìm trong kho đã crawl.</strong></p>
+      <p>Phần khớp được Lucene tô vàng. Bấm tiêu đề để mở trang gốc ở tab bên cạnh.</p>
+    </div>
+  </section>
+
+  <section class="panel" id="p-dash">
+    <div class="grid" id="cards"></div>
+
+    <div class="card">
+      <h2>Crawl</h2>
+      <div class="row" style="margin-bottom:10px">
+        <span><span class="dot off" id="cdot"></span><b id="cstate">chưa rõ</b></span>
+        <span class="meta" id="ccmd" style="margin:0"></span>
+      </div>
+      <div class="row" style="margin-bottom:12px">
+        <label>Chế độ</label>
+        <select id="mode">
+          <option value="resume">Chạy tiếp (tải nội dung bài)</option>
+          <option value="listing">Chỉ lấy link (trang danh sách)</option>
+          <option value="site">Site khác / subdomain</option>
+        </select>
+        <label>Site</label><input id="site" placeholder="hust.edu.vn" size="20">
+        <label>Trần trang</label><input id="cap" type="number" value="100" size="5" style="width:90px">
+        <label>Render</label>
+        <select id="render"><option value="never">không</option><option value="auto">auto</option><option value="always">luôn</option></select>
+        <button class="btn" id="cstart">Chạy</button>
+        <button class="btn warn" id="cstop">Dừng</button>
+      </div>
+      <pre id="clog">—</pre>
+    </div>
+
+    <div class="card">
+      <h2>Index</h2>
+      <div class="row" style="margin-bottom:12px">
+        <span class="meta" id="istat" style="margin:0">—</span>
+        <button class="btn ghost" id="irun">Index thêm vào kho</button>
+        <button class="btn ghost" id="ireset">Dựng lại từ đầu</button>
+      </div>
+      <pre id="ilog">—</pre>
+    </div>
+
+    <div class="card">
+      <h2>Kho theo site</h2>
+      <table><thead><tr>
+        <th>Host</th><th class="n">Đã tải</th><th class="n">Hàng đợi</th>
+        <th class="n">Bài</th><th class="n">Shard</th><th class="n">Dung lượng</th>
+      </tr></thead><tbody id="sites"></tbody></table>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = n => (n ?? 0).toLocaleString('vi-VN');
+const mb = b => b >= 1e9 ? (b/1e9).toFixed(1)+' GB' : (b/1e6).toFixed(1)+' MB';
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
+  $('#p-search').classList.toggle('on', t.dataset.p === 'search');
+  $('#p-dash').classList.toggle('on', t.dataset.p === 'dash');
+  $('#sb').style.display = t.dataset.p === 'search' ? 'flex' : 'none';
+  if (t.dataset.p === 'dash') refresh();
+});
+
+// ---------------- tìm kiếm ----------------
+async function doSearch() {
+  const q = $('#q').value.trim();
+  if (!q) return;
+  $('#empty').style.display = 'none';
+  $('#meta').textContent = 'Đang tìm…';
+  const host = $('#host').value;
+  const u = `/api/search?q=${encodeURIComponent(q)}&size=20` + (host ? `&host=${encodeURIComponent(host)}` : '');
+  const r = await fetch(u);
+  const d = await r.json();
+  if (d.error) { $('#meta').textContent = 'Lỗi: ' + d.error; $('#hits').innerHTML = ''; return; }
+  $('#meta').textContent = `${fmt(d.total)} kết quả cho “${d.q}” · ${d.took_ms} ms`;
+  if (!d.hits.length) {
+    $('#hits').innerHTML = '';
+    $('#empty').style.display = 'block';
+    $('#empty').innerHTML = '<p><strong>Không có kết quả nào.</strong></p><p>Thử bớt từ khoá — mặc định các từ được nối bằng AND.</p>';
+    return;
+  }
+  // fragment do Lucene sinh, chỉ chứa thẻ <mark>; phần còn lại đã được thoát ở server
+  $('#hits').innerHTML = d.hits.map(h => `
+    <article class="hit">
+      <h3><a href="${h.url}" target="_blank" rel="noopener noreferrer">${h.title || '(không có tiêu đề)'}</a></h3>
+      <div class="url">${h.url}</div>
+      ${h.fragments.map(f => `<p class="frag">…${f}…</p>`).join('')}
+      <div class="chips">
+        <span class="chip g">${h.host}</span>
+        ${h.section ? `<span class="chip">${h.section}</span>` : ''}
+        ${h.date ? `<span class="chip b">${h.date}</span>` : ''}
+      </div>
+    </article>`).join('');
+}
+$('#go').onclick = doSearch;
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+// ---------------- bảng điều khiển ----------------
+async function refresh() {
+  const s = await (await fetch('/api/stats')).json();
+  let idx = { docs: 0, index_bytes: 0, by_host: {} };
+  try { idx = await (await fetch('/api/index/stats')).json(); } catch (e) {}
+
+  $('#cards').innerHTML = `
+    <div class="stat m"><b>${fmt(s.total_pages)}</b><span>trang đã crawl</span></div>
+    <div class="stat s"><b>${fmt(idx.docs)}</b><span>tài liệu đã index</span></div>
+    <div class="stat b"><b>${fmt(s.links)}</b><span>link trong ${s.links_file || 'danh sách'}</span></div>
+    <div class="stat y"><b>${mb(s.total_bytes)}</b><span>HTML thô trên đĩa</span></div>`;
+
+  $('#sites').innerHTML = s.sites.map(x => `<tr>
+     <td>${x.host}</td><td class="n">${fmt(x.done)}</td><td class="n">${fmt(x.queued)}</td>
+     <td class="n">${fmt(x.articles)}</td><td class="n">${x.shards}</td><td class="n">${mb(x.bytes)}</td>
+   </tr>`).join('');
+
+  const opts = ['<option value="">Mọi site</option>']
+    .concat(Object.entries(idx.by_host || {}).map(([h, n]) => `<option value="${h}">${h} (${fmt(n)})</option>`));
+  const cur = $('#host').value;
+  $('#host').innerHTML = opts.join('');
+  $('#host').value = cur;
+
+  $('#istat').textContent = `${fmt(idx.docs)} tài liệu · ${mb(idx.index_bytes)} index`;
+
+  const c = await (await fetch('/api/crawl/status')).json();
+  $('#cdot').className = 'dot ' + (c.running ? 'on' : 'off');
+  $('#cstate').textContent = c.running ? `đang chạy (${c.elapsed_sec}s)` : 'không chạy';
+  $('#ccmd').textContent = c.cmd || '';
+  $('#clog').textContent = c.log_tail || '—';
+}
+
+$('#cstart').onclick = async () => {
+  const mode = $('#mode').value;
+  const body = {
+    mode: mode === 'site' ? 'listing' : mode,
+    site: $('#site').value.trim() || null,
+    max_pages: +$('#cap').value || 0,
+    render: $('#render').value,
+  };
+  const r = await fetch('/api/crawl/start', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json();
+  $('#clog').textContent = r.ok ? 'Đã chạy: ' + d.cmd : 'Lỗi: ' + (d.detail || JSON.stringify(d));
+  setTimeout(refresh, 1500);
+};
+$('#cstop').onclick = async () => {
+  const d = await (await fetch('/api/crawl/stop', { method: 'POST' })).json();
+  $('#clog').textContent = d.graceful === false ? 'Đã kill cứng' : 'Đã dừng sạch';
+  setTimeout(refresh, 1000);
+};
+
+async function runIndex(reset) {
+  $('#ilog').textContent = 'Đang index, kho lớn thì mất vài phút…';
+  const r = await fetch('/api/index/run', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ reset, batch: 200 }) });
+  const d = await r.json();
+  $('#ilog').textContent = JSON.stringify(d, null, 2);
+  refresh();
+}
+$('#irun').onclick = () => runIndex(false);
+$('#ireset').onclick = () => { if (confirm('Xoá sạch index rồi dựng lại từ đầu?')) runIndex(true); };
+
+refresh();
+setInterval(() => { if ($('#p-dash').classList.contains('on')) refresh(); }, 5000);
+</script>
+</body>
+</html>

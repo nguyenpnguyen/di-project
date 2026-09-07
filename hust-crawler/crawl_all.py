@@ -51,6 +51,8 @@ from urllib.robotparser import RobotFileParser
 import requests
 from bs4 import BeautifulSoup
 
+import render
+
 BASE = "https://hust.edu.vn"
 HOST = "hust.edu.vn"
 UA = "hust-research-crawler/1.0 (nghien cuu mon IT5420; lien he: student@sis.hust.edu.vn)"
@@ -133,9 +135,24 @@ def norm(url: str, base: str | None = None) -> str | None:
     return urlunparse(("https", p.netloc.lower().replace("www.", ""), path, "", q, ""))
 
 
+ALLOW_SUFFIX: str | None = None    # đặt bởi --allow-domain: nhận cả subdomain
+
+
+def host_ok(netloc: str) -> bool:
+    """Host này có thuộc phạm vi crawl không?
+
+    Mặc định chỉ đúng một host, vì mỗi site một kho riêng thì thống kê mới sạch.
+    --allow-domain mở ra cả họ, cần khi crawl theo file danh sách link trộn nhiều
+    subdomain.
+    """
+    if ALLOW_SUFFIX:
+        return netloc == ALLOW_SUFFIX or netloc.endswith("." + ALLOW_SUFFIX)
+    return netloc == HOST
+
+
 def in_scope(url: str) -> bool:
     p = urlparse(url)
-    if p.netloc != HOST:                      # bỏ library./svbk./jst.vn... — site khác
+    if not host_ok(p.netloc):                 # bỏ library./svbk./jst.vn... — site khác
         return False
     if ASSET.search(p.path) or SKIP_SEG.search(p.path) or SKIP_QUERY.search(p.query):
         return False
@@ -244,6 +261,7 @@ class Crawler:
         self._ok_streak = 0
         self.delay = args.delay      # nhịp hiện tại, tự co giãn quanh args.delay
         self.n_429 = 0
+        self.n_rendered = 0
 
         self.frontier: collections.deque = collections.deque()
         self.queued: set[str] = set()        # URL đã từng vào hàng đợi
@@ -372,22 +390,52 @@ class Crawler:
         return None, err
 
     # -- một trang ----------------------------------------------------------
+    def maybe_render(self, url: str, status: int, html: str):
+        """Trang requests lấy hụt thì tải lại bằng trình duyệt thật.
+
+        -> (html mới, status mới) hoặc (None, None) nếu không cần / không được.
+        """
+        if self.a.render == "never":
+            return None, None
+        if self.a.render == "auto" and not render.looks_blocked(status, html):
+            return None, None
+        rhtml, rstatus, rerr = render.fetch(url, timeout=self.a.render_timeout * 1000)
+        if rerr:
+            self.log(f"    ~ render hỏng: {rerr[:90]}")
+            return None, None
+        with self.lock:
+            self.n_rendered += 1
+        self.log(f"    ~ render bằng trình duyệt: {len(rhtml) // 1024}KB  {url[-58:]}")
+        return rhtml, rstatus or status
+
     def visit(self, url: str, depth: int, via: str):
         r, err = self.fetch(url)
         now = dt.datetime.now().isoformat(timespec="seconds")
         if r is None:
-            with self.lock:
-                self.errors.append({"url": url, "error": err, "via": via, "at": now})
-            self.log(f"    ! {err}  {url[-70:]}")
-            return
+            # requests không lấy được (TLS hỏng, chặn…) — thử trình duyệt thật
+            rhtml, rstatus = self.maybe_render(url, 0, "")
+            if rhtml is None:
+                with self.lock:
+                    self.errors.append({"url": url, "error": err, "via": via, "at": now})
+                self.log(f"    ! {err}  {url[-70:]}")
+                return
+            body, ctype, status, enc, final, rendered = (
+                rhtml.encode("utf-8"), "text/html; charset=utf-8", rstatus, "utf-8", None, True)
+        else:
+            ctype = r.headers.get("Content-Type", "")
+            body, status, enc = r.content, r.status_code, r.encoding
+            final = r.url if r.url != url else None
+            rendered = False
+            if "html" in ctype.lower():
+                rhtml, rstatus = self.maybe_render(url, status, r.text)
+                if rhtml is not None:
+                    body, status, enc, rendered = rhtml.encode("utf-8"), rstatus, "utf-8", True
 
-        ctype = r.headers.get("Content-Type", "")
         is_html = "html" in ctype.lower()
-        body = r.content
         rec = {
             "url": url,
-            "final_url": r.url if r.url != url else None,
-            "status": r.status_code,
+            "final_url": final,
+            "status": status,
             "content_type": ctype,
             "kind": kind_of(url),
             "article_id": art_id(url),
@@ -396,18 +444,19 @@ class Crawler:
             "fetched_at": now,
             "size": len(body),
             "sha1": hashlib.sha1(body).hexdigest(),
-            "encoding": r.encoding,
+            "encoding": enc,
+            "rendered": rendered,                  # True = lấy bằng trình duyệt, không phải requests
             "html_b64": base64.b64encode(body).decode("ascii") if is_html else None,
         }
         self.store.add(rec)
         with self.lock:
-            self.done[url] = r.status_code
+            self.done[url] = status
 
-        if not is_html or r.status_code >= 400:
+        if not is_html or status >= 400:
             return
 
-        # bóc link để đi tiếp
-        soup = BeautifulSoup(r.text, "lxml")
+        # bóc link để đi tiếp — dùng body đã lấy được, dù từ requests hay trình duyệt
+        soup = BeautifulSoup(body.decode(enc or "utf-8", "replace"), "lxml")
         deep = depth >= self.a.max_depth     # hết ngân sách độ sâu: ghi sổ nhưng không đi tiếp
         found = pages = 0
         with self.lock:
@@ -416,7 +465,7 @@ class Crawler:
                 u = norm(href, url)
                 if not u:
                     continue
-                if urlparse(u).netloc == HOST and ASSET.search(urlparse(u).path):
+                if host_ok(urlparse(u).netloc) and ASSET.search(urlparse(u).path):
                     self.assets.add(u)       # file đính kèm: ghi sổ, không tải
                     continue
                 if deep:
@@ -466,6 +515,28 @@ class Crawler:
     # -- hạt giống ----------------------------------------------------------
     def seed(self):
         self.log("[1/3] Gieo hạt giống…")
+        if self.a.from_file:
+            # Crawl đúng danh sách link cho sẵn. Không --follow thì đẩy ở độ sâu
+            # tối đa nên visit() lưu xong là dừng, không nở link — dùng khi đã có
+            # sẵn danh sách url và chỉ cần nội dung của đúng ngần ấy trang.
+            depth = 0 if self.a.follow else self.a.max_depth
+            urls = [u.strip() for u in pathlib.Path(self.a.from_file).read_text(
+                encoding="utf-8").splitlines() if u.strip() and not u.startswith("#")]
+            bad = 0
+            for u in urls:
+                n = norm(u)
+                if not n or not in_scope(n):
+                    bad += 1
+                    continue
+                self.done.pop(n, None)
+                self.queued.discard(n)
+                self.push(n, depth, "from-file")
+            self.log(f"      {len(urls)} dòng -> {len(self.frontier)} url vào hàng đợi"
+                     + (f", {bad} dòng ngoài phạm vi bị bỏ" if bad else ""))
+            if bad and not ALLOW_SUFFIX:
+                self.log("      (url khác host bị loại — thêm --allow-domain hust.edu.vn nếu muốn nhận)")
+            return
+
         if self.a.seed_file:
             # chế độ vá: chỉ tải đúng danh sách URL cho sẵn, không bò tiếp.
             # Đẩy ở depth cao nhất nên visit() lưu xong là dừng, không nở link.
@@ -558,10 +629,14 @@ class Crawler:
 
     # -- vòng chạy ----------------------------------------------------------
     def run(self):
-        loaded = self.a.resume and self.load_state()
-        if self.a.seed_file:
-            # chế độ vá: gác hàng đợi cũ sang một bên chứ không xoá, nếu không
-            # lần --resume sau sẽ mất sạch những url đã phát hiện được
+        # LUÔN nạp state nếu file có, không chỉ khi --resume. Trước đây chạy
+        # --from-file mà quên --resume thì state khởi tạo rỗng, rồi save_state
+        # cuối mẻ ghi đè lên file — xoá sạch hàng đợi 4.220 url đã dựng công phu.
+        # --resume giờ chỉ quyết định có gieo lại hạt giống hay không.
+        loaded = self.load_state() if self.state_path.exists() else False
+        if self.a.seed_file or self.a.from_file:
+            # gác hàng đợi cũ sang một bên chứ không xoá, nếu không lần --resume
+            # sau sẽ mất sạch những url đã phát hiện được
             self._parked = list(self.frontier)
             self.frontier.clear()
             self.seed()
@@ -638,6 +713,7 @@ class Crawler:
             "alias_urls": sum(len(v) for v in self.aliases.values()),
             "assets_seen": len(self.assets),
             "throttle_429": self.n_429,
+            "rendered_pages": self.n_rendered,
             "final_delay_sec": round(self.delay, 2),
             "pages_per_min": round(self.store.n_total / max(dur / 60, 1e-9), 1),
             "errors": len(self.errors),
@@ -668,6 +744,15 @@ def main():
                     help="host cần crawl, vd sinhvien.hust.edu.vn. Mỗi site một kho riêng "
                          "data/raw-<host>; kiểu phân trang tự nhận, không cần sửa code")
     ap.add_argument("--seed-url", nargs="*", help="url hạt giống thêm, khi site không có sitemap")
+    ap.add_argument("--from-file", help="crawl đúng danh sách url trong file này (mỗi dòng một url)")
+    ap.add_argument("--follow", action="store_true",
+                    help="với --from-file: bò tiếp theo link tìm thấy, mặc định chỉ tải đúng danh sách")
+    ap.add_argument("--allow-domain",
+                    help="nhận mọi host thuộc tên miền này, vd hust.edu.vn cho cả subdomain")
+    ap.add_argument("--render", choices=["never", "auto", "always"], default="never",
+                    help="tải lại bằng trình duyệt thật: auto khi trang có vẻ bị chặn "
+                         "hoặc rỗng do JS, always cho mọi trang")
+    ap.add_argument("--render-timeout", type=int, default=30, help="giây, cho mỗi trang render")
     ap.add_argument("--insecure", action="store_true",
                     help="bỏ kiểm chứng chỉ TLS. Vài subdomain của trường không gửi kèm "
                          "chứng chỉ trung gian nên requests từ chối; chỉ bật khi đã biết "
@@ -701,6 +786,13 @@ def main():
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
     set_site(args.site)             # phải gọi TRƯỚC khi dựng Crawler: RAW đổi theo site
+    if args.allow_domain:
+        globals()["ALLOW_SUFFIX"] = args.allow_domain.lower().strip(". ")
+    if args.render != "never":
+        ok, why = render.available()
+        if not ok:
+            print(f"! --render {args.render} nhưng {why}", file=sys.stderr)
+            print("  vẫn chạy tiếp, chỉ là không render được trang nào", file=sys.stderr)
 
     if args.workers > 8:
         print("! workers > 8 là quá tay với web trường, hạ xuống 8", file=sys.stderr)

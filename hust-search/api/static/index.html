@@ -95,6 +95,7 @@ th{color:var(--muted);font-weight:500;font-size:12.5px}
 td.n{text-align:right;font-variant-numeric:tabular-nums}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .row label{font-size:13.5px;color:var(--muted)}
+.lb{font-size:13px;color:#41566b;padding:0 2px}
 .row input,.row select{padding:9px 12px;border-radius:10px;border:1px solid var(--line);font:inherit}
 pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:12px;
   font-size:12px;overflow-x:auto;max-height:280px;white-space:pre-wrap;margin:0}
@@ -102,6 +103,74 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
 .dot.on{background:var(--mint-deep)}.dot.off{background:#c9ccd4}
 .empty{text-align:center;color:var(--muted);padding:50px 20px}
 .empty p{margin:6px 0}
+
+/* ---- lưới kết quả nổi bật ---- */
+.top{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:14px;margin-bottom:22px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;
+  box-shadow:var(--shadow);display:flex;flex-direction:column;transition:.15s}
+.tile:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(47,48,56,.06),0 16px 34px -16px rgba(47,48,56,.3)}
+.shot{position:relative;height:158px;background:#f3f1ec;border-bottom:1px solid var(--line);
+  overflow:hidden;cursor:zoom-in}
+.shot iframe{position:absolute;top:0;left:0;width:250%;height:250%;border:0;
+  transform:scale(.4);transform-origin:0 0;pointer-events:none;background:#fff}
+.shot .rank{position:absolute;top:8px;left:8px;z-index:2;background:var(--ink);color:#fff;
+  font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;opacity:.85}
+.shot .zoom{position:absolute;right:8px;bottom:8px;z-index:2;background:rgba(255,255,255,.94);
+  border:1px solid var(--line);border-radius:999px;font-size:11.5px;padding:3px 10px}
+.shot.na{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12.5px;cursor:default}
+.tile .body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
+.tile h3{margin:0;font-size:14.5px;font-weight:600;line-height:1.4}
+.tile h3 a{text-decoration:none}
+.tile h3 a:hover{text-decoration:underline}
+.tile .frag{font-size:12.5px;color:#585a67;margin:0;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tile .foot{margin-top:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+
+/* ---- danh sách phần sau ---- */
+.rest{display:flex;flex-direction:column;gap:8px}
+.line{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 14px;
+  border-left:3px solid var(--sky);transition:.12s}
+.line:hover{border-left-color:var(--sky-deep)}
+.line h4{margin:0 0 2px;font-size:14.5px;font-weight:600;line-height:1.4}
+.line h4 a{text-decoration:none}
+.line h4 a:hover{text-decoration:underline}
+.line .frag{font-size:13px;color:#585a67;margin:2px 0 0;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.line .url{font-size:11.5px;color:var(--mint-deep);word-break:break-all}
+.dupe{font-size:11.5px;color:var(--muted);margin-top:4px}
+.dupe summary{cursor:pointer}
+.dupe a{display:block;color:var(--sky-deep);word-break:break-all;margin-top:2px}
+
+/* ---- phân trang ---- */
+.pager{display:flex;gap:6px;align-items:center;justify-content:center;margin:26px 0 10px;flex-wrap:wrap}
+.pager button{min-width:36px;padding:7px 11px;border-radius:10px;border:1px solid var(--line);
+  background:var(--card);font:inherit;font-size:13.5px;cursor:pointer}
+.pager button:hover:not(:disabled){border-color:var(--mint-deep)}
+.pager button[aria-current="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.pager button:disabled{opacity:.4;cursor:default}
+.pager .gap{color:var(--muted);padding:0 2px}
+
+/* ---- khung xem trước lớn ---- */
+.modal{position:fixed;inset:0;background:rgba(47,48,56,.55);display:none;z-index:50;
+  align-items:center;justify-content:center;padding:24px}
+.modal.on{display:flex}
+.sheet{background:#fff;border-radius:18px;width:min(940px,100%);height:min(88vh,900px);
+  display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.5)}
+.sheet header{background:var(--paper);border-bottom:1px solid var(--line);padding:12px 16px;
+  display:flex;gap:10px;align-items:center}
+.sheet header h3{margin:0;font-size:15px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet iframe{flex:1;width:100%;border:0;background:#fff}
+.x{border:1px solid var(--line);background:#fff;border-radius:10px;padding:6px 11px;cursor:pointer;font:inherit}
+
+/* ---- tải lẻ ---- */
+.bigbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.bigbar input{flex:1;min-width:280px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font:inherit}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:12px 0}
+.kv div{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
+.kv b{display:block;font-size:16px;font-variant-numeric:tabular-nums}
+.kv span{font-size:11.5px;color:var(--muted)}
+.note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+.err{background:#fdeceb;border:1px solid #f3c9c4;color:#8d3125;border-radius:12px;padding:10px 13px;font-size:13.5px}
 </style>
 </head>
 <body>
@@ -114,6 +183,7 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
     </div>
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" aria-selected="true" data-p="search">Tìm kiếm</button>
+      <button class="tab" role="tab" aria-selected="false" data-p="fetch">Tải một trang</button>
       <button class="tab" role="tab" aria-selected="false" data-p="dash">Bảng điều khiển</button>
     </div>
     <div class="searchbar" id="sb">
@@ -121,16 +191,42 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
       <select id="host"><option value="">Mọi site</option></select>
       <button class="btn" id="go">Tìm</button>
     </div>
+    <div class="searchbar" id="sb2" style="margin-top:8px">
+      <label class="lb">Từ ngày</label><input type="date" id="d1">
+      <label class="lb">Đến</label><input type="date" id="d2">
+      <select id="sort">
+        <option value="score">Xếp theo độ khớp</option>
+        <option value="date">Xếp theo ngày, mới trước</option>
+      </select>
+      <button class="btn ghost" id="clr">Bỏ lọc</button>
+    </div>
   </div>
 </header>
 
 <main class="wrap">
   <section class="panel on" id="p-search">
     <div class="meta" id="meta"></div>
-    <div id="hits"></div>
+    <div class="top" id="top"></div>
+    <div class="rest" id="rest"></div>
+    <div class="pager" id="pager"></div>
     <div class="empty" id="empty">
       <p><strong>Nhập từ khoá để tìm trong kho đã crawl.</strong></p>
-      <p>Phần khớp được Lucene tô vàng. Bấm tiêu đề để mở trang gốc ở tab bên cạnh.</p>
+      <p>Phần khớp được Lucene tô vàng. Mấy kết quả đầu có ảnh trang, dựng lại từ
+         bản HTML đã tải về nên không gọi thêm request nào sang hust.edu.vn.</p>
+    </div>
+  </section>
+
+  <section class="panel" id="p-fetch">
+    <div class="card">
+      <h2>Tải lẻ một trang rồi index luôn</h2>
+      <div class="bigbar">
+        <input id="one" placeholder="Dán url bất kỳ, ví dụ https://soict.hust.edu.vn/ts-nguyen-ba-ngoc.html">
+        <button class="btn" id="onego">Tải và index</button>
+      </div>
+      <p class="note">Một url một lần, máy chủ tự giữ nhịp tối thiểu 3 giây giữa hai lần
+        tải. Trang tải xong được ghi vào kho <code>data/raw-adhoc</code> và đẩy thẳng
+        vào Lucene — tìm được ngay, không phải chạy lại mẻ index nào.</p>
+      <div id="oneout"></div>
     </div>
   </section>
 
@@ -180,52 +276,281 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
   </section>
 </main>
 
+<div class="modal" id="modal">
+  <div class="sheet">
+    <header>
+      <h3 id="mtitle">—</h3>
+      <a class="x" id="mopen" href="#" target="_blank" rel="noopener noreferrer">Mở trang gốc</a>
+      <button class="x" id="mclose">Đóng</button>
+    </header>
+    <!-- sandbox rỗng: không chạy script, không đọc được gì của trang cha -->
+    <iframe id="mframe" sandbox=""></iframe>
+  </div>
+</div>
+
 <script>
 const $ = s => document.querySelector(s);
 const fmt = n => (n ?? 0).toLocaleString('vi-VN');
 const mb = b => b >= 1e9 ? (b/1e9).toFixed(1)+' GB' : (b/1e6).toFixed(1)+' MB';
 
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  const p = t.dataset.p;
   document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
-  $('#p-search').classList.toggle('on', t.dataset.p === 'search');
-  $('#p-dash').classList.toggle('on', t.dataset.p === 'dash');
-  $('#sb').style.display = t.dataset.p === 'search' ? 'flex' : 'none';
-  if (t.dataset.p === 'dash') refresh();
+  ['search', 'fetch', 'dash'].forEach(k => $('#p-' + k).classList.toggle('on', k === p));
+  $('#sb').style.display = p === 'search' ? 'flex' : 'none';
+  $('#sb2').style.display = p === 'search' ? 'flex' : 'none';
+  if (p === 'dash') refresh();
 });
 
 // ---------------- tìm kiếm ----------------
-async function doSearch() {
+const TOI_DA_ANH = 6;      // trần số ô có ảnh trang; số thật cắt cho vừa số cột
+const MOI_TRANG = 20;
+let trang = 0, tongKq = 0, truyVanCu = '';
+const khoAnh = new Map();  // url -> html đã dọn, khỏi hỏi lại server khi lật trang
+
+const esc = t => (t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/** Số cột lưới đang chia, đọc từ chính bố cục trình duyệt đã tính. */
+function soCot() {
+  const g = getComputedStyle($('#top')).gridTemplateColumns;
+  const n = g.split(' ').filter(x => x && x !== 'none').length;
+  return Math.max(1, n);
+}
+
+function thamSo() {
+  const p = new URLSearchParams({ q: $('#q').value.trim(), size: MOI_TRANG, from_: trang * MOI_TRANG });
+  if ($('#host').value) p.set('host', $('#host').value);
+  if ($('#d1').value) p.set('date_from', $('#d1').value);
+  if ($('#d2').value) p.set('date_to', $('#d2').value);
+  if ($('#sort').value === 'date') p.set('sort', 'date');
+  return p;
+}
+
+async function doSearch(giuTrang) {
   const q = $('#q').value.trim();
   if (!q) return;
+  if (!giuTrang || q !== truyVanCu) { trang = 0; truyVanCu = q; }
   $('#empty').style.display = 'none';
   $('#meta').textContent = 'Đang tìm…';
-  const host = $('#host').value;
-  const u = `/api/search?q=${encodeURIComponent(q)}&size=20` + (host ? `&host=${encodeURIComponent(host)}` : '');
-  const r = await fetch(u);
-  const d = await r.json();
-  if (d.error) { $('#meta').textContent = 'Lỗi: ' + d.error; $('#hits').innerHTML = ''; return; }
-  $('#meta').textContent = `${fmt(d.total)} kết quả cho “${d.q}” · ${d.took_ms} ms`;
-  if (!d.hits.length) {
-    $('#hits').innerHTML = '';
-    $('#empty').style.display = 'block';
-    $('#empty').innerHTML = '<p><strong>Không có kết quả nào.</strong></p><p>Thử bớt từ khoá — mặc định các từ được nối bằng AND.</p>';
+
+  const d = await (await fetch('/api/search?' + thamSo())).json();
+  if (d.error) {
+    $('#meta').textContent = 'Lỗi: ' + d.error;
+    $('#top').innerHTML = $('#rest').innerHTML = $('#pager').innerHTML = '';
     return;
   }
-  // fragment do Lucene sinh, chỉ chứa thẻ <mark>; phần còn lại đã được thoát ở server
-  $('#hits').innerHTML = d.hits.map(h => `
-    <article class="hit">
-      <h3><a href="${h.url}" target="_blank" rel="noopener noreferrer">${h.title || '(không có tiêu đề)'}</a></h3>
-      <div class="url">${h.url}</div>
-      ${h.fragments.map(f => `<p class="frag">…${f}…</p>`).join('')}
-      <div class="chips">
-        <span class="chip g">${h.host}</span>
-        ${h.section ? `<span class="chip">${h.section}</span>` : ''}
-        ${h.date ? `<span class="chip b">${h.date}</span>` : ''}
+  tongKq = d.total;
+  const sapNgay = d.sort === 'date';
+  $('#meta').textContent = `${fmt(d.total)} kết quả cho “${d.q}” · ${d.took_ms} ms`
+    + (sapNgay ? ' · xếp theo ngày' : '')
+    + (d.total > MOI_TRANG ? ` · trang ${trang + 1}/${Math.ceil(d.total / MOI_TRANG)}` : '');
+
+  if (!d.hits.length) {
+    $('#top').innerHTML = $('#rest').innerHTML = $('#pager').innerHTML = '';
+    $('#empty').style.display = 'block';
+    $('#empty').innerHTML = '<p><strong>Không có kết quả nào.</strong></p>'
+      + '<p>Thử bớt một từ, hoặc nới khoảng ngày — bài không rõ ngày bị bộ lọc ngày loại ra.</p>';
+    return;
+  }
+
+  // Chỉ trang đầu mới có ảnh: từ trang 2 trở đi người ta đang lướt tìm nhanh,
+  // dựng thêm mấy khung nữa chỉ tổ chậm.
+  //
+  // Số ô cắt cho tròn hàng chứ không cố định 5: lưới auto-fill nên số cột đổi
+  // theo bề rộng cửa sổ, mà 5 ô trên lưới 3 cột thì hàng dưới hụt mất một ô,
+  // nhìn như kết quả bị rơi. Hỏi thẳng trình duyệt xem nó chia mấy cột rồi lấy
+  // bội số gần nhất.
+  let soAnh = 0;
+  if (trang === 0) {
+    const c = soCot();
+    soAnh = Math.min(c * Math.max(1, Math.floor(TOI_DA_ANH / c)), d.hits.length);
+  }
+  const noiBat = d.hits.slice(0, soAnh), conLai = d.hits.slice(soAnh);
+
+  $('#top').innerHTML = noiBat.map((h, i) => `
+    <article class="tile">
+      <div class="shot na" data-url="${esc(h.url)}" data-i="${i}">đang dựng ảnh…</div>
+      <div class="body">
+        <h3><a href="${esc(h.url)}" target="_blank" rel="noopener noreferrer">${esc(h.title) || '(không có tiêu đề)'}</a></h3>
+        <p class="frag">${h.fragments[0] || ''}</p>
+        <div class="foot">
+          <span class="chip g">${esc(h.host)}</span>
+          ${h.date ? `<span class="chip b">${esc(h.date)}</span>` : ''}
+          ${dupHtml(h)}
+        </div>
       </div>
     </article>`).join('');
+
+  $('#rest').innerHTML = conLai.map((h, i) => `
+    <article class="line">
+      <h4><span class="chip">${trang * MOI_TRANG + soAnh + i + 1}</span>
+        <a href="${esc(h.url)}" target="_blank" rel="noopener noreferrer">${esc(h.title) || '(không có tiêu đề)'}</a></h4>
+      <div class="url">${esc(h.url)}</div>
+      ${h.fragments.slice(0, 2).map(f => `<p class="frag">…${f}…</p>`).join('')}
+      <div class="foot" style="margin-top:6px">
+        <span class="chip g">${esc(h.host)}</span>
+        ${h.section ? `<span class="chip">${esc(h.section)}</span>` : ''}
+        ${h.date ? `<span class="chip b">${esc(h.date)}</span>` : ''}
+      </div>
+      ${dupHtml(h)}
+    </article>`).join('');
+
+  vePhanTrang();
+  noiBat.forEach((h, i) => dungAnh(h.url, i));
 }
-$('#go').onclick = doSearch;
-$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+/** Các url khác cùng một bài, Lucene đã gộp lại. */
+function dupHtml(h) {
+  if (!h.duplicates || !h.duplicates.length) return '';
+  return `<details class="dupe"><summary>còn ${h.duplicates.length} bản khác cùng nội dung</summary>
+    ${h.duplicates.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(u)}</a>`).join('')}
+  </details>`;
+}
+
+/**
+ * Ảnh trang: nhét HTML đã dọn vào iframe rồi thu nhỏ bằng transform.
+ * Bỏ hẳn thẻ img ở bản thu nhỏ — năm khung mở cùng lúc mà khung nào cũng kéo
+ * ảnh từ hust.edu.vn thì mỗi lần tìm là vài chục request, đúng thứ đang bị chặn.
+ * Ảnh chỉ tải khi người dùng bấm mở khung lớn, mỗi lần một trang.
+ */
+async function dungAnh(url, i) {
+  const o = document.querySelector(`.shot[data-i="${i}"]`);
+  if (!o) return;
+  let html = khoAnh.get(url);
+  if (html === undefined) {
+    try {
+      const r = await fetch('/api/preview?url=' + encodeURIComponent(url));
+      html = r.ok ? (await r.json()).html || '' : '';
+    } catch (e) { html = ''; }
+    khoAnh.set(url, html);
+  }
+  if (!html) { o.textContent = 'chưa có bản xem trước'; return; }
+  o.classList.remove('na');
+  o.innerHTML = `<span class="rank">#${i + 1}</span><span class="zoom">xem lớn</span>`;
+  const f = document.createElement('iframe');
+  f.setAttribute('sandbox', '');
+  o.appendChild(f);
+  nap(f, KHUNG_CSS + html.replace(/<img\b[^>]*>/gi, ''));
+  o.onclick = () => moKhungLon(url);
+}
+
+/**
+ * Nạp HTML vào iframe qua blob url chứ không qua srcdoc.
+ *
+ * srcdoc + sandbox="" là chỗ WebKit không chịu dựng: iframe ra trắng trơn, không
+ * báo lỗi gì, còn Chrome thì vẫn hiện — nên nhìn máy này tưởng chạy máy kia
+ * tưởng hỏng. Blob url đi qua đường tải trang bình thường nên trình duyệt nào
+ * cũng dựng, mà sandbox vẫn giữ nguyên: không script, không đọc được trang cha.
+ *
+ * Thu hồi blob cũ trước khi tạo cái mới, không thì lật vài trang kết quả là bỏ
+ * quên vài chục bản HTML vài chục KB trong bộ nhớ.
+ */
+function nap(iframe, html) {
+  if (iframe._blob) URL.revokeObjectURL(iframe._blob);
+  iframe._blob = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+  iframe.src = iframe._blob;
+}
+
+const KHUNG_CSS = `<meta charset="utf-8"><style>
+body{font:15px/1.65 "Be Vietnam Pro",system-ui,sans-serif;color:#2f3038;margin:0;padding:22px 26px;background:#fff}
+h1,h2,h3{font-family:Lora,Georgia,serif;line-height:1.3;margin:1.1em 0 .4em}
+h1{font-size:24px}h2{font-size:19px}h3{font-size:17px}
+p{margin:.7em 0}img{max-width:100%;height:auto;border-radius:8px;margin:.5em 0}
+a{color:#4d7ba6}table{border-collapse:collapse;width:100%;font-size:14px}
+td,th{border:1px solid #ebe6de;padding:6px 9px;text-align:left}
+ul,ol{padding-left:1.2em}blockquote{border-left:3px solid #cfe8dd;margin:.8em 0;padding-left:12px;color:#585a67}
+</style>`;
+
+async function moKhungLon(url) {
+  const m = $('#modal');
+  $('#mtitle').textContent = url;
+  $('#mopen').href = url;
+  const f = $('#mframe');
+  nap(f, KHUNG_CSS + '<p style="color:#6f7180">đang mở…</p>');
+  m.classList.add('on');
+  let html = khoAnh.get(url);
+  if (html === undefined) {
+    const r = await fetch('/api/preview?url=' + encodeURIComponent(url));
+    html = r.ok ? (await r.json()).html || '' : '';
+    khoAnh.set(url, html);
+  }
+  // khung lớn giữ nguyên ảnh: người dùng chủ động mở một trang, không phải năm trang tự tải
+  nap(f, KHUNG_CSS + (html || '<p>Chưa có bản xem trước cho trang này.</p>'));
+}
+
+function vePhanTrang() {
+  const soTrang = Math.ceil(tongKq / MOI_TRANG);
+  if (soTrang <= 1) { $('#pager').innerHTML = ''; return; }
+  const nut = (n, nhan, cur) =>
+    `<button data-t="${n}" ${cur ? 'aria-current="true"' : ''}>${nhan}</button>`;
+  let h = `<button data-t="${trang - 1}" ${trang === 0 ? 'disabled' : ''}>‹ Trước</button>`;
+  const ds = new Set([0, soTrang - 1, trang, trang - 1, trang + 1, trang - 2, trang + 2]);
+  const sap = [...ds].filter(n => n >= 0 && n < soTrang).sort((a, b) => a - b);
+  sap.forEach((n, i) => {
+    if (i && n - sap[i - 1] > 1) h += '<span class="gap">…</span>';
+    h += nut(n, n + 1, n === trang);
+  });
+  h += `<button data-t="${trang + 1}" ${trang >= soTrang - 1 ? 'disabled' : ''}>Sau ›</button>`;
+  $('#pager').innerHTML = h;
+  $('#pager').querySelectorAll('button[data-t]').forEach(b => b.onclick = () => {
+    trang = +b.dataset.t;
+    doSearch(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
+
+$('#go').onclick = () => doSearch(false);
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(false); });
+['#host', '#d1', '#d2', '#sort'].forEach(k => $(k).onchange = () => { if (truyVanCu) doSearch(false); });
+$('#clr').onclick = () => {
+  $('#d1').value = $('#d2').value = ''; $('#sort').value = 'score'; $('#host').value = '';
+  if (truyVanCu) doSearch(false);
+};
+
+// ---------------- tải lẻ một trang ----------------
+$('#onego').onclick = async () => {
+  const url = $('#one').value.trim();
+  if (!url) return;
+  $('#oneout').innerHTML = '<p class="note">Đang tải…</p>';
+  $('#onego').disabled = true;
+  try {
+    const r = await fetch('/api/fetch', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url }) });
+    const d = await r.json();
+    if (!r.ok) { $('#oneout').innerHTML = `<div class="err">${esc(d.detail || JSON.stringify(d))}</div>`; return; }
+    khoAnh.delete(d.url);
+    $('#oneout').innerHTML = `
+      <div class="kv">
+        <div><b>${d.status}</b><span>HTTP</span></div>
+        <div><b>${mb(d.bytes)}</b><span>HTML tải về</span></div>
+        <div><b>${fmt(d.chars)}</b><span>ký tự bóc ra</span></div>
+        <div><b>${fmt(d.index_docs)}</b><span>tài liệu trong index</span></div>
+      </div>
+      <h3 style="margin:6px 0 2px;font-size:16px">${esc(d.title) || '(không có tiêu đề)'}</h3>
+      <div class="url" style="font-size:12.5px;color:var(--mint-deep);word-break:break-all">${esc(d.url)}</div>
+      <div class="foot" style="margin:8px 0">
+        <span class="chip g">${esc(d.host)}</span>
+        ${d.date ? `<span class="chip b">${esc(d.date)}</span>` : ''}
+        <span class="chip">đã vào index</span>
+      </div>
+      <div class="row">
+        <button class="btn ghost" id="onepv">Xem trước trang</button>
+        <button class="btn ghost" id="onesearch">Tìm thử tiêu đề này</button>
+      </div>`;
+    $('#onepv').onclick = () => moKhungLon(d.url);
+    $('#onesearch').onclick = () => {
+      $('#q').value = d.title || d.url;
+      document.querySelector('.tab[data-p="search"]').click();
+      doSearch(false);
+    };
+  } catch (e) {
+    $('#oneout').innerHTML = `<div class="err">${esc(String(e))}</div>`;
+  } finally {
+    $('#onego').disabled = false;
+  }
+};
+$('#one').addEventListener('keydown', e => { if (e.key === 'Enter') $('#onego').click(); });
 
 // ---------------- bảng điều khiển ----------------
 async function refresh() {
@@ -288,6 +613,10 @@ async function runIndex(reset) {
   $('#ilog').textContent = JSON.stringify(d, null, 2);
   refresh();
 }
+$('#mclose').onclick = () => $('#modal').classList.remove('on');
+$('#modal').onclick = e => { if (e.target === $('#modal')) $('#modal').classList.remove('on'); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').classList.remove('on'); });
+
 $('#irun').onclick = () => runIndex(false);
 $('#ireset').onclick = () => { if (confirm('Xoá sạch index rồi dựng lại từ đầu?')) runIndex(true); };
 

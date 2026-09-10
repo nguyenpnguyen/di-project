@@ -16,6 +16,7 @@ services:
       lucene: {condition: service_healthy}
     volumes:
       - ../hust-crawler:/crawler     # dùng chung code và kho với crawler đang có
+      - ./api:/app                   # sửa API hoặc giao diện không phải build lại image
     ports: ["8000:8000"]
     environment:
       LUCENE_URL: http://lucene:8081

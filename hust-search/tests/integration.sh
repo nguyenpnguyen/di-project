@@ -56,7 +56,35 @@ has "báo được trạng thái crawl" "$c" '"running"'
 stop=$(curl -s --max-time 40 -X POST "$API/api/crawl/stop")
 has "gọi dừng không lỗi" "$stop" '"ok":true'
 
-echo "── 9. Giao diện ──"
+echo "── 9. Bỏ dấu, gộp trùng, lọc ngày ──"
+kd=$(curl -s --max-time 30 --get "$API/api/search" --data-urlencode "q=diem chuan" --data-urlencode "size=3")
+n_kd=$(echo "$kd" | sed -n 's/.*"total":\([0-9]*\).*/\1/p')
+if [ "${n_kd:-0}" -gt 0 ]; then ok "gõ không dấu vẫn ra kết quả ($n_kd)"; else no "gõ không dấu vẫn ra kết quả" "total=0"; fi
+has "đoạn trích tô cả chữ có dấu" "$kd" "<mark>"
+has "kết quả có trường bản trùng" "$kd" '"duplicates"'
+
+sd=$(curl -s --max-time 30 --get "$API/api/search" --data-urlencode "q=tuyển sinh" \
+     --data-urlencode "sort=date" --data-urlencode "size=5")
+has "xếp theo ngày được ghi nhận" "$sd" '"sort":"date"'
+d_new=$(echo "$sd" | sed -n 's/.*"date":"\([0-9-]*\)".*/\1/p' | head -1)
+if [ -n "$d_new" ]; then ok "kết quả đầu có ngày ($d_new)"; else no "kết quả đầu có ngày" "trống"; fi
+
+lo=$(curl -s --max-time 30 --get "$API/api/search" --data-urlencode "q=tuyển sinh" \
+     --data-urlencode "date_from=2026-01-01" --data-urlencode "size=5")
+if echo "$lo" | grep -qE '"date":"20(1[0-9]|2[0-5])-'; then
+  no "lọc ngày không lọt bài cũ" "$(echo "$lo" | grep -oE '"date":"20[0-9-]*"' | head -3)"
+else ok "lọc ngày không lọt bài cũ"; fi
+
+echo "── 10. Xem trước và tải lẻ ──"
+u1=$(echo "$kd" | sed -n 's/.*"url":"\([^"]*\)".*/\1/p' | head -1)
+pv=$(curl -s --max-time 20 --get "$API/api/preview" --data-urlencode "url=$u1")
+has "xem trước trả HTML đã dọn" "$pv" '"html"'
+if echo "$pv" | grep -qiE '<script|onerror=|javascript:'; then
+  no "xem trước đã bỏ script" "còn thẻ chạy được"; else ok "xem trước đã bỏ script"; fi
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --get "$API/api/preview" --data-urlencode "url=https://khong-co-that.example/x")
+check "url lạ trả 404 chứ không 500" "$code" "404"
+
+echo "── 11. Giao diện ──"
 ui=$(curl -s --max-time 10 "$API/")
 has "trang chủ trả HTML"    "$ui" "<title>"
 has "có font tiếng Việt"    "$ui" "Be+Vietnam+Pro"

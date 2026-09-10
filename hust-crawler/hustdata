@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+# Đóng gói kho crawl để gửi cho người khác, và mở gói ở đầu bên kia.
+#
+# Vì sao cần: `data/` nằm trong .gitignore — kho HTML thô 150 MB và sẽ còn phình,
+# đẩy lên git là hỏng repo. Nên code đi đường git, dữ liệu đi đường riêng, và
+# script này lo cho hai đầu khớp nhau: gói có kèm bản kê để đầu nhận biết mình
+# nhận đủ chưa và đang cầm mẻ crawl tới đâu.
+#
+# Index Lucene KHÔNG nằm trong gói. Nó dựng lại được từ kho trong khoảng hai
+# phút, mà đóng theo thì gói to gấp rưỡi và hay lệch phiên bản lược đồ.
+#
+#   ./hustdata export [thư-mục-đích] [--split 45m]   đóng gói kho hiện có
+#                                                    mặc định ra goi/ ngay trong repo
+#   ./hustdata import <gói.tar.gz|phần đầu .part-aa> mở gói vào data/
+#   ./hustdata info   <gói.tar.gz>                   xem gói có gì, chưa mở
+#   ./hustdata check                                 soát kho đang có tại chỗ
+set -uo pipefail
+cd "$(dirname "$0")" || exit 1
+
+PY=${PY:-.venv/bin/python}
+[ -x "$PY" ] || PY=python3
+
+# macOS có shasum, Linux có sha256sum — nhận cả hai chứ đừng bắt cài thêm
+if command -v sha256sum >/dev/null 2>&1; then SHA="sha256sum"; else SHA="shasum -a 256"; fi
+
+do_hash() { $SHA "$1" | awk '{print $1}'; }
+
+# ---------------------------------------------------------------- bản kê
+# Liệt kê những gì đáng gửi. Cố ý bỏ log, pid và .DS_Store: chúng chỉ có nghĩa
+# trên máy sinh ra, mang sang máy khác là gây hiểu nhầm "đang chạy".
+danh_sach() {
+  {
+    for d in data/raw data/raw-*; do
+      [ -d "$d" ] || continue
+      ls "$d"/pages-*.jsonl "$d"/pages-*.jsonl.gz 2>/dev/null
+      [ -f "$d/state.json" ] && echo "$d/state.json"
+      # N1-links cố ý không có đuôi file, tìm theo tên
+      for f in "$d"/*links*; do
+        [ -f "$f" ] && case "$f" in *.log|*.txt) ;; *) echo "$f";; esac
+      done
+    done
+    for f in data/subdomains.txt data/soict_canbo.txt data/MANIFEST.txt; do
+      [ -f "$f" ] && echo "$f"
+    done
+  } | sort -u
+}
+
+viet_manifest() {
+  local out=$1
+  {
+    echo "# Bản kê kho crawl hust.edu.vn"
+    echo "# Sinh lúc : $(date '+%Y-%m-%d %H:%M:%S %Z')"
+    echo "# Máy      : $(uname -s) $(uname -m)"
+    echo "#"
+    echo "# Mỗi kho một dòng: host, số trang đã tải, số url còn trong hàng đợi."
+    for d in data/raw data/raw-*; do
+      [ -d "$d" ] || continue
+      [ -f "$d/state.json" ] || continue
+      "$PY" - "$d" <<'PYEOF'
+import json, pathlib, sys
+d = pathlib.Path(sys.argv[1]); s = json.loads((d / "state.json").read_text(encoding="utf-8"))
+host = "hust.edu.vn" if d.name == "raw" else d.name[4:]
+print(f"# kho {host:<30} {len(s.get('done', {})):>6} đã tải  {len(s.get('frontier', [])):>6} chờ")
+PYEOF
+    done
+    echo "#"
+    echo "# sha256                                                            đường dẫn"
+    danh_sach | while read -r f; do printf "%s  %s\n" "$(do_hash "$f")" "$f"; done
+  } > "$out"
+}
+
+# ---------------------------------------------------------------- export
+lam_goi() {
+  # Mặc định ra goi/ chứ không phải thư mục hiện hành: gói 120 MB quăng lung
+  # tung trong máy rồi quên là rác. goi/ nằm trong .gitignore nên không lọt lên
+  # git, mà vẫn ở ngay cạnh repo để khỏi đi tìm.
+  local dich=${1:-goi} split=""
+  shift 2>/dev/null || true
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --split) split=${2:?dùng: --split 45m}; shift 2 ;;
+      *) echo "Không hiểu tham số: $1"; exit 1 ;;
+    esac
+  done
+  mkdir -p "$dich"
+
+  local n; n=$(danh_sach | wc -l | tr -d ' ')
+  [ "$n" -gt 0 ] || { echo "Kho rỗng, không có gì để gói."; exit 1; }
+
+  local ten="hust-data-$(date +%Y%m%d-%H%M)"
+  echo "→ Lập bản kê $n file…"
+  # Bản kê nằm luôn trong data/ để nó đi theo gói; bản thứ hai để cạnh gói cho
+  # người gửi đọc được mà không phải mở gói ra.
+  viet_manifest data/MANIFEST.txt
+  cp data/MANIFEST.txt "$dich/$ten.manifest.txt"
+
+  echo "→ Nén… (kho đã là gzip nên gói chỉ nhỏ đi ở state.json)"
+  # -T -: đọc danh sách file từ stdin, tránh giới hạn độ dài dòng lệnh
+  danh_sach | tar -czf "$dich/$ten.tar.gz" -T -
+
+  local kt; kt=$(du -h "$dich/$ten.tar.gz" | awk '{print $1}')
+  echo "$(do_hash "$dich/$ten.tar.gz")  $ten.tar.gz" > "$dich/$ten.tar.gz.sha256"
+
+  if [ -n "$split" ]; then
+    echo "→ Cắt thành từng phần ${split}…"
+    split -b "$split" "$dich/$ten.tar.gz" "$dich/$ten.tar.gz.part-"
+    rm "$dich/$ten.tar.gz"
+    echo "Đã cắt:"; ls -lh "$dich/$ten.tar.gz.part-"* | awk '{print "   ", $9, $5}'
+    echo ""
+    echo "Gửi TẤT CẢ các phần + file .sha256 + .manifest.txt."
+    echo "Đầu nhận chỉ cần trỏ vào phần đầu: ./hustdata import $ten.tar.gz.part-aa"
+  else
+    echo ""
+    echo "Xong: $dich/$ten.tar.gz  ($kt)"
+    echo "Gửi kèm $ten.tar.gz.sha256 và $ten.manifest.txt để đầu kia đối chiếu."
+  fi
+  echo ""
+  echo "Bên nhận làm gì tiếp: xem CHIA-DU-LIEU.md, mục 3."
+}
+
+# ---------------------------------------------------------------- import
+mo_goi() {
+  local goi=${1:?dùng: ./hustdata import <gói.tar.gz hoặc .part-aa>}
+  # TAM phải là biến toàn cục: trap EXIT chạy sau khi hàm đã thoát, lúc đó biến
+  # local không còn nữa và `set -u` báo "unbound variable" ngay dòng dọn dẹp.
+  TAM=$(mktemp -d)
+  trap 'rm -rf "${TAM:-}"' EXIT
+  local tam=$TAM
+
+  local tar_file="$goi"
+  case "$goi" in
+    *.part-*)
+      local base=${goi%.part-*}
+      echo "→ Ghép các phần của $(basename "$base")…"
+      cat "$base".part-* > "$tam/goi.tar.gz"
+      tar_file="$tam/goi.tar.gz"
+      [ -f "$base.sha256" ] && goi="$base"
+      ;;
+  esac
+
+  # Đối chiếu sha256 nếu người gửi có gửi kèm. Gói 150 MB đi qua Drive hay Zalo
+  # rất hay đứt giữa chừng mà vẫn giải nén được một phần, nên bước này không thừa.
+  local shafile="${goi}.sha256"
+  case "$goi" in *.part-*) shafile="${goi%.part-*}.tar.gz.sha256";; esac
+  if [ -f "$shafile" ]; then
+    echo "→ Đối chiếu sha256…"
+    local mong nhan
+    mong=$(awk '{print $1}' "$shafile")
+    nhan=$(do_hash "$tar_file")
+    if [ "$mong" = "$nhan" ]; then echo "   khớp"; else
+      echo "   LỆCH! gói hỏng hoặc tải thiếu."
+      echo "   mong  $mong"; echo "   nhận  $nhan"
+      exit 1
+    fi
+  else
+    echo "→ Không có file .sha256 đi kèm, bỏ qua bước đối chiếu."
+  fi
+
+  # Kho cũ được đổi tên chứ không xoá: state.json của hai máy không trộn được,
+  # mà lỡ tay đè lên mẻ crawl của chính mình thì không có đường lùi.
+  local co_cu=0
+  for d in data/raw data/raw-*; do [ -d "$d" ] && co_cu=1; done
+  if [ "$co_cu" = 1 ]; then
+    local sao="data.truoc-khi-import-$(date +%Y%m%d-%H%M)"
+    echo "→ Đang có kho cũ. Dời sang $sao/ chứ không đè."
+    mkdir -p "$sao"
+    for d in data/raw data/raw-*; do [ -d "$d" ] && mv "$d" "$sao/"; done
+  fi
+
+  echo "→ Giải nén…"
+  mkdir -p data
+  tar -xzf "$tar_file" -C . || { echo "Giải nén hỏng."; exit 1; }
+
+  echo ""
+  soat_kho
+  echo ""
+  echo "Chạy tiếp được rồi:"
+  echo "   ./hustctl status          xem còn bao nhiêu url trong hàng đợi"
+  echo "   ./hustctl resume          crawl tiếp"
+  echo "   cd ../hust-search && docker compose up -d && ./hustctl index"
+}
+
+# ---------------------------------------------------------------- info / check
+xem_goi() {
+  local goi=${1:?dùng: ./hustdata info <gói.tar.gz>}
+  echo "Nội dung bản kê trong gói:"
+  tar -xzOf "$goi" data/MANIFEST.txt 2>/dev/null | grep '^#' | sed 's/^# \{0,1\}/  /' 
+  echo ""
+  echo "Số file trong gói: $(tar -tzf "$goi" | wc -l | tr -d ' ')"
+  echo "Dung lượng gói   : $(du -h "$goi" | awk '{print $1}')"
+}
+
+soat_kho() {
+  echo "Kho hiện có:"
+  local tong=0
+  for d in data/raw data/raw-*; do
+    [ -d "$d" ] || continue
+    [ -f "$d/state.json" ] || continue
+    "$PY" - "$d" <<'PYEOF'
+import json, pathlib, sys
+d = pathlib.Path(sys.argv[1]); s = json.loads((d / "state.json").read_text(encoding="utf-8"))
+host = "hust.edu.vn" if d.name == "raw" else d.name[4:]
+shard = len(list(d.glob("pages-*.jsonl*")))
+kb = sum(f.stat().st_size for f in d.glob("pages-*.jsonl*")) / 1e6
+print(f"  {host:<30} {len(s.get('done', {})):>6} trang  {len(s.get('frontier', [])):>6} chờ"
+      f"  {shard:>3} shard  {kb:>7.1f} MB")
+PYEOF
+  done
+  echo ""
+  echo "Soát kho khớp state chưa (read_raw.py --check):"
+  local kq
+  kq=$("$PY" read_raw.py --check 2>&1 | tail -6)
+  if [ -z "$kq" ] || echo "$kq" | grep -q "ModuleNotFoundError"; then
+    echo "  (chưa chạy được — cài môi trường trước:"
+    echo "   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)"
+  else
+    echo "$kq" | sed 's/^/  /'
+  fi
+}
+
+case "${1:-}" in
+  export) shift; lam_goi "$@" ;;
+  import) shift; mo_goi "$@" ;;
+  info)   shift; xem_goi "$@" ;;
+  check)  soat_kho ;;
+  # in đúng khối chú thích đầu file làm phần trợ giúp, dừng ở dòng code đầu tiên
+  *) awk 'NR>1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0" ;;
+esac

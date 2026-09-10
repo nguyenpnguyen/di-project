@@ -19,7 +19,9 @@ import java.util.concurrent.Executors;
  * không kéo thêm framework nào — cả dịch vụ chỉ còn Lucene và Jackson.
  *
  *   POST /bulk    [{url,title,text,host,section,date}, …]   thêm/ghi đè, trả số đã nhận
- *   GET  /search?q=&from=&size=&host=                       kết quả kèm đoạn tô sáng
+ *   GET  /search?q=&from=&size=&host=&date_from=&date_to=&sort=
+ *                                                          kết quả kèm đoạn tô sáng
+ *   GET  /doc?url=                                          một tài liệu kèm HTML đã dọn
  *   GET  /stats                                             số tài liệu, dung lượng, theo host
  *   POST /reset                                             xoá sạch index
  *   GET  /health
@@ -42,6 +44,7 @@ public class SearchServer {
         http.setExecutor(Executors.newFixedThreadPool(8));
         http.createContext("/bulk", app::bulk);
         http.createContext("/search", app::search);
+        http.createContext("/doc", app::doc);
         http.createContext("/stats", app::stats);
         http.createContext("/reset", app::reset);
         http.createContext("/health", (ex) -> send(ex, 200, Map.of("ok", true)));
@@ -80,21 +83,47 @@ public class SearchServer {
         if (q.isEmpty()) { send(ex, 400, Map.of("error", "thiếu tham số q")); return; }
         int from = parseInt(p.get("from"), 0);
         int size = Math.min(parseInt(p.get("size"), 10), 50);
+        boolean theoNgay = "date".equalsIgnoreCase(p.get("sort"));
         try {
-            Index.Result r = index.search(q, from, size, p.get("host"));
+            Index.Result r = index.search(new Index.Truy(q, from, size, p.get("host"),
+                    p.get("date_from"), p.get("date_to"), theoNgay));
             List<Map<String, Object>> hits = new ArrayList<>();
             for (Index.Hit h : r.hits()) {
-                hits.add(new LinkedHashMap<>(Map.of(
-                        "url", nz(h.url()), "title", nz(h.title()), "host", nz(h.host()),
-                        "section", nz(h.section()), "date", nz(h.date()),
-                        "score", h.score(), "fragments", h.fragments())));
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("url", nz(h.url()));
+                m.put("title", nz(h.title()));
+                m.put("host", nz(h.host()));
+                m.put("section", nz(h.section()));
+                m.put("date", nz(h.date()));
+                m.put("score", h.score());
+                m.put("fragments", h.fragments());
+                m.put("duplicates", h.duplicates());
+                hits.add(m);
             }
-            send(ex, 200, new LinkedHashMap<>(Map.of(
-                    "q", q, "total", r.total(), "took_ms", r.tookMs(),
-                    "from", from, "size", size, "hits", hits)));
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("q", q);
+            out.put("total", r.total());
+            out.put("took_ms", r.tookMs());
+            out.put("from", from);
+            out.put("size", size);
+            out.put("sort", theoNgay ? "date" : "score");
+            out.put("hits", hits);
+            send(ex, 200, out);
         } catch (Exception e) {
             // câu truy vấn sai cú pháp là lỗi của người dùng, đừng trả 500
             send(ex, 400, Map.of("error", "không phân tích được truy vấn: " + e.getMessage()));
+        }
+    }
+
+    private void doc(HttpExchange ex) throws IOException {
+        String url = query(ex).getOrDefault("url", "").trim();
+        if (url.isEmpty()) { send(ex, 400, Map.of("error", "thiếu tham số url")); return; }
+        try {
+            Map<String, String> d = index.layTaiLieu(url);
+            if (d == null) { send(ex, 404, Map.of("error", "chưa có trong index")); return; }
+            send(ex, 200, d);
+        } catch (Exception e) {
+            send(ex, 500, Map.of("error", String.valueOf(e)));
         }
     }
 

@@ -90,6 +90,17 @@ trăm MB). Mỗi site một kho riêng `data/raw-<host>`. Sinh lại được b�
 `N1-links` cố ý **không có đuôi file** — người dùng đặt tên vậy. `--links` tìm
 file `*links*` không đuôi trong `data/raw` mà ghi đè, đừng đẻ file mới bên cạnh.
 
+## Chia dữ liệu cho người khác
+
+`data/` gitignore nên code và kho đi hai đường. Đóng/mở gói bằng
+`hust-crawler/hustdata` (`export` / `import` / `info` / `check`), hướng dẫn đầy
+đủ ở `hust-crawler/CHIA-DU-LIEU.md`. Gói ra `hust-crawler/goi/` — cũng gitignore.
+Index Lucene không đi kèm gói — dựng lại từ kho mất khoảng hai phút.
+
+Không trộn được hai kho crawl song song trên cùng một host: hai `state.json`
+khác nhau ghép lại thì hàng đợi hết khớp. Chia việc theo site thì được, vì mỗi
+site một thư mục kho riêng `data/raw-<host>`.
+
 ## Ràng buộc phải nhớ khi sửa crawler
 
 **Site chặn ~20-25 request/phút.** Đo bằng cách bắn thử từng nhịp; vượt là HTTP

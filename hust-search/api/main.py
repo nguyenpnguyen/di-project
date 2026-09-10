@@ -18,6 +18,7 @@ import signal
 import subprocess
 import threading
 import time
+import urllib.parse
 from typing import Iterator
 
 import httpx
@@ -97,10 +98,58 @@ def extract(rec: dict) -> dict | None:
         "url": rec["url"],
         "title": title[:500],
         "text": text[:200_000],
+        "html": don_html(body, rec["url"]),
         "host": re.sub(r"^https?://", "", rec["url"]).split("/")[0].lower(),
         "section": meta(property="article:section") or "",
         "date": (prop("datePublished") or rec.get("lastmod") or "")[:10],
     }
+
+
+# thẻ giữ lại khi dọn: đủ để trang xem trước còn ra hình hài bài báo
+THE_GIU = {"p", "br", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li",
+           "blockquote", "figure", "figcaption", "table", "thead", "tbody", "tr",
+           "th", "td", "strong", "b", "em", "i", "u", "sub", "sup", "img", "a",
+           "div", "span", "section", "article"}
+THUOC_TINH_GIU = {"a": ["href"], "img": ["src", "alt"]}
+
+
+def don_html(body, goc: str) -> str:
+    """HTML rút gọn để xem trước, dựng từ bản đã tải chứ không gọi lại site.
+
+    Bỏ script/style/form/iframe và toàn bộ thuộc tính trừ href/src/alt: giữ
+    nguyên class của trang gốc thì phải kéo cả CSS của họ về mới ra hình, mà
+    kéo CSS nghĩa là mỗi lần xem trước lại bắn thêm chục request sang
+    hust.edu.vn — đúng cái đang bị chặn. Bỏ hết rồi tự tô bằng CSS của mình thì
+    trang xem trước không phát sinh request nào ngoài ảnh.
+    """
+    if body is None:
+        return ""
+    ban = BeautifulSoup(str(body), "lxml")
+    for tag in ban(["script", "style", "form", "iframe", "noscript", "svg",
+                    "button", "input", "select", "nav", "footer", "header"]):
+        tag.decompose()
+    for tag in ban.find_all(True):
+        if tag.name not in THE_GIU:
+            tag.unwrap()
+            continue
+        giu = THUOC_TINH_GIU.get(tag.name, [])
+        tag.attrs = {k: v for k, v in tag.attrs.items() if k in giu}
+        if tag.name == "img":
+            src = tag.get("src") or ""
+            if src.startswith("data:") or not src:
+                tag.decompose()
+                continue
+            tag["src"] = urllib.parse.urljoin(goc, src)
+            tag["loading"] = "lazy"
+        elif tag.name == "a":
+            tag["href"] = urllib.parse.urljoin(goc, tag.get("href") or "")
+            tag["target"] = "_blank"
+            tag["rel"] = "noopener"
+    out = str(ban)
+    # Chặn ở 40 KB: trang xem trước chỉ cần đủ nhận ra bài, mà 2.800 tài liệu
+    # nhân vài chục KB là index phình lên hàng trăm MB cho một thứ chỉ dùng cho
+    # năm kết quả đầu mỗi lượt tìm.
+    return out[:40_000]
 
 
 # --------------------------------------------------------------------- mô hình
@@ -113,6 +162,11 @@ class CrawlReq(BaseModel):
     render: str = "never"
     allow_domain: str | None = None
     insecure: bool = False
+
+
+class LayReq(BaseModel):
+    url: str
+    render: bool = False
 
 
 class IndexReq(BaseModel):
@@ -265,13 +319,121 @@ def index_stats():
 
 
 @app.get("/api/search")
-def search(q: str, from_: int = 0, size: int = 10, host: str | None = None):
-    params = {"q": q, "from": from_, "size": size}
-    if host:
-        params["host"] = host
+def search(q: str, from_: int = 0, size: int = 10, host: str | None = None,
+           date_from: str | None = None, date_to: str | None = None,
+           sort: str = "score"):
+    """Chuyển thẳng sang Lucene. Tầng này không tự lọc gì: lọc ở Lucene thì bộ
+    đếm tổng và việc chia trang mới khớp nhau."""
+    params: dict = {"q": q, "from": from_, "size": size}
+    for k, v in (("host", host), ("date_from", date_from), ("date_to", date_to)):
+        if v:
+            params[k] = v
+    if sort == "date":
+        params["sort"] = "date"
     with httpx.Client(base_url=LUCENE, timeout=30) as cli:
         r = cli.get("/search", params=params)
         return JSONResponse(r.json(), status_code=r.status_code)
+
+
+# --------------------------------------------------- tải lẻ một url và index ngay
+ADHOC = DATA / "raw-adhoc"
+_lan_tai = {"luc": 0.0}
+_tai_lock = threading.Lock()
+NHIP_TOI_THIEU = 3.0        # giây giữa hai lần tải lẻ, cùng nhịp với --delay
+
+
+def _ghi_kho(rec: dict) -> None:
+    """Ghi vào kho riêng raw-adhoc, không đụng vào kho của crawler.
+
+    Cố ý tách kho: crawl_all.py đang chạy nền giữ state.json của từng host mở
+    suốt mẻ, ghi chen vào đó thì hai bên đạp lên nhau ngay. raw-adhoc có shard
+    riêng, và vì kho_dirs() quét mọi thư mục raw* nên lần index đầy đủ sau này
+    vẫn gom được.
+    """
+    ADHOC.mkdir(parents=True, exist_ok=True)
+    p = ADHOC / "pages-0001.jsonl.gz"
+    with gzip.open(p, "at", encoding="utf-8") as fh:
+        fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        fh.flush()          # flush từng dòng: cùng lý do như crawl_all.py
+
+
+@app.post("/api/fetch")
+def fetch_one(req: LayReq):
+    """Tải đúng một url, lưu kho, bóc chữ rồi đẩy thẳng vào Lucene.
+
+    Trả về luôn kết quả bóc được để giao diện hiện ra ngay, không phải đợi một
+    mẻ index nào cả — tải xong là tìm được.
+    """
+    url = (req.url or "").strip()
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url.lstrip("/")
+
+    # Chặn nhịp ở phía máy chủ chứ không tin vào giao diện: bấm nhanh tay hay mở
+    # hai tab là thành bắn liên tiếp, đúng kiểu ăn 429.
+    with _tai_lock:
+        cho = NHIP_TOI_THIEU - (time.time() - _lan_tai["luc"])
+        if cho > 0:
+            time.sleep(cho)
+        _lan_tai["luc"] = time.time()
+
+    ua = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+    try:
+        with httpx.Client(timeout=30, follow_redirects=True,
+                          headers={"User-Agent": ua}) as cli:
+            r = cli.get(url)
+    except Exception as e:
+        raise HTTPException(502, f"không tải được: {e}")
+
+    if r.status_code == 429:
+        raise HTTPException(429, "site đang chặn nhịp, đợi rồi thử lại")
+    if r.status_code >= 400:
+        raise HTTPException(502, f"site trả HTTP {r.status_code}")
+
+    rec = {
+        "url": str(r.url),
+        "status": r.status_code,
+        "encoding": r.encoding or "utf-8",
+        "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "html_b64": base64.b64encode(r.content).decode("ascii"),
+        "kind": "adhoc",
+    }
+    doc = extract(rec)
+    if not doc:
+        raise HTTPException(422, "tải được nhưng không bóc ra chữ nào — trang rỗng hoặc dựng bằng JS")
+
+    _ghi_kho(rec)
+    with httpx.Client(base_url=LUCENE, timeout=60) as cli:
+        cli.post("/bulk", json=[doc]).raise_for_status()
+        tong = cli.get("/stats").json().get("docs", 0)
+
+    return {
+        "ok": True,
+        "url": doc["url"],
+        "title": doc["title"],
+        "host": doc["host"],
+        "date": doc["date"],
+        "chars": len(doc["text"]),
+        "bytes": len(r.content),
+        "status": r.status_code,
+        "indexed": True,
+        "index_docs": tong,
+        "preview": doc["html"][:4000],
+    }
+
+
+@app.get("/api/preview")
+def preview(url: str):
+    """HTML đã dọn của một trang đã index, để nhúng vào khung xem trước.
+
+    Lấy từ index của mình, không gọi lại hust.edu.vn — nên mở bao nhiêu lần
+    cũng không tốn một request nào của site và không bao giờ bị chặn.
+    """
+    with httpx.Client(base_url=LUCENE, timeout=30) as cli:
+        r = cli.get("/doc", params={"url": url})
+    if r.status_code != 200:
+        raise HTTPException(r.status_code, "chưa có trang này trong index")
+    return r.json()
 
 
 @app.get("/api/health")

@@ -46,10 +46,10 @@ cd hust-crawler
 ./hustdata export                    # ra một file .tar.gz + .sha256 + .manifest.txt
 ```
 
-Gói rơi vào `hust-crawler/goi/`. Thư mục này nằm trong `.gitignore` nên không
-bao giờ lọt lên git, mà vẫn ở ngay cạnh repo — cố ý không để mặc định ra Desktop
-hay `/tmp`: gói 120 MB quăng lung tung rồi quên là thành rác trong máy, còn
-`/tmp` thì mất sạch khi khởi động lại.
+Gói rơi vào `GOI-DU-LIEU/` ngay gốc repo, cạnh `hust-crawler/` và `hust-search/`.
+Thư mục này nằm trong `.gitignore` nên không bao giờ lọt lên git. Cố ý không để
+mặc định ra Desktop hay `/tmp`: gói 120 MB quăng lung tung rồi quên là thành rác
+trong máy, còn `/tmp` thì mất sạch khi khởi động lại.
 
 Muốn để chỗ khác thì truyền thư mục: `./hustdata export ~/Desktop`.
 
@@ -76,7 +76,7 @@ trên máy sinh ra; mang sang máy khác chỉ gây hiểu nhầm "đang có m�
 Xem trước gói mà không cần giải nén:
 
 ```bash
-./hustdata info goi/hust-data-20260910-2046.tar.gz
+./hustdata info ../GOI-DU-LIEU/hust-data-20260910-2100.tar.gz
 ```
 
 ## 3. Người nhận: dựng lại từ đầu
@@ -102,13 +102,13 @@ python3 -m venv .venv
 Đặt gói (và các file `.sha256`, `.manifest.txt`) vào đâu cũng được, rồi:
 
 ```bash
-./hustdata import ~/Downloads/hust-data-20260910-2046.tar.gz
+./hustdata import ~/Downloads/hust-data-20260910-2100.tar.gz
 ```
 
 Gói bị cắt nhỏ thì chỉ cần trỏ vào **phần đầu**, script tự ghép:
 
 ```bash
-./hustdata import ~/Downloads/hust-data-20260910-2046.tar.gz.part-aa
+./hustdata import ~/Downloads/hust-data-20260910-2100.tar.gz.part-aa
 ```
 
 Lệnh này sẽ:
@@ -201,7 +201,7 @@ subdomain bằng `--site library.hust.edu.vn` — mỗi site một thư mục kh
 
 | Lệnh | Làm gì |
 |---|---|
-| `./hustdata export [thư-mục] [--split 45m]` | đóng gói kho để gửi, mặc định ra `goi/` |
+| `./hustdata export [thư-mục] [--split 45m]` | đóng gói kho để gửi, mặc định ra `GOI-DU-LIEU/` |
 | `./hustdata import <gói hoặc .part-aa>` | mở gói, có kiểm sha256 |
 | `./hustdata info <gói>` | xem gói có gì, không cần giải nén |
 | `./hustdata check` | soát kho đang có tại chỗ |

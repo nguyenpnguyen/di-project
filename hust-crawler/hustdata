@@ -10,7 +10,7 @@
 # phút, mà đóng theo thì gói to gấp rưỡi và hay lệch phiên bản lược đồ.
 #
 #   ./hustdata export [thư-mục-đích] [--split 45m]   đóng gói kho hiện có
-#                                                    mặc định ra goi/ ngay trong repo
+#                                                    mặc định ra GOI-DU-LIEU/ ở gốc repo
 #   ./hustdata import <gói.tar.gz|phần đầu .part-aa> mở gói vào data/
 #   ./hustdata info   <gói.tar.gz>                   xem gói có gì, chưa mở
 #   ./hustdata check                                 soát kho đang có tại chỗ
@@ -71,10 +71,11 @@ PYEOF
 
 # ---------------------------------------------------------------- export
 lam_goi() {
-  # Mặc định ra goi/ chứ không phải thư mục hiện hành: gói 120 MB quăng lung
-  # tung trong máy rồi quên là rác. goi/ nằm trong .gitignore nên không lọt lên
-  # git, mà vẫn ở ngay cạnh repo để khỏi đi tìm.
-  local dich=${1:-goi} split=""
+  # Mặc định ra GOI-DU-LIEU/ ở gốc repo, không phải thư mục hiện hành: gói 120 MB
+  # quăng lung tung rồi quên là rác trong máy, mà /tmp thì mất khi khởi động lại.
+  # Để ở gốc repo cho đập vào mắt, và tên viết hoa cho khỏi lẫn với code.
+  # Thư mục này nằm trong .gitignore nên không bao giờ lọt lên git.
+  local dich=${1:-../GOI-DU-LIEU} split=""
   shift 2>/dev/null || true
   while [ $# -gt 0 ]; do
     case "$1" in

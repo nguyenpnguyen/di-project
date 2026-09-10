@@ -94,7 +94,7 @@ file `*links*` không đuôi trong `data/raw` mà ghi đè, đừng đẻ file m
 
 `data/` gitignore nên code và kho đi hai đường. Đóng/mở gói bằng
 `hust-crawler/hustdata` (`export` / `import` / `info` / `check`), hướng dẫn đầy
-đủ ở `hust-crawler/CHIA-DU-LIEU.md`. Gói ra `hust-crawler/goi/` — cũng gitignore.
+đủ ở `hust-crawler/CHIA-DU-LIEU.md`. Gói ra `GOI-DU-LIEU/` ở gốc repo — cũng gitignore.
 Index Lucene không đi kèm gói — dựng lại từ kho mất khoảng hai phút.
 
 Không trộn được hai kho crawl song song trên cùng một host: hai `state.json`

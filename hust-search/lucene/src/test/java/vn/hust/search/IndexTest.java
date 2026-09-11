@@ -110,6 +110,74 @@ class IndexTest {
 
     // ------------------------------------------------ các cải tiến xếp hạng
 
+    private Index.Result tfidf(String q) throws Exception {
+        return idx.search(new Index.Truy(q, 0, 10, null, null, null, false, "tfidf"));
+    }
+
+    @Test void tfidfXepTheoDiemGiamDan() throws Exception {
+        doc("https://fixture.local/doc-1", "Tuyen sinh ky thuat",
+                "tuyen sinh ky thuat tuyen sinh ky thuat");
+        doc("https://fixture.local/doc-2", "Thong bao", "tuyen sinh");
+        idx.commit();
+
+        Index.Result r = tfidf("tuyen sinh");
+        assertEquals(2, r.hits().size());
+        assertEquals("https://fixture.local/doc-1", r.hits().get(0).url());
+        assertTrue(r.hits().get(0).score() >= r.hits().get(1).score(),
+                "TF-IDF phải trả điểm giảm dần");
+    }
+
+    @Test void tfidfKhongDungDiemNen() throws Exception {
+        String title = "Tuyen sinh";
+        String text = "Tuyen sinh ky thuat";
+        doc("https://fixture.local/article.html", title, text);
+        doc("https://fixture.local/page-2/", title, text);
+        idx.commit();
+
+        Index.Result r = tfidf("tuyen sinh");
+        assertEquals(2, r.hits().size());
+        assertEquals(r.hits().get(0).score(), r.hits().get(1).score(), 0.0001,
+                "strict TF-IDF không được thưởng URL bài viết");
+    }
+
+    @Test void enhancedVanUuTienBaiViet() throws Exception {
+        String text = "Tuyen sinh ky thuat";
+        doc("https://fixture.local/article.html", "Tuyen sinh", text);
+        doc("https://fixture.local/page-2/", "Tuyen sinh", text);
+        idx.commit();
+
+        Index.Result r = idx.search(new Index.Truy("tuyen sinh", 0, 10, null,
+                null, null, false, "enhanced"));
+        assertEquals("https://fixture.local/article.html", r.hits().get(0).url());
+    }
+
+    @Test void tfidfTimKhongDau() throws Exception {
+        doc("https://fixture.local/doc-3", "Điểm chuẩn Đại học",
+                "Thông tin điểm chuẩn tuyển sinh.");
+        idx.commit();
+
+        Index.Result r = tfidf("diem chuan");
+        assertEquals(1, r.total());
+        assertTrue(String.join(" ", r.hits().get(0).fragments()).contains("điểm"));
+    }
+
+    @Test void locHostVaNgayKhongGopDiemTfidf() throws Exception {
+        docNgay("https://fixture.local/old", "Tuyen sinh", "Tuyen sinh ky thuat", "2024-01-01");
+        idx.put(Map.of("url", "https://other.local/new", "title", "Tuyen sinh",
+                "text", "Tuyen sinh ky thuat", "host", "other.local", "date", "2026-01-01"));
+        idx.commit();
+
+        Index.Result all = tfidf("tuyen sinh");
+        Index.Result filtered = idx.search(new Index.Truy("tuyen sinh", 0, 10,
+                "other.local", "2026-01-01", "2026-12-31", false, "tfidf"));
+        assertEquals(2, all.hits().size());
+        assertEquals(1, filtered.hits().size());
+        assertEquals(all.hits().stream().filter(h -> h.host().equals("other.local"))
+                        .findFirst().orElseThrow().score(),
+                filtered.hits().get(0).score(), 0.0001,
+                "FILTER chỉ thu hẹp kết quả, không góp điểm");
+    }
+
     @Test void goKhongDauVanTimRa() throws Exception {
         doc("https://hust.edu.vn/k-11.html", "Điểm chuẩn Đại học Bách khoa Hà Nội năm 2026",
             "Nhà trường công bố điểm chuẩn xét tuyển vào 68 chương trình đào tạo.");

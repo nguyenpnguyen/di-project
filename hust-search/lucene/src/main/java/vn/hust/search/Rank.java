@@ -4,9 +4,9 @@ package vn.hust.search;
  * Điểm nền của một tài liệu, tính từ chính nó chứ không từ truy vấn.
  *
  * Vì sao cần: kho crawl hiện 82% là trang mục lục ("… - Trang 9"), mà mục lục
- * nào cũng nhắc lại tiêu đề của cả chục bài nên BM25 chấm chúng rất cao. Người
+ * nào cũng nhắc lại tiêu đề của cả chục bài nên điểm Lucene chấm chúng rất cao. Người
  * tìm "học bổng" muốn ra bài viết, không muốn ra trang liệt kê. Ba tín hiệu rẻ
- * tiền dưới đây nhân vào điểm BM25 để kéo bài viết lên trước.
+ * tiền dưới đây nhân vào điểm Lucene để kéo bài viết lên trước.
  *
  * Cố ý để hệ số nhẹ tay: đây là điểm nền, không được lấn át độ khớp từ khoá.
  * Khoảng dao động tổng cộng chỉ quanh 0,35x — đủ đảo thứ tự hai kết quả sát

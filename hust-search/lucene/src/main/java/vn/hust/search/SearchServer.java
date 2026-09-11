@@ -19,7 +19,7 @@ import java.util.concurrent.Executors;
  * không kéo thêm framework nào — cả dịch vụ chỉ còn Lucene và Jackson.
  *
  *   POST /bulk    [{url,title,text,host,section,date}, …]   thêm/ghi đè, trả số đã nhận
- *   GET  /search?q=&from=&size=&host=&date_from=&date_to=&sort=
+ *   GET  /search?q=&from=&size=&host=&date_from=&date_to=&sort=&ranking=
  *                                                          kết quả kèm đoạn tô sáng
  *   GET  /doc?url=                                          một tài liệu kèm HTML đã dọn
  *   GET  /stats                                             số tài liệu, dung lượng, theo host
@@ -81,12 +81,17 @@ public class SearchServer {
         Map<String, String> p = query(ex);
         String q = p.getOrDefault("q", "").trim();
         if (q.isEmpty()) { send(ex, 400, Map.of("error", "thiếu tham số q")); return; }
-        int from = parseInt(p.get("from"), 0);
-        int size = Math.min(parseInt(p.get("size"), 10), 50);
+        int from = Math.max(parseInt(p.get("from"), 0), 0);
+        int size = Math.min(Math.max(parseInt(p.get("size"), 10), 1), 50);
+        String ranking = p.getOrDefault("ranking", "tfidf").trim().toLowerCase(Locale.ROOT);
+        if (!ranking.equals("tfidf") && !ranking.equals("enhanced")) {
+            send(ex, 400, Map.of("error", "ranking phải là tfidf hoặc enhanced"));
+            return;
+        }
         boolean theoNgay = "date".equalsIgnoreCase(p.get("sort"));
         try {
             Index.Result r = index.search(new Index.Truy(q, from, size, p.get("host"),
-                    p.get("date_from"), p.get("date_to"), theoNgay));
+                    p.get("date_from"), p.get("date_to"), theoNgay, ranking));
             List<Map<String, Object>> hits = new ArrayList<>();
             for (Index.Hit h : r.hits()) {
                 Map<String, Object> m = new LinkedHashMap<>();
@@ -102,6 +107,7 @@ public class SearchServer {
             }
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("q", q);
+            out.put("ranking", ranking);
             out.put("total", r.total());
             out.put("took_ms", r.tookMs());
             out.put("from", from);

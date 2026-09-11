@@ -1,0 +1,55 @@
+{
+  "batch": 2,
+  "documents": [
+    {
+      "url": "https://fixture.local/doc-1",
+      "title": "Tuyen sinh ky thuat",
+      "content": "fixturealpha tuyen sinh ky thuat may tinh. fixturealpha tuyen sinh ky thuat cap nhat.",
+      "section": "Tuyen sinh",
+      "published_at": "2026-09-01",
+      "outgoing_links": [
+        {
+          "url": "https://fixture.local/doc-2",
+          "text": "Xem thong bao"
+        }
+      ]
+    },
+    {
+      "url": "https://fixture.local/doc-2",
+      "title": "Thong bao",
+      "content": "fixturealpha tuyen sinh ky thuat.",
+      "host": "fixture.local",
+      "section": "Thong bao",
+      "published_at": "2026-08-01",
+      "outgoing_links": [
+        {
+          "url": "https://fixture.local/doc-1",
+          "text": "Tai lieu lien quan"
+        }
+      ]
+    },
+    {
+      "url": "https://fixture.local/doc-3",
+      "title": "Hoc bong",
+      "content": "Thong tin hoc bong cho sinh vien.",
+      "host": "fixture.local",
+      "section": "Hoc tap",
+      "published_at": "2026-07-01",
+      "outgoing_links": []
+    },
+    {
+      "url": "https://fixture.local/doc-4",
+      "title": "Điểm chuẩn Đại học Bách khoa",
+      "content": "Thông tin điểm chuẩn và tuyển sinh của Đại học Bách khoa Hà Nội.",
+      "host": "fixture.local",
+      "section": "Tuyển sinh",
+      "published_at": "2026-09-02",
+      "outgoing_links": [
+        {
+          "url": "https://hust.edu.vn/admissions/",
+          "text": "Thông tin tuyển sinh"
+        }
+      ]
+    }
+  ]
+}

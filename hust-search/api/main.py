@@ -26,7 +26,7 @@ from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 CRAWLER = pathlib.Path(os.getenv("CRAWLER_DIR", "/crawler"))
 DATA = pathlib.Path(os.getenv("DATA_DIR", "/crawler/data"))
@@ -69,6 +69,54 @@ def records(d: pathlib.Path) -> Iterator[dict]:
             continue
 
 
+def _join_http(base_url: str, href: str) -> str:
+    """Ghép url và chỉ trả về link HTTP(S), bỏ fragment."""
+    href = (href or "").strip()
+    if not href:
+        return ""
+    url = urllib.parse.urldefrag(urllib.parse.urljoin(base_url, href))[0]
+    parsed = urllib.parse.urlsplit(url)
+    return url if parsed.scheme.lower() in {"http", "https"} and parsed.netloc else ""
+
+
+def _clean_space(value: str) -> str:
+    return re.sub(r"\s+", " ", value or "").strip()
+
+
+def outgoing_links(body, base_url: str) -> list[dict]:
+    """Bóc các liên kết trong phần thân, chuẩn hóa và khử trùng theo URL."""
+    out: list[dict] = []
+    seen: dict[str, int] = {}
+    if body is None:
+        return out
+    for anchor in body.select("a[href]"):
+        url = _join_http(base_url, anchor.get("href") or "")
+        if not url:
+            continue
+        text = _clean_space(anchor.get_text(" ", strip=True))
+        if not text:
+            text = _clean_space(anchor.get("title") or anchor.get("aria-label") or "")
+        if url in seen:
+            i = seen[url]
+            if not out[i]["text"] and text:
+                out[i]["text"] = text
+            continue
+        seen[url] = len(out)
+        out.append({"url": url, "text": text})
+    return out
+
+
+def _date_or_empty(value: str | None) -> str:
+    value = (value or "").strip()[:10]
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return ""
+    try:
+        time.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return ""
+    return value
+
+
 def extract(rec: dict) -> dict | None:
     """Bản ghi thô -> tài liệu để index. None nếu không phải trang đọc được."""
     if not rec.get("html_b64") or (rec.get("status") or 0) >= 400:
@@ -94,14 +142,16 @@ def extract(rec: dict) -> dict | None:
     text = re.sub(r"\s+", " ", text)
     if not title and not text:
         return None
+    parsed = urllib.parse.urlsplit(rec["url"])
     return {
         "url": rec["url"],
         "title": title[:500],
         "text": text[:200_000],
         "html": don_html(body, rec["url"]),
-        "host": re.sub(r"^https?://", "", rec["url"]).split("/")[0].lower(),
+        "host": (parsed.hostname or "").lower(),
         "section": meta(property="article:section") or "",
         "date": (prop("datePublished") or rec.get("lastmod") or "")[:10],
+        "outgoing_links": outgoing_links(body, rec["url"]),
     }
 
 
@@ -135,14 +185,18 @@ def don_html(body, goc: str) -> str:
         giu = THUOC_TINH_GIU.get(tag.name, [])
         tag.attrs = {k: v for k, v in tag.attrs.items() if k in giu}
         if tag.name == "img":
-            src = tag.get("src") or ""
-            if src.startswith("data:") or not src:
+            src = _join_http(goc, tag.get("src") or "")
+            if not src:
                 tag.decompose()
                 continue
-            tag["src"] = urllib.parse.urljoin(goc, src)
+            tag["src"] = src
             tag["loading"] = "lazy"
         elif tag.name == "a":
-            tag["href"] = urllib.parse.urljoin(goc, tag.get("href") or "")
+            href = _join_http(goc, tag.get("href") or "")
+            if not href:
+                tag.unwrap()
+                continue
+            tag["href"] = href
             tag["target"] = "_blank"
             tag["rel"] = "noopener"
     out = str(ban)
@@ -164,15 +218,116 @@ class CrawlReq(BaseModel):
     insecure: bool = False
 
 
+class OutgoingLink(BaseModel):
+    url: str
+    text: str = ""
+
+    @field_validator("url")
+    @classmethod
+    def http_only(cls, value: str) -> str:
+        parsed = urllib.parse.urlsplit(value.strip())
+        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("url phải dùng HTTP hoặc HTTPS")
+        return value.strip()
+
+
+class PublicDocument(BaseModel):
+    url: str
+    title: str = ""
+    content: str = ""
+    host: str = ""
+    section: str = ""
+    published_at: str = ""
+    outgoing_links: list[OutgoingLink] = Field(default_factory=list)
+
+    @field_validator("url")
+    @classmethod
+    def valid_url(cls, value: str) -> str:
+        value = value.strip()
+        parsed = urllib.parse.urlsplit(value)
+        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("url phải là HTTP hoặc HTTPS đầy đủ")
+        return value
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def cap_title(cls, value: str | None) -> str:
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise ValueError("title phải là chuỗi")
+        return value[:500]
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def cap_content(cls, value: str | None) -> str:
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise ValueError("content phải là chuỗi")
+        return value[:200_000]
+
+    @field_validator("published_at", mode="before")
+    @classmethod
+    def cap_date(cls, value: str | None) -> str:
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise ValueError("published_at phải là chuỗi")
+        return value.strip()[:10]
+
+    @field_validator("published_at")
+    @classmethod
+    def valid_date(cls, value: str) -> str:
+        if value:
+            try:
+                time.strptime(value, "%Y-%m-%d")
+            except ValueError as e:
+                raise ValueError("published_at phải có dạng YYYY-MM-DD") from e
+        return value
+
+    @model_validator(mode="after")
+    def has_text(self):
+        if not self.title.strip() and not self.content.strip():
+            raise ValueError("cần ít nhất title hoặc content không rỗng")
+        return self
+
+
 class LayReq(BaseModel):
     url: str
     render: bool = False
 
 
 class IndexReq(BaseModel):
-    limit: int = 0                  # 0 = không giới hạn
-    batch: int = 200
+    limit: int = Field(default=0, ge=0)  # 0 = không giới hạn
+    batch: int = Field(default=200, ge=1, le=1000)
     reset: bool = False
+
+
+class DocumentsReq(BaseModel):
+    reset: bool = False
+    batch: int = Field(default=200, ge=1, le=1000)
+    documents: list[PublicDocument] = Field(max_length=5000)
+
+
+def public_document(d: dict) -> dict:
+    """Ánh xạ tên nội bộ sang schema dùng chung ngoài API."""
+    return PublicDocument(
+        url=d["url"], title=d.get("title", ""), content=d.get("text", ""),
+        host=d.get("host", ""), section=d.get("section", ""),
+        published_at=_date_or_empty(d.get("date")),
+        outgoing_links=d.get("outgoing_links", []),
+    ).model_dump()
+
+
+def lucene_document(d: PublicDocument | dict) -> dict:
+    if isinstance(d, PublicDocument):
+        host = d.host.strip().lower() or (urllib.parse.urlsplit(d.url).hostname or "").lower()
+        return {"url": d.url, "title": d.title, "text": d.content,
+                "host": host, "section": d.section, "date": d.published_at}
+    return {"url": d["url"], "title": d.get("title", ""), "text": d.get("text", ""),
+            "host": d.get("host", ""), "section": d.get("section", ""),
+            "date": d.get("date", ""), "html": d.get("html", "")}
 
 
 # ------------------------------------------------------------------- crawl API
@@ -283,7 +438,7 @@ def stats():
 def index_run(req: IndexReq):
     with httpx.Client(base_url=LUCENE, timeout=120) as cli:
         if req.reset:
-            cli.post("/reset")
+            cli.post("/reset").raise_for_status()
         sent = skipped = 0
         batch: list[dict] = []
         seen: set[str] = set()
@@ -296,7 +451,7 @@ def index_run(req: IndexReq):
                 if not doc:
                     skipped += 1
                     continue
-                batch.append(doc)
+                batch.append(lucene_document(doc))
                 if len(batch) >= req.batch:
                     cli.post("/bulk", json=batch).raise_for_status()
                     sent += len(batch)
@@ -308,8 +463,34 @@ def index_run(req: IndexReq):
         if batch:
             cli.post("/bulk", json=batch).raise_for_status()
             sent += len(batch)
-        total = cli.get("/stats").json()
-    return {"indexed": sent, "skipped_non_html": skipped, "index": total}
+        total = cli.get("/stats")
+        total.raise_for_status()
+    return {"indexed": sent, "skipped_non_html": skipped, "index": total.json()}
+
+
+@app.post("/api/index/documents")
+def index_documents(req: DocumentsReq):
+    """Nhận corpus theo schema public rồi chia nhỏ sang Lucene."""
+    unique: dict[str, PublicDocument] = {}
+    duplicates = 0
+    for doc in req.documents:
+        if doc.url in unique:
+            duplicates += 1
+        unique[doc.url] = doc
+
+    with httpx.Client(base_url=LUCENE, timeout=120) as cli:
+        try:
+            if req.reset:
+                cli.post("/reset").raise_for_status()
+            docs = [lucene_document(d) for d in unique.values()]
+            for start in range(0, len(docs), req.batch):
+                cli.post("/bulk", json=docs[start:start + req.batch]).raise_for_status()
+            total = cli.get("/stats")
+            total.raise_for_status()
+        except httpx.HTTPError as e:
+            raise HTTPException(502, f"Lucene không sẵn sàng: {e}") from e
+    return {"indexed": len(docs), "duplicates_in_request": duplicates,
+            "index": total.json()}
 
 
 @app.get("/api/index/stats")
@@ -321,10 +502,13 @@ def index_stats():
 @app.get("/api/search")
 def search(q: str, from_: int = 0, size: int = 10, host: str | None = None,
            date_from: str | None = None, date_to: str | None = None,
-           sort: str = "score"):
+           sort: str = "score", ranking: str = "tfidf"):
     """Chuyển thẳng sang Lucene. Tầng này không tự lọc gì: lọc ở Lucene thì bộ
     đếm tổng và việc chia trang mới khớp nhau."""
-    params: dict = {"q": q, "from": from_, "size": size}
+    ranking = ranking.strip().lower()
+    if ranking not in {"tfidf", "enhanced"}:
+        raise HTTPException(400, "ranking phải là tfidf hoặc enhanced")
+    params: dict = {"q": q, "from": from_, "size": size, "ranking": ranking}
     for k, v in (("host", host), ("date_from", date_from), ("date_to", date_to)):
         if v:
             params[k] = v
@@ -365,8 +549,9 @@ def fetch_one(req: LayReq):
     mẻ index nào cả — tải xong là tìm được.
     """
     url = (req.url or "").strip()
-    if not url.startswith(("http://", "https://")):
-        url = "https://" + url.lstrip("/")
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        raise HTTPException(422, "url phải là HTTP hoặc HTTPS đầy đủ")
 
     # Chặn nhịp ở phía máy chủ chứ không tin vào giao diện: bấm nhanh tay hay mở
     # hai tab là thành bắn liên tiếp, đúng kiểu ăn 429.
@@ -402,10 +587,16 @@ def fetch_one(req: LayReq):
     if not doc:
         raise HTTPException(422, "tải được nhưng không bóc ra chữ nào — trang rỗng hoặc dựng bằng JS")
 
+    try:
+        with httpx.Client(base_url=LUCENE, timeout=60) as cli:
+            cli.post("/bulk", json=[lucene_document(doc)]).raise_for_status()
+            tong = cli.get("/stats")
+            tong.raise_for_status()
+            tong = tong.json().get("docs", 0)
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"Lucene không sẵn sàng: {e}") from e
     _ghi_kho(rec)
-    with httpx.Client(base_url=LUCENE, timeout=60) as cli:
-        cli.post("/bulk", json=[doc]).raise_for_status()
-        tong = cli.get("/stats").json().get("docs", 0)
+    document = public_document(doc)
 
     return {
         "ok": True,
@@ -419,6 +610,7 @@ def fetch_one(req: LayReq):
         "indexed": True,
         "index_docs": tong,
         "preview": doc["html"][:4000],
+        "document": document,
     }
 
 

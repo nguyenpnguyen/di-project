@@ -171,6 +171,8 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
 .kv span{font-size:11.5px;color:var(--muted)}
 .note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
 .err{background:#fdeceb;border:1px solid #f3c9c4;color:#8d3125;border-radius:12px;padding:10px 13px;font-size:13.5px}
+.content{white-space:pre-wrap;max-height:360px;overflow:auto;background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13.5px}
+.links{overflow:auto}.links td:first-child{word-break:break-all;min-width:45%}
 </style>
 </head>
 <body>
@@ -189,6 +191,10 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
     <div class="searchbar" id="sb">
       <input type="search" id="q" placeholder="Nhập từ khoá, ví dụ: điểm chuẩn 2026" autocomplete="off">
       <select id="host"><option value="">Mọi site</option></select>
+      <select id="ranking" aria-label="Xếp hạng">
+        <option value="tfidf">TF-IDF</option>
+        <option value="enhanced">Nâng cao</option>
+      </select>
       <button class="btn" id="go">Tìm</button>
     </div>
     <div class="searchbar" id="sb2" style="margin-top:8px">
@@ -309,6 +315,7 @@ let trang = 0, tongKq = 0, truyVanCu = '';
 const khoAnh = new Map();  // url -> html đã dọn, khỏi hỏi lại server khi lật trang
 
 const esc = t => (t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fragHtml = t => esc(t).replace(/&lt;mark&gt;/g, '<mark>').replace(/&lt;\/mark&gt;/g, '</mark>');
 
 /** Số cột lưới đang chia, đọc từ chính bố cục trình duyệt đã tính. */
 function soCot() {
@@ -318,7 +325,8 @@ function soCot() {
 }
 
 function thamSo() {
-  const p = new URLSearchParams({ q: $('#q').value.trim(), size: MOI_TRANG, from_: trang * MOI_TRANG });
+  const p = new URLSearchParams({ q: $('#q').value.trim(), size: MOI_TRANG, from_: trang * MOI_TRANG,
+    ranking: $('#ranking').value });
   if ($('#host').value) p.set('host', $('#host').value);
   if ($('#d1').value) p.set('date_from', $('#d1').value);
   if ($('#d2').value) p.set('date_to', $('#d2').value);
@@ -342,7 +350,7 @@ async function doSearch(giuTrang) {
   tongKq = d.total;
   const sapNgay = d.sort === 'date';
   $('#meta').textContent = `${fmt(d.total)} kết quả cho “${d.q}” · ${d.took_ms} ms`
-    + (sapNgay ? ' · xếp theo ngày' : '')
+    + (sapNgay ? ' · xếp theo ngày' : ` · ${d.ranking === 'tfidf' ? 'TF-IDF' : 'xếp hạng nâng cao'}`)
     + (d.total > MOI_TRANG ? ` · trang ${trang + 1}/${Math.ceil(d.total / MOI_TRANG)}` : '');
 
   if (!d.hits.length) {
@@ -372,10 +380,11 @@ async function doSearch(giuTrang) {
       <div class="shot na" data-url="${esc(h.url)}" data-i="${i}">đang dựng ảnh…</div>
       <div class="body">
         <h3><a href="${esc(h.url)}" target="_blank" rel="noopener noreferrer">${esc(h.title) || '(không có tiêu đề)'}</a></h3>
-        <p class="frag">${h.fragments[0] || ''}</p>
+        <p class="frag">${fragHtml(h.fragments[0] || '')}</p>
         <div class="foot">
           <span class="chip g">${esc(h.host)}</span>
           ${h.date ? `<span class="chip b">${esc(h.date)}</span>` : ''}
+          ${diemHtml(h, d)}
           ${dupHtml(h)}
         </div>
       </div>
@@ -386,17 +395,25 @@ async function doSearch(giuTrang) {
       <h4><span class="chip">${trang * MOI_TRANG + soAnh + i + 1}</span>
         <a href="${esc(h.url)}" target="_blank" rel="noopener noreferrer">${esc(h.title) || '(không có tiêu đề)'}</a></h4>
       <div class="url">${esc(h.url)}</div>
-      ${h.fragments.slice(0, 2).map(f => `<p class="frag">…${f}…</p>`).join('')}
+      ${h.fragments.slice(0, 2).map(f => `<p class="frag">…${fragHtml(f)}…</p>`).join('')}
       <div class="foot" style="margin-top:6px">
         <span class="chip g">${esc(h.host)}</span>
         ${h.section ? `<span class="chip">${esc(h.section)}</span>` : ''}
         ${h.date ? `<span class="chip b">${esc(h.date)}</span>` : ''}
+        ${diemHtml(h, d)}
       </div>
       ${dupHtml(h)}
     </article>`).join('');
 
   vePhanTrang();
   noiBat.forEach((h, i) => dungAnh(h.url, i));
+}
+
+/** Điểm chỉ có ý nghĩa khi kết quả đang xếp theo score. */
+function diemHtml(h, d) {
+  if (d.sort !== 'score') return '';
+  const label = d.ranking === 'tfidf' ? 'Điểm TF-IDF' : 'Điểm nâng cao';
+  return `<span class="chip">${label}: ${Number(h.score || 0).toFixed(2)}</span>`;
 }
 
 /** Các url khác cùng một bài, Lucene đã gộp lại. */
@@ -501,13 +518,74 @@ function vePhanTrang() {
 
 $('#go').onclick = () => doSearch(false);
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(false); });
-['#host', '#d1', '#d2', '#sort'].forEach(k => $(k).onchange = () => { if (truyVanCu) doSearch(false); });
+['#host', '#d1', '#d2', '#sort', '#ranking'].forEach(k => $(k).onchange = () => { if (truyVanCu) doSearch(false); });
 $('#clr').onclick = () => {
-  $('#d1').value = $('#d2').value = ''; $('#sort').value = 'score'; $('#host').value = '';
+  $('#d1').value = $('#d2').value = ''; $('#sort').value = 'score'; $('#host').value = ''; $('#ranking').value = 'tfidf';
   if (truyVanCu) doSearch(false);
 };
 
 // ---------------- tải lẻ một trang ----------------
+function renderFetch(d, doc) {
+  const links = doc.outgoing_links || [];
+  let shown = Math.min(50, links.length);
+  $('#oneout').innerHTML = `
+    <div class="kv">
+      <div><b>${d.status}</b><span>HTTP</span></div>
+      <div><b>${mb(d.bytes)}</b><span>HTML tải về</span></div>
+      <div><b>${fmt(d.chars)}</b><span>ký tự bóc ra</span></div>
+      <div><b>${fmt(d.index_docs)}</b><span>tài liệu trong index</span></div>
+    </div>
+    <h3 style="margin:6px 0 2px;font-size:16px">${esc(doc.title) || '(không có tiêu đề)'}</h3>
+    <div class="url" style="font-size:12.5px;color:var(--mint-deep);word-break:break-all">${esc(doc.url)}</div>
+    <div class="foot" style="margin:8px 0">
+      <span class="chip g">${esc(doc.host)}</span>
+      ${doc.published_at ? `<span class="chip b">${esc(doc.published_at)}</span>` : ''}
+      <span class="chip">đã vào index</span>
+    </div>
+    <details>
+      <summary>Nội dung đã bóc (${fmt(doc.content.length)} ký tự)</summary>
+      <div class="content">${esc(doc.content)}</div>
+    </details>
+    <div class="card" style="margin-top:14px">
+      <h2>Liên kết đi ra (${fmt(links.length)})</h2>
+      <div class="links"><table><thead><tr><th>URL đầy đủ</th><th>Văn bản mô tả</th></tr></thead>
+        <tbody id="onelinks"></tbody></table></div>
+      <button class="btn ghost" id="onemore" style="margin-top:10px"></button>
+    </div>
+    <div class="row">
+      <button class="btn ghost" id="onedownload">Tải JSON</button>
+      <button class="btn ghost" id="onepv">Xem trước trang</button>
+      <button class="btn ghost" id="onesearch">Tìm thử tiêu đề này</button>
+    </div>`;
+
+  const drawLinks = () => {
+    $('#onelinks').innerHTML = links.slice(0, shown).map(link => `
+      <tr><td><a href="${esc(link.url)}" target="_blank" rel="noopener noreferrer">${esc(link.url)}</a></td>
+      <td>${esc(link.text)}</td></tr>`).join('')
+      || '<tr><td colspan="2">Không có liên kết HTTP(S) trong phần bài.</td></tr>';
+    const more = $('#onemore');
+    more.hidden = shown >= links.length;
+    if (!more.hidden) {
+      more.textContent = `Hiện thêm ${fmt(links.length - shown)} link`;
+      more.onclick = () => { shown = links.length; drawLinks(); };
+    }
+  };
+  drawLinks();
+  $('#onedownload').onclick = () => {
+    const href = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)],
+      { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = href; a.download = 'hust-document.json'; a.click();
+    setTimeout(() => URL.revokeObjectURL(href), 0);
+  };
+  $('#onepv').onclick = () => moKhungLon(doc.url);
+  $('#onesearch').onclick = () => {
+    $('#q').value = doc.title || doc.url;
+    document.querySelector('.tab[data-p="search"]').click();
+    doSearch(false);
+  };
+}
+
 $('#onego').onclick = async () => {
   const url = $('#one').value.trim();
   if (!url) return;
@@ -519,31 +597,12 @@ $('#onego').onclick = async () => {
       body: JSON.stringify({ url }) });
     const d = await r.json();
     if (!r.ok) { $('#oneout').innerHTML = `<div class="err">${esc(d.detail || JSON.stringify(d))}</div>`; return; }
-    khoAnh.delete(d.url);
-    $('#oneout').innerHTML = `
-      <div class="kv">
-        <div><b>${d.status}</b><span>HTTP</span></div>
-        <div><b>${mb(d.bytes)}</b><span>HTML tải về</span></div>
-        <div><b>${fmt(d.chars)}</b><span>ký tự bóc ra</span></div>
-        <div><b>${fmt(d.index_docs)}</b><span>tài liệu trong index</span></div>
-      </div>
-      <h3 style="margin:6px 0 2px;font-size:16px">${esc(d.title) || '(không có tiêu đề)'}</h3>
-      <div class="url" style="font-size:12.5px;color:var(--mint-deep);word-break:break-all">${esc(d.url)}</div>
-      <div class="foot" style="margin:8px 0">
-        <span class="chip g">${esc(d.host)}</span>
-        ${d.date ? `<span class="chip b">${esc(d.date)}</span>` : ''}
-        <span class="chip">đã vào index</span>
-      </div>
-      <div class="row">
-        <button class="btn ghost" id="onepv">Xem trước trang</button>
-        <button class="btn ghost" id="onesearch">Tìm thử tiêu đề này</button>
-      </div>`;
-    $('#onepv').onclick = () => moKhungLon(d.url);
-    $('#onesearch').onclick = () => {
-      $('#q').value = d.title || d.url;
-      document.querySelector('.tab[data-p="search"]').click();
-      doSearch(false);
+    const doc = d.document || {
+      url: d.url, title: d.title, content: '', host: d.host,
+      section: '', published_at: d.date || '', outgoing_links: []
     };
+    khoAnh.delete(doc.url);
+    renderFetch(d, doc);
   } catch (e) {
     $('#oneout').innerHTML = `<div class="err">${esc(String(e))}</div>`;
   } finally {
@@ -565,12 +624,12 @@ async function refresh() {
     <div class="stat y"><b>${mb(s.total_bytes)}</b><span>HTML thô trên đĩa</span></div>`;
 
   $('#sites').innerHTML = s.sites.map(x => `<tr>
-     <td>${x.host}</td><td class="n">${fmt(x.done)}</td><td class="n">${fmt(x.queued)}</td>
+     <td>${esc(x.host)}</td><td class="n">${fmt(x.done)}</td><td class="n">${fmt(x.queued)}</td>
      <td class="n">${fmt(x.articles)}</td><td class="n">${x.shards}</td><td class="n">${mb(x.bytes)}</td>
    </tr>`).join('');
 
   const opts = ['<option value="">Mọi site</option>']
-    .concat(Object.entries(idx.by_host || {}).map(([h, n]) => `<option value="${h}">${h} (${fmt(n)})</option>`));
+    .concat(Object.entries(idx.by_host || {}).map(([h, n]) => `<option value="${esc(h)}">${esc(h)} (${fmt(n)})</option>`));
   const cur = $('#host').value;
   $('#host').innerHTML = opts.join('');
   $('#host').value = cur;

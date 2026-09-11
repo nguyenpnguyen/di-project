@@ -20,7 +20,7 @@ Kiểm tra sống:
 
 ```bash
 curl -s localhost:8000/api/health     # {"api":true,"lucene":true,...}
-./tests/integration.sh                # 16 kiểm tra đường đi thật
+./tests/integration.sh                # 33 kiểm tra đường đi thật
 ```
 
 Lần đầu index chưa có gì. Vào tab **Bảng điều khiển** bấm **Index thêm vào kho**,
@@ -64,13 +64,15 @@ DI/
     │       ├── main/java/vn/hust/search/
     │       │   ├── Index.java         bọc Lucene: put/commit/search/stats/reset
     │       │   └── SearchServer.java  HTTP bằng com.sun.net.httpserver của JDK
-    │       └── test/java/.../IndexTest.java   8 test
+    │       └── test/java/.../IndexTest.java   29 test
     ├── api/                       ĐIỀU KHIỂN + GIAO DIỆN — Python FastAPI
     │   ├── main.py                crawl start/stop/status, index, search, stats
     │   ├── static/index.html      giao diện một trang, không framework
     │   ├── requirements.txt
     │   └── Dockerfile             nền image playwright (có sẵn Chromium)
-    └── tests/integration.sh       16 kiểm tra trên stack đang chạy
+    ├── tests/fixtures/corpus.json corpus mẫu theo schema public
+    ├── tests/test_api.py          5 test parser/schema bằng unittest
+    └── tests/integration.sh       33 kiểm tra trên stack đang chạy
 ```
 
 **Chia việc giữa hai ngôn ngữ:** Python bóc chữ từ HTML (BeautifulSoup và bộ
@@ -87,12 +89,13 @@ cấu trúc site.
         │  crawl_all.py  (nhịp tự dò, robots.txt, render khi cần)
         ▼
    data/raw*/pages-*.jsonl.gz        HTML thô base64, chưa parse
-        │  api/main.py extract()     BeautifulSoup → {url,title,text,host,section,date}
+        │  api/main.py extract()     BeautifulSoup → schema public
+        │                             {url,title,content,host,section,published_at,outgoing_links}
         ▼
    POST lucene:8081/bulk             updateDocument theo Term(url) → không đẻ trùng
         ▼
    index Lucene (volume)
-        │  GET /search?q=
+        │  GET /search?q=&ranking=tfidf
         ▼
    giao diện: tô <mark>, bấm mở tab mới
 ```
@@ -196,8 +199,10 @@ Tất cả dưới `http://localhost:8000`.
 | POST | `/api/crawl/stop` | SIGTERM rồi chờ 30s, cùng lắm mới kill |
 | GET | `/api/crawl/status` | đang chạy không, log 12 dòng cuối |
 | POST | `/api/index/run` | đọc kho → bóc chữ → đẩy vào Lucene |
+| POST | `/api/index/documents` | nhận corpus JSON theo schema public |
 | GET | `/api/index/stats` | số tài liệu, dung lượng index, theo host |
-| GET | `/api/search?q=&size=&host=` | kết quả kèm đoạn đã tô `<mark>` |
+| GET | `/api/search?q=&size=&host=&ranking=` | kết quả kèm đoạn đã tô `<mark>` |
+| POST | `/api/fetch` | tải một URL, trả document và index ngay |
 
 ```bash
 # crawl tiếp, trần 200 trang
@@ -208,9 +213,55 @@ curl -X POST localhost:8000/api/crawl/start -H 'content-type: application/json' 
 curl -X POST localhost:8000/api/crawl/start -H 'content-type: application/json' \
      -d '{"mode":"listing","site":"svbk.hust.edu.vn","max_pages":300}'
 
-# tìm
-curl -s --get localhost:8000/api/search --data-urlencode "q=điểm chuẩn"
+# tải một bài, bóc document và index ngay
+curl -X POST localhost:8000/api/fetch \
+     -H 'content-type: application/json' \
+     -d '{"url":"https://hust.edu.vn/vi/news/example.html"}'
+
+# index một corpus JSON (reset=true nếu muốn dựng lại từ đầu)
+curl -X POST localhost:8000/api/index/documents \
+     -H 'content-type: application/json' --data @tests/fixtures/corpus.json
+
+# tìm theo TF-IDF của Lucene
+curl -s --get localhost:8000/api/search \
+     --data-urlencode "q=diem chuan" --data-urlencode "ranking=tfidf" \
+     --data-urlencode "sort=score"
 ```
+
+### Schema tài liệu public
+
+`/api/fetch` trả `document`, và `/api/index/documents` nhận cùng một cấu trúc:
+
+```json
+{
+  "url": "https://hust.edu.vn/vi/news/example.html",
+  "title": "Tiêu đề bài viết",
+  "content": "Nội dung văn bản đã bóc tách",
+  "host": "hust.edu.vn",
+  "section": "Tin tức",
+  "published_at": "2026-09-11",
+  "outgoing_links": [
+    {"url": "https://hust.edu.vn/admissions/", "text": "Thông tin tuyển sinh"}
+  ]
+}
+```
+
+`url` và `outgoing_links[].url` chỉ nhận HTTP/HTTPS; request corpus tối đa 5.000
+tài liệu. `title` tối đa 500 ký tự, `content` tối đa 200.000 ký tự,
+`published_at` rỗng hoặc dạng `YYYY-MM-DD`. `host` rỗng sẽ được suy từ hostname;
+URL trùng trong một request giữ bản cuối. Các link đi ra được chuẩn hóa bằng
+`urljoin`, bỏ fragment, lọc scheme nguy hiểm và khử trùng. Mảng link chỉ phục vụ
+output/hiển thị, chưa đưa vào chỉ mục Lucene.
+
+### Xếp hạng
+
+`ranking=tfidf` là mặc định: Lucene dùng `ClassicSimilarity`, tìm trên
+`title_kd` và `text_kd` với boost bằng nhau. Điểm dùng ý tưởng
+`TF × IDF × document norm`; query không dấu vẫn tìm được nội dung có dấu.
+`ranking=enhanced` giữ các thưởng cụm, loại trang, độ dài và độ mới hiện có.
+
+`sort=score` mới là thứ tự theo điểm; khi đó UI gọi đúng tên điểm theo chế độ.
+`sort=date` sắp ngày mới trước và không gọi số điểm đó là TF-IDF.
 
 Lucene cũng nghe trực tiếp ở `localhost:8081` (`/bulk`, `/search`, `/stats`,
 `/reset`, `/health`) — tiện khi cần gỡ lỗi riêng tầng index.
@@ -221,8 +272,11 @@ Lucene cũng nghe trực tiếp ở `localhost:8081` (`/bulk`, `/search`, `/stat
 
 Một file `api/static/index.html`, không framework, không bước build.
 
-* **Tìm kiếm** — gõ từ khoá, lọc theo site. Phần khớp được **Lucene** tô `<mark>`
-  (màu bơ pastel), bấm tiêu đề mở trang gốc ở tab mới.
+* **Tìm kiếm** — gõ từ khoá, lọc theo site và chọn `TF-IDF` hoặc `Nâng cao`.
+  Phần khớp được **Lucene** tô `<mark>` (màu bơ pastel), bấm tiêu đề mở trang
+  gốc ở tab mới; khi xếp theo điểm, giao diện ghi rõ điểm TF-IDF.
+* **Tải một trang** — trả tiêu đề, nội dung, URL đầy đủ và văn bản mô tả của
+  link đi ra; nội dung thu gọn mặc định và có nút tải JSON.
 * **Bảng điều khiển** — số trang crawl, số tài liệu index, số link, dung lượng;
   bảng từng site; nút chạy/dừng crawl; nút index thêm hoặc dựng lại; log trực tiếp.
 
@@ -233,6 +287,125 @@ các trường hợp hoa/thường hay dấu câu dính liền.
 Màu: nền giấy ấm `#fbf9f6`, chấm phá mint / blush / sky / lilac pastel, chữ
 **Be Vietnam Pro** cho tiếng Việt và **Lora** cho tiêu đề.
 
+### Kịch bản demo 5–7 phút
+
+1. Mở tab **Tải một trang**, dán URL bài viết, bấm **Tải và index**; chỉ ra tiêu
+   đề, nội dung thu gọn và bảng URL/link mô tả, rồi bấm **Tải JSON** nếu cần.
+2. Nạp corpus cố định:
+
+   ```bash
+   curl -X POST localhost:8000/api/index/documents \
+        -H 'content-type: application/json' --data @tests/fixtures/corpus.json
+   ```
+
+3. Tìm không dấu theo TF-IDF:
+
+   ```bash
+   curl -s --get localhost:8000/api/search \
+        --data-urlencode 'q=tuyen sinh ky thuat' \
+        --data-urlencode 'ranking=tfidf' --data-urlencode 'sort=score'
+   ```
+
+   Chỉ ra `ranking`, điểm giảm dần, đoạn `<mark>` và lựa chọn ranking trong UI.
+
+---
+
+## Hướng dẫn chạy theo yêu cầu đề bài
+
+### A. Khởi động
+
+```bash
+cd hust-search
+docker compose up -d --build
+curl -s http://localhost:8000/api/health
+open http://localhost:8000
+```
+
+Chỉ tiếp tục khi response health có `"api":true` và `"lucene":true`. Index
+nằm trong volume Docker `lucene-index`; `docker compose down` không xóa volume.
+
+### B. Luồng thu thập dữ liệu
+
+Trên giao diện: chọn **Tải một trang** → dán URL bài viết đầy đủ
+(`http://` hoặc `https://`) → bấm **Tải và index**. Kết quả phải có tiêu đề,
+nội dung, số link đi ra, URL đầy đủ và văn bản mô tả. Nút **Tải JSON** lưu đúng
+`document` theo schema public.
+
+Có thể chạy bằng lệnh:
+
+```bash
+curl -s -X POST http://localhost:8000/api/fetch \
+  -H 'content-type: application/json' \
+  -d '{"url":"https://THAY-BANG-URL-BAI-VIET-THAT"}' | python3 -m json.tool
+```
+
+Trong response, kiểm tra các trường:
+
+```text
+response.document.title
+response.document.content
+response.document.outgoing_links[].url
+response.document.outgoing_links[].text
+```
+
+Trang tải lẻ được ghi vào `hust-crawler/data/raw-adhoc/` và index ngay. Máy chủ
+giữ khoảng cách tối thiểu 3 giây giữa hai lần tải; HTTP 429 nghĩa là website
+đang giới hạn nhịp.
+
+### C. Luồng JSON → chỉ mục → truy vấn
+
+Dùng corpus cố định để trình diễn không phụ thuộc website:
+
+```bash
+curl -s -X POST http://localhost:8000/api/index/documents \
+  -H 'content-type: application/json' \
+  --data @tests/fixtures/corpus.json | python3 -m json.tool
+```
+
+Sau đó tìm theo TF-IDF:
+
+```bash
+curl -s --get http://localhost:8000/api/search \
+  --data-urlencode 'q=fixturealpha' \
+  --data-urlencode 'ranking=tfidf' \
+  --data-urlencode 'sort=score' \
+  --data-urlencode 'size=10' | python3 -m json.tool
+```
+
+Response cần có `ranking: "tfidf"`, `sort: "score"`, danh sách `hits`,
+`score` và `fragments` chứa `<mark>`. Dùng `q=diem chuan` để chứng minh truy
+vấn không dấu vẫn tìm được nội dung có dấu. Luôn dùng `sort=score` khi cần
+khẳng định thứ tự TF-IDF; `sort=date` chỉ sắp theo ngày.
+
+Trên giao diện, chọn tab **Tìm kiếm**, chọn **TF-IDF**, nhập cùng truy vấn và
+giữ **Xếp theo độ khớp**. Chọn **Nâng cao** chỉ khi muốn trình diễn chế độ
+`ranking=enhanced`, không gọi đó là TF-IDF thuần.
+
+### D. Index lại kho crawler
+
+```bash
+# thêm tài liệu mới vào index
+curl -X POST http://localhost:8000/api/index/run \
+  -H 'content-type: application/json' -d '{"reset":false,"batch":200}'
+
+# xóa index rồi dựng lại từ toàn bộ kho raw
+curl -X POST http://localhost:8000/api/index/run \
+  -H 'content-type: application/json' -d '{"reset":true,"batch":150}'
+```
+
+`reset=true` chỉ được dùng khi chủ động dựng lại; không dùng
+`docker compose down -v` nếu muốn giữ volume index.
+
+### E. Kiểm tra trước khi trình diễn
+
+```bash
+./tests/integration.sh
+cd lucene && docker run --rm -v "$PWD":/w -v hust-m2:/root/.m2 \
+  -w /w maven:3.9-eclipse-temurin-21 mvn -B test
+```
+
+Kết quả hiện tại: **33 integration, 29 JUnit, 5 API và 32 crawler test đạt**.
+
 ---
 
 ## 7. Test
@@ -241,15 +414,19 @@ Màu: nền giấy ấm `#fbf9f6`, chấm phá mint / blush / sky / lilac pastel
 # engine (32 test)
 cd hust-crawler && .venv/bin/python -m pytest tests -q
 
-# Lucene (8 test)
+# parser/schema API (5 test, không gọi mạng thật)
+cd hust-search && docker run --rm -v "$PWD":/workspace -w /workspace \
+    hust-search-api:latest python tests/test_api.py -v
+
+# Lucene (29 test)
 cd hust-search/lucene && docker run --rm -v "$PWD":/w -v hust-m2:/root/.m2 \
     -w /w maven:3.9-eclipse-temurin-21 mvn -B test
 
-# tích hợp (16 kiểm tra, cần stack đang chạy)
+# tích hợp (33 kiểm tra, cần stack đang chạy)
 cd hust-search && ./tests/integration.sh
 ```
 
-Trạng thái gần nhất: **32 + 8 + 16 = 56 đạt, 0 hỏng**.
+Trạng thái gần nhất: **32 engine + 5 API + 29 Lucene + 33 tích hợp = 99 đạt, 0 hỏng**.
 
 Mỗi test ứng với một lỗi đã gặp thật, tên test nói rõ lỗi đó — sửa code mà làm
 đỏ test nào thì đọc tên test là biết mình vừa phá cái gì.
@@ -343,6 +520,14 @@ không thêm link nào đi tới được.
 | Đổi màu, bố cục | `api/static/index.html` | khối `:root` ở đầu `<style>` |
 | Thêm endpoint | `api/main.py` | thêm route FastAPI |
 
+Thay đổi `ClassicSimilarity` hoặc schema field thì phải dựng lại image và index:
+
+```bash
+docker compose build lucene && docker compose up -d
+curl -X POST localhost:8000/api/index/run \
+     -H 'content-type: application/json' -d '{"reset":true,"batch":150}'
+```
+
 Sửa Java thì `docker compose build lucene && docker compose up -d`.
 Sửa Python phía api thì `docker compose restart api` (code đã COPY vào image;
 muốn sửa nóng thì mount thêm `./api:/app`).
@@ -353,7 +538,7 @@ container ở `/crawler`.
 
 ## 10. Giới hạn đã biết
 
-* **Chưa tải nội dung hết**: 2.079 tài liệu đã index trên ~5.600 bài đã phát hiện.
+* **Chưa tải nội dung hết**: lần rebuild baseline có 3.406 tài liệu index trên ~5.600 bài đã phát hiện.
   Chạy tiếp bằng `./hustctl resume` (~3 giờ ở nhịp 24 trang/phút).
 * **Subdomain mới chạm 11/51 host**, phần lớn chỉ mới trang chủ.
 * **Không tải file đính kèm** — PDF/DOC chỉ lập danh mục url trong `assets.txt`.

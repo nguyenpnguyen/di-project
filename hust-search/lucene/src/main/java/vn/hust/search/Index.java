@@ -11,6 +11,8 @@ import org.apache.lucene.queryparser.classic.MultiFieldQueryParser;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.*;
 import org.apache.lucene.search.highlight.*;
+import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.Bits;
@@ -30,7 +32,8 @@ import java.util.*;
  *  - StandardAnalyzer tách token theo chuẩn Unicode nên tiếng Việt ra từng âm tiết
  *    và giữ nguyên dấu; "điểm chuẩn" thành hai token, tìm cụm vẫn đúng.
  *  - Mỗi trường chữ được index hai bản: bản còn dấu và bản bỏ dấu ({@link Fold}).
- *    Xem {@link #search} để biết hai bản được ghép điểm thế nào.
+ *    Chế độ tfidf dùng riêng bản bỏ dấu với ClassicSimilarity; enhanced ghép
+ *    hai bản rồi thêm các tín hiệu xếp hạng cũ.
  */
 public class Index implements AutoCloseable {
 
@@ -52,6 +55,7 @@ public class Index implements AutoCloseable {
 
     private final Analyzer chuan = new StandardAnalyzer();
     private final Analyzer khongDau = new Fold.Analyzer();
+    private final Similarity similarity = new ClassicSimilarity();
     private final Analyzer analyzer;
     private final Directory dir;
     private final IndexWriter writer;
@@ -66,9 +70,16 @@ public class Index implements AutoCloseable {
         this.dir = FSDirectory.open(path);
         IndexWriterConfig cfg = new IndexWriterConfig(analyzer);
         cfg.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
+        cfg.setSimilarity(similarity);
         this.writer = new IndexWriter(dir, cfg);
         this.writer.commit();                       // để mở searcher trên index rỗng
-        this.searchers = new SearcherManager(writer, new SearcherFactory());
+        this.searchers = new SearcherManager(writer, new SearcherFactory() {
+            @Override public IndexSearcher newSearcher(IndexReader reader, IndexReader previousReader) {
+                IndexSearcher s = new IndexSearcher(reader);
+                s.setSimilarity(similarity);
+                return s;
+            }
+        });
     }
 
     /** Thêm/ghi đè một tài liệu. Khoá là url. */
@@ -161,11 +172,25 @@ public class Index implements AutoCloseable {
     public record Hit(String url, String title, String host, String section, String date,
                       float score, List<String> fragments, List<String> duplicates) { }
 
-    /** Tham số của một lượt tìm. Gom thành record cho khỏi truyền 7 đối số rời. */
+    /** Tham số của một lượt tìm. Gom thành record cho khỏi truyền nhiều đối số rời. */
     public record Truy(String q, int from, int size, String host,
-                       String tuNgay, String denNgay, boolean sapTheoNgay) {
+                       String tuNgay, String denNgay, boolean sapTheoNgay,
+                       String ranking) {
+        public Truy {
+            ranking = ranking == null || ranking.isBlank()
+                    ? "tfidf" : ranking.toLowerCase(Locale.ROOT);
+            if (!ranking.equals("tfidf") && !ranking.equals("enhanced")) {
+                throw new IllegalArgumentException("ranking phải là tfidf hoặc enhanced");
+            }
+        }
+
+        public Truy(String q, int from, int size, String host,
+                    String tuNgay, String denNgay, boolean sapTheoNgay) {
+            this(q, from, size, host, tuNgay, denNgay, sapTheoNgay, "tfidf");
+        }
+
         public Truy(String q, int from, int size, String host) {
-            this(q, from, size, host, null, null, false);
+            this(q, from, size, host, null, null, false, "tfidf");
         }
     }
 
@@ -290,6 +315,14 @@ public class Index implements AutoCloseable {
         return b.build();
     }
 
+    /** TF-IDF thuần: chỉ dùng bản bỏ dấu, title và text cùng trọng số. */
+    private Query dungTruyVanTfidf(String q, QueryParser.Operator op, boolean noiLong) throws Exception {
+        Query out = nhanh(new String[]{F_TITLE_KD, F_TEXT_KD},
+                Map.of(F_TITLE_KD, 1.0f, F_TEXT_KD, 1.0f), khongDau,
+                Fold.bo_dau(q), op);
+        return noiLong ? itNhat(out, 0.5) : out;
+    }
+
     private static Map<String, Float> chuanBoost() {
         return Map.of(F_TITLE, 3.0f, F_SECTION, 1.5f, F_TEXT, 1.0f);
     }
@@ -340,10 +373,11 @@ public class Index implements AutoCloseable {
      * mấy trường hợp như chữ hoa/thường hay dấu câu dính liền.
      *
      * Các bước, theo thứ tự:
-     *   1. AND trên cả hai nhánh (còn dấu / bỏ dấu) + thưởng cụm liền nhau.
+     *   1. tfidf dùng AND trên title_kd/text_kd; enhanced dùng hai nhánh và
+     *      thưởng cụm liền nhau.
      *   2. Không ra gì thì vét lại, chỉ đòi khớp quá nửa số âm tiết.
-     *   3. Lấy dư kết quả rồi xếp lại bằng điểm BM25 nhân điểm nền {@link Rank}
-     *      — để bài viết thật vượt lên trước trang mục lục.
+     *   3. enhanced mới nhân điểm Lucene với điểm nền {@link Rank}; tfidf giữ
+     *      nguyên điểm ClassicSimilarity.
      *   4. Gộp các bản trùng nội dung ({@link Sig}) rồi mới cắt ra đúng trang
      *      người dùng xin. Gộp trước khi cắt là bắt buộc: gộp sau thì trang 1
      *      còn 7 dòng, trang 2 còn 9 dòng, số dòng nhảy loạn theo từng trang.
@@ -353,7 +387,10 @@ public class Index implements AutoCloseable {
         IndexSearcher s = searchers.acquire();
         try {
             int can = Math.max(t.from() + t.size(), 1);
-            Query query = loc(dungTruyVan(t.q(), QueryParser.Operator.AND, false), t);
+            boolean enhanced = "enhanced".equals(t.ranking());
+            Query query = loc(enhanced
+                    ? dungTruyVan(t.q(), QueryParser.Operator.AND, false)
+                    : dungTruyVanTfidf(t.q(), QueryParser.Operator.AND, false), t);
             // Lấy dư gấp 5 để bước xếp lại và bước gộp có cái mà đảo; trần 1.000
             // cho khỏi phải nạp trường lưu của cả kho khi truy vấn quá phổ biến.
             int cuaSo = Math.min(1000, Math.max(can * 5, 50));
@@ -365,7 +402,9 @@ public class Index implements AutoCloseable {
                                       : s.search(query, cuaSo, sap, true);
 
             if (top.totalHits.value == 0) {
-                Query vet = loc(dungTruyVan(t.q(), QueryParser.Operator.OR, true), t);
+                Query vet = loc(enhanced
+                        ? dungTruyVan(t.q(), QueryParser.Operator.OR, true)
+                        : dungTruyVanTfidf(t.q(), QueryParser.Operator.OR, true), t);
                 TopDocs lai = sap == null ? s.search(vet, cuaSo)
                                           : s.search(vet, cuaSo, sap, true);
                 if (lai.totalHits.value > 0) { query = vet; top = lai; }
@@ -378,7 +417,7 @@ public class Index implements AutoCloseable {
             Highlighter hl = new Highlighter(new SimpleHTMLFormatter("<mark>", "</mark>"), scorer);
             hl.setTextFragmenter(new SimpleSpanFragmenter(scorer, 160));
 
-            List<Object[]> xep = xepLai(s, top, t.sapTheoNgay());
+            List<Object[]> xep = xepLai(s, top, t.sapTheoNgay(), enhanced);
             List<Object[]> gon = gopTrung(xep);
 
             List<Hit> hits = new ArrayList<>();
@@ -400,9 +439,11 @@ public class Index implements AutoCloseable {
         }
     }
 
-    /** Nạp trường lưu rồi nhân điểm nền. Sắp theo ngày thì giữ nguyên thứ tự
-     *  Lucene đã sắp, không đụng vào — người xin theo ngày là muốn đúng theo ngày. */
-    private List<Object[]> xepLai(IndexSearcher s, TopDocs top, boolean theoNgay) throws IOException {
+    /** Nạp trường lưu; chỉ enhanced mới nhân điểm nền. Sắp theo ngày thì giữ
+     *  nguyên thứ tự Lucene đã sắp, không đụng vào — người xin theo ngày là
+     *  muốn đúng theo ngày. */
+    private List<Object[]> xepLai(IndexSearcher s, TopDocs top, boolean theoNgay,
+                                  boolean enhanced) throws IOException {
         int nam = Year.now().getValue();
         StoredFields sf = s.storedFields();
         List<Object[]> xep = new ArrayList<>(top.scoreDocs.length);
@@ -410,7 +451,7 @@ public class Index implements AutoCloseable {
             Document d = sf.document(sd.doc);
             String text = d.get(F_TEXT);
             double diem = Float.isNaN(sd.score) ? 0.0 : sd.score;
-            if (!theoNgay) {
+            if (!theoNgay && enhanced) {
                 diem *= Rank.diemNen(d.get(F_URL), text == null ? 0 : text.length(),
                         d.get(F_DATE), nam);
             }

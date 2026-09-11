@@ -2,4 +2,5 @@
 **/target/
 **/__pycache__/
 **/.pytest_cache/
-GOI-DU-LIEU/
+GOI-DU-LIEU*
+**/.idea/**

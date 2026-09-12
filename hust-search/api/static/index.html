@@ -186,6 +186,8 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" aria-selected="true" data-p="search">Tìm kiếm</button>
       <button class="tab" role="tab" aria-selected="false" data-p="fetch">Tải một trang</button>
+      <button class="tab" role="tab" aria-selected="false" data-p="browse">Duyệt tất cả</button>
+      <button class="tab" role="tab" aria-selected="false" data-p="dict">Chỉ mục ngược</button>
       <button class="tab" role="tab" aria-selected="false" data-p="dash">Bảng điều khiển</button>
     </div>
     <div class="searchbar" id="sb">
@@ -233,6 +235,80 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
         tải. Trang tải xong được ghi vào kho <code>data/raw-adhoc</code> và đẩy thẳng
         vào Lucene — tìm được ngay, không phải chạy lại mẻ index nào.</p>
       <div id="oneout"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-browse">
+    <div class="card">
+      <h2>Duyệt toàn bộ tài liệu đã index</h2>
+      <p class="note">Không cần gõ từ khoá — liệt kê nguyên trạng mọi tài liệu trong
+        Lucene, để hình dung tổng thể kho: bao nhiêu bài, thuộc site nào, chuyên mục
+        gì, cũ/mới ra sao. Các bản trùng nội dung (cùng bài, khác url) được gộp lại
+        y như khi tìm kiếm.</p>
+      <div class="row" style="margin-bottom:12px">
+        <label>Site</label>
+        <select id="bhost"><option value="">Mọi site</option></select>
+        <label>Sắp theo</label>
+        <select id="bsort">
+          <option value="date">Ngày, mới trước</option>
+          <option value="url">URL, A → Z</option>
+        </select>
+        <span class="meta" id="bmeta" style="margin:0"></span>
+      </div>
+      <div class="links">
+        <table><thead><tr>
+          <th>Tiêu đề / URL</th><th>Host</th><th>Chuyên mục</th><th>Ngày</th>
+        </tr></thead><tbody id="browseRows"></tbody></table>
+      </div>
+    </div>
+    <div class="pager" id="bpager"></div>
+  </section>
+
+  <section class="panel" id="p-dict">
+    <div class="card">
+      <h2>Từ điển chỉ mục ngược (term dictionary)</h2>
+      <p class="note">Lucene lưu <b>từ → danh sách tài liệu chứa từ đó</b> (posting
+        list), kèm tần suất và vị trí token — đây là cấu trúc dữ liệu lõi của "chỉ
+        mục ngược" (inverted index), khác với chỉ mục thuận (tài liệu → danh sách
+        từ). Chọn field rồi duyệt từ điển bên dưới, hoặc bấm "Xem posting" ở một từ
+        để xem chi tiết nó nằm trong bài nào, tần suất và vị trí token trong bài.</p>
+      <div class="row" style="margin-bottom:12px">
+        <label>Field</label>
+        <select id="dfield">
+          <option value="text">text — nội dung, còn dấu</option>
+          <option value="title">title — tiêu đề, còn dấu</option>
+          <option value="text_kd">text_kd — nội dung, bỏ dấu</option>
+          <option value="title_kd">title_kd — tiêu đề, bỏ dấu</option>
+          <option value="section">section — chuyên mục</option>
+          <option value="host">host — không phân tích, mỗi bài đúng 1 token</option>
+        </select>
+        <input id="dprefix" placeholder="lọc theo tiền tố, ví dụ: dao" style="max-width:170px">
+        <button class="btn ghost" id="dgo">Duyệt từ điển</button>
+      </div>
+      <div class="links">
+        <table><thead><tr>
+          <th>Từ (term)</th><th class="n">Số bài chứa (docFreq)</th>
+          <th class="n">Tổng lần xuất hiện</th><th></th>
+        </tr></thead><tbody id="dictRows"></tbody></table>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <span class="meta" id="dmeta" style="margin:0"></span>
+        <button class="btn ghost" id="dnext" hidden>Trang sau ›</button>
+      </div>
+    </div>
+
+    <div class="card" id="postCard" hidden>
+      <h2>Posting list của từ "<span id="ptermLabel"></span>"</h2>
+      <div class="kv">
+        <div><b id="pdf">0</b><span>bài chứa từ (docFreq)</span></div>
+        <div><b id="pttf">0</b><span>tổng lần xuất hiện (totalTermFreq)</span></div>
+        <div><b id="pshown">0</b><span>đang hiện (giới hạn hiển thị)</span></div>
+      </div>
+      <div class="links">
+        <table><thead><tr>
+          <th>Tài liệu chứa từ này</th><th class="n">tf trong bài</th><th>Vị trí token trong bài</th>
+        </tr></thead><tbody id="postRows"></tbody></table>
+      </div>
     </div>
   </section>
 
@@ -302,10 +378,12 @@ const mb = b => b >= 1e9 ? (b/1e9).toFixed(1)+' GB' : (b/1e6).toFixed(1)+' MB';
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   const p = t.dataset.p;
   document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
-  ['search', 'fetch', 'dash'].forEach(k => $('#p-' + k).classList.toggle('on', k === p));
+  ['search', 'fetch', 'dash', 'browse', 'dict'].forEach(k => $('#p-' + k).classList.toggle('on', k === p));
   $('#sb').style.display = p === 'search' ? 'flex' : 'none';
   $('#sb2').style.display = p === 'search' ? 'flex' : 'none';
   if (p === 'dash') refresh();
+  if (p === 'browse') { refresh(); doBrowse(); }
+  if (p === 'dict' && !dictDaNap) { dictDaNap = true; docBrowseDict(true); }
 });
 
 // ---------------- tìm kiếm ----------------
@@ -516,6 +594,115 @@ function vePhanTrang() {
   });
 }
 
+// ---------------- duyệt tất cả (không qua truy vấn) ----------------
+const B_MOI_TRANG = 50;
+let bTrang = 0;
+
+async function doBrowse() {
+  const p = new URLSearchParams({ from_: bTrang * B_MOI_TRANG, size: B_MOI_TRANG, sort: $('#bsort').value });
+  if ($('#bhost').value) p.set('host', $('#bhost').value);
+  $('#bmeta').textContent = 'Đang tải…';
+  const d = await (await fetch('/api/index/list?' + p)).json();
+  if (d.error) {
+    $('#bmeta').textContent = 'Lỗi: ' + d.error;
+    $('#browseRows').innerHTML = ''; $('#bpager').innerHTML = '';
+    return;
+  }
+  const soTrang = Math.max(1, Math.ceil(d.total / B_MOI_TRANG));
+  $('#bmeta').textContent = `${fmt(d.total)} tài liệu · trang ${bTrang + 1}/${soTrang}`;
+  $('#browseRows').innerHTML = d.items.map(it => `
+    <tr>
+      <td><a href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">${esc(it.title) || '(không có tiêu đề)'}</a>
+        <div class="url">${esc(it.url)}</div></td>
+      <td>${esc(it.host)}</td>
+      <td>${esc(it.section)}</td>
+      <td>${esc(it.date)}</td>
+    </tr>`).join('') || '<tr><td colspan="4">Chưa có tài liệu nào trong index.</td></tr>';
+  veBPhanTrang(d.total);
+}
+
+/** Cùng khuôn nút với vePhanTrang() của tab Tìm kiếm, chỉ đổi biến trang/hàm gọi. */
+function veBPhanTrang(total) {
+  const soTrang = Math.ceil(total / B_MOI_TRANG);
+  if (soTrang <= 1) { $('#bpager').innerHTML = ''; return; }
+  const nut = (n, nhan, cur) =>
+    `<button data-t="${n}" ${cur ? 'aria-current="true"' : ''}>${nhan}</button>`;
+  let h = `<button data-t="${bTrang - 1}" ${bTrang === 0 ? 'disabled' : ''}>‹ Trước</button>`;
+  const ds = new Set([0, soTrang - 1, bTrang, bTrang - 1, bTrang + 1, bTrang - 2, bTrang + 2]);
+  const sap = [...ds].filter(n => n >= 0 && n < soTrang).sort((a, b) => a - b);
+  sap.forEach((n, i) => {
+    if (i && n - sap[i - 1] > 1) h += '<span class="gap">…</span>';
+    h += nut(n, n + 1, n === bTrang);
+  });
+  h += `<button data-t="${bTrang + 1}" ${bTrang >= soTrang - 1 ? 'disabled' : ''}>Sau ›</button>`;
+  $('#bpager').innerHTML = h;
+  $('#bpager').querySelectorAll('button[data-t]').forEach(b => b.onclick = () => {
+    bTrang = +b.dataset.t;
+    doBrowse();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
+
+$('#bhost').onchange = () => { bTrang = 0; doBrowse(); };
+$('#bsort').onchange = () => { bTrang = 0; doBrowse(); };
+
+// ---------------- chỉ mục ngược: từ điển + posting list ----------------
+let dictDaNap = false;
+let dConTro = '';      // từ để bắt đầu trang sau; rỗng = từ đầu từ điển
+let dFieldDangXem = 'text';
+
+async function docBrowseDict(datLai) {
+  if (datLai) dConTro = '';
+  dFieldDangXem = $('#dfield').value;
+  const p = new URLSearchParams({ field: dFieldDangXem, limit: 50 });
+  const tienTo = $('#dprefix').value.trim();
+  if (dConTro) p.set('after', dConTro);
+  else if (tienTo) p.set('after', tienTo);
+
+  $('#dmeta').textContent = 'Đang tải…';
+  const d = await (await fetch('/api/index/dict?' + p)).json();
+  if (d.error) {
+    $('#dmeta').textContent = 'Lỗi: ' + d.error;
+    $('#dictRows').innerHTML = ''; $('#dnext').hidden = true;
+    return;
+  }
+  $('#dictRows').innerHTML = d.terms.map(t => `
+    <tr>
+      <td><code>${esc(t.term)}</code></td>
+      <td class="n">${fmt(t.doc_freq)}</td>
+      <td class="n">${fmt(t.total_term_freq)}</td>
+      <td><button class="btn ghost xemterm" data-t="${esc(t.term)}">Xem posting</button></td>
+    </tr>`).join('') || '<tr><td colspan="4">Không có từ nào (field trống hoặc đã hết từ điển).</td></tr>';
+  $('#dmeta').textContent = `Field “${d.field}” · ${d.terms.length} từ đang hiện`
+    + (tienTo && !dConTro ? ` · bắt đầu từ tiền tố “${esc(tienTo)}”` : '');
+  $('#dnext').hidden = !d.next;
+  $('#dnext').onclick = () => { dConTro = d.next; docBrowseDict(false); };
+  document.querySelectorAll('.xemterm').forEach(b => b.onclick = () => xemPosting(b.dataset.t));
+}
+
+async function xemPosting(term) {
+  const p = new URLSearchParams({ field: dFieldDangXem, term, limit: 50 });
+  $('#postCard').hidden = false;
+  $('#ptermLabel').textContent = term;
+  $('#postRows').innerHTML = '<tr><td colspan="3">Đang tải…</td></tr>';
+  const d = await (await fetch('/api/index/posting?' + p)).json();
+  if (d.error) { $('#postRows').innerHTML = `<tr><td colspan="3">Lỗi: ${esc(d.error)}</td></tr>`; return; }
+  $('#pdf').textContent = fmt(d.doc_freq);
+  $('#pttf').textContent = fmt(d.total_term_freq);
+  $('#pshown').textContent = fmt(d.rows.length);
+  $('#postRows').innerHTML = d.rows.map(r => `
+    <tr>
+      <td><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.title) || esc(r.url)}</a></td>
+      <td class="n">${r.tf}</td>
+      <td>${r.positions.length ? r.positions.join(', ') : '<span class="meta" style="margin:0">(field không lưu vị trí)</span>'}</td>
+    </tr>`).join('') || '<tr><td colspan="3">Từ này không nằm trong field đã chọn.</td></tr>';
+  $('#postCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+$('#dgo').onclick = () => docBrowseDict(true);
+$('#dfield').onchange = () => { $('#postCard').hidden = true; docBrowseDict(true); };
+$('#dprefix').addEventListener('keydown', e => { if (e.key === 'Enter') docBrowseDict(true); });
+
 $('#go').onclick = () => doSearch(false);
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(false); });
 ['#host', '#d1', '#d2', '#sort', '#ranking'].forEach(k => $(k).onchange = () => { if (truyVanCu) doSearch(false); });
@@ -633,6 +820,9 @@ async function refresh() {
   const cur = $('#host').value;
   $('#host').innerHTML = opts.join('');
   $('#host').value = cur;
+  const bcur = $('#bhost').value;
+  $('#bhost').innerHTML = opts.join('');
+  $('#bhost').value = bcur;
 
   $('#istat').textContent = `${fmt(idx.docs)} tài liệu · ${mb(idx.index_bytes)} index`;
 

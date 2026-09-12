@@ -519,6 +519,44 @@ def search(q: str, from_: int = 0, size: int = 10, host: str | None = None,
         return JSONResponse(r.json(), status_code=r.status_code)
 
 
+@app.get("/api/index/list")
+def index_list(from_: int = 0, size: int = 20, host: str | None = None, sort: str = "date"):
+    """Liệt kê toàn bộ tài liệu đã index, không cần từ khoá — cho tab Duyệt tất cả,
+    để hình dung tổng thể kho (bao nhiêu bài, thuộc site nào, thời gian nào) thay vì
+    chỉ xem con số tổng như /api/index/stats."""
+    params: dict = {"from": from_, "size": size}
+    if host:
+        params["host"] = host
+    if sort == "url":
+        params["sort"] = "url"
+    with httpx.Client(base_url=LUCENE, timeout=30) as cli:
+        r = cli.get("/list", params=params)
+        return JSONResponse(r.json(), status_code=r.status_code)
+
+
+@app.get("/api/index/dict")
+def index_dict(field: str = "text", after: str | None = None, limit: int = 50):
+    """Duyệt từ điển chỉ mục ngược (term dictionary) của một field — cho tab
+    "Chỉ mục ngược": xem trực tiếp cấu trúc từ -> (docFreq, totalTermFreq)."""
+    params: dict = {"field": field, "limit": limit}
+    if after:
+        params["after"] = after
+    with httpx.Client(base_url=LUCENE, timeout=30) as cli:
+        r = cli.get("/dict", params=params)
+        return JSONResponse(r.json(), status_code=r.status_code)
+
+
+@app.get("/api/index/posting")
+def index_posting(field: str = "text", term: str = "", limit: int = 50):
+    """Posting list đầy đủ của một từ: docFreq/totalTermFreq và danh sách tài
+    liệu chứa từ đó kèm tần suất + vị trí token."""
+    if not term.strip():
+        raise HTTPException(400, "thiếu tham số term")
+    with httpx.Client(base_url=LUCENE, timeout=30) as cli:
+        r = cli.get("/posting", params={"field": field, "term": term, "limit": limit})
+        return JSONResponse(r.json(), status_code=r.status_code)
+
+
 # --------------------------------------------------- tải lẻ một url và index ngay
 ADHOC = DATA / "raw-adhoc"
 _lan_tai = {"luc": 0.0}

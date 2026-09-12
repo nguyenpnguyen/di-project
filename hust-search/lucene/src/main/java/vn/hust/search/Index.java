@@ -92,6 +92,11 @@ public class Index implements AutoCloseable {
 
         Document doc = new Document();
         doc.add(new StringField(F_URL, url, Field.Store.YES));
+        // SortedDocValuesField riêng để SortField theo url dùng được (tab "Duyệt tất
+        // cả", sort=url) — StringField chỉ lập chỉ mục ngược, không tự có DocValues.
+        // Thiếu dòng này thì Lucene ném IllegalStateException "unexpected docvalues
+        // type NONE" ngay khi có ai sort theo trường này.
+        doc.add(new SortedDocValuesField(F_URL, new org.apache.lucene.util.BytesRef(url)));
         doc.add(new TextField(F_TITLE, title, Field.Store.YES));
         doc.add(new TextField(F_TEXT, text, Field.Store.YES));
         // Bản bỏ dấu: Store.NO vì chỉ dùng để khớp; hiển thị luôn lấy bản gốc.
@@ -171,6 +176,171 @@ public class Index implements AutoCloseable {
 
     public record Hit(String url, String title, String host, String section, String date,
                       float score, List<String> fragments, List<String> duplicates) { }
+
+    public record ListItem(String url, String title, String host, String section, String date) { }
+    public record ListResult(long total, List<ListItem> items) { }
+
+    public record TermInfo(String term, long docFreq, long totalTermFreq) { }
+    public record DictPage(List<TermInfo> terms, String tiepTheo) { }
+    public record PostingRow(String url, String title, int tf, List<Integer> positions) { }
+    public record Posting(String term, long docFreq, long totalTermFreq, List<PostingRow> rows) { }
+
+    // -------------------------------------------------- xem chỉ mục ngược (tab "Chỉ mục ngược")
+    /**
+     * Duyệt từ điển (term dictionary) của một field — đúng cấu trúc lõi của chỉ
+     * mục ngược: mỗi field giữ nguyên MỘT danh sách từ đã từng xuất hiện, sắp
+     * theo thứ tự byte, mỗi từ kèm hai số:
+     *   docFreq       = có bao nhiêu TÀI LIỆU chứa từ này (không tính số lần)
+     *   totalTermFreq = tổng số LẦN từ này xuất hiện, cộng dồn trên mọi tài liệu
+     *
+     * {@link MultiTerms} cho view đã hợp nhất qua mọi segment của IndexWriter —
+     * không phải tự cộng dồn docFreq của từng segment bằng tay.
+     *
+     * Phân trang bằng con trỏ (từ bắt đầu của trang sau), không bằng from/size:
+     * từ điển có thể có hàng chục nghìn từ, seekCeil đi thẳng tới đúng vị trí
+     * chứ không phải duyệt lại từ đầu mỗi lần xin trang mới.
+     */
+    public DictPage tuDien(String field, String tuBatDau, int limit) throws IOException {
+        IndexSearcher s = searchers.acquire();
+        try {
+            Terms terms = MultiTerms.getTerms(s.getIndexReader(), field);
+            List<TermInfo> out = new ArrayList<>();
+            String tiep = null;
+            if (terms != null) {
+                TermsEnum te = terms.iterator();
+                org.apache.lucene.util.BytesRef cur = (tuBatDau == null || tuBatDau.isBlank())
+                        ? te.next()
+                        : (te.seekCeil(new org.apache.lucene.util.BytesRef(tuBatDau)) == TermsEnum.SeekStatus.END
+                                ? null : te.term());
+                while (cur != null && out.size() < limit) {
+                    out.add(new TermInfo(cur.utf8ToString(), te.docFreq(), te.totalTermFreq()));
+                    cur = te.next();
+                }
+                tiep = cur == null ? null : cur.utf8ToString();
+            }
+            return new DictPage(out, tiep);
+        } finally {
+            searchers.release(s);
+        }
+    }
+
+    /**
+     * Posting list đầy đủ của MỘT từ: docFreq/totalTermFreq đếm trên toàn
+     * index, và danh sách tài liệu chứa từ đó kèm tần suất + vị trí token
+     * trong từng tài liệu (giới hạn số dòng hiển thị ở {@code limit}, nhưng
+     * hai số docFreq/totalTermFreq vẫn là số thật của toàn bộ posting list).
+     *
+     * Field không lưu vị trí (StringField như host/url/date, IndexOptions.DOCS)
+     * thì trả positions rỗng và tf = 1 — kiểm bằng {@code Terms.hasPositions()}/
+     * {@code hasFreqs()} trước khi gọi, gọi nhầm sẽ ném UnsupportedOperationException.
+     */
+    public Posting layPosting(String field, String raw, int limit) throws IOException {
+        IndexSearcher s = searchers.acquire();
+        try {
+            String term = phanTichMotTu(field, raw);
+            Terms terms = MultiTerms.getTerms(s.getIndexReader(), field);
+            if (terms == null) return new Posting(term, 0, 0, List.of());
+            TermsEnum te = terms.iterator();
+            if (!te.seekExact(new org.apache.lucene.util.BytesRef(term))) return new Posting(term, 0, 0, List.of());
+            long docFreq = te.docFreq(), totalTermFreq = te.totalTermFreq();
+
+            boolean coTanSo = terms.hasFreqs();
+            boolean coViTri = terms.hasPositions();
+            int flags = coViTri ? PostingsEnum.ALL : (coTanSo ? PostingsEnum.FREQS : PostingsEnum.NONE);
+            PostingsEnum pe = te.postings(null, flags);
+
+            StoredFields sf = s.storedFields();
+            List<PostingRow> rows = new ArrayList<>();
+            int doc;
+            // MultiTerms trả docID đã quy về toàn cục, tra thẳng vào storedFields
+            // của top-level reader được, không cần cộng docBase tay như khi tự
+            // duyệt leaves() (xem byHost() ở trên, chỗ đó phải làm tay vì đi qua
+            // LeafReaderContext trực tiếp).
+            while (rows.size() < limit && (doc = pe.nextDoc()) != PostingsEnum.NO_MORE_DOCS) {
+                int freq = coTanSo ? pe.freq() : 1;
+                List<Integer> vt = new ArrayList<>(coViTri ? freq : 0);
+                if (coViTri) for (int i = 0; i < freq; i++) vt.add(pe.nextPosition());
+                Document d = sf.document(doc);
+                rows.add(new PostingRow(d.get(F_URL), d.get(F_TITLE), freq, vt));
+            }
+            return new Posting(term, docFreq, totalTermFreq, rows);
+        } finally {
+            searchers.release(s);
+        }
+    }
+
+    /**
+     * Tách input người dùng gõ ra đúng MỘT token, qua đúng analyzer của field —
+     * để tra từ điển đúng dạng đã lập chỉ mục (đã lowercase, đã/chưa bỏ dấu).
+     * Field không phân tích (host/url/date, StringField) thì giữ nguyên chuỗi:
+     * khoá của chúng là chính giá trị gốc, không qua Analyzer nào.
+     */
+    private String phanTichMotTu(String field, String raw) throws IOException {
+        if (field.equals(F_HOST) || field.equals(F_DATE) || field.equals(F_URL)) {
+            return raw.trim();
+        }
+        boolean kd = field.equals(F_TITLE_KD) || field.equals(F_TEXT_KD);
+        Analyzer an = kd ? khongDau : chuan;
+        String input = kd ? Fold.bo_dau(raw) : raw;
+        try (TokenStream ts = an.tokenStream(field, input)) {
+            CharTermAttribute t = ts.addAttribute(CharTermAttribute.class);
+            ts.reset();
+            String out = ts.incrementToken() ? t.toString() : raw.toLowerCase(Locale.ROOT);
+            ts.end();
+            return out;
+        }
+    }
+
+    /**
+     * Liệt kê toàn bộ tài liệu, không cần từ khoá — dùng cho tab "Duyệt tất cả",
+     * để hình dung tổng thể kho đã index chứ không phải tìm theo truy vấn.
+     *
+     * Dùng {@link MatchAllDocsQuery} thay vì QueryParser, phân trang bằng
+     * from/size như {@link #search(Truy)}. Cũng gộp bản trùng nội dung qua
+     * {@link Sig} (xem {@link #gopTrung}) để danh sách nhất quán với kết quả
+     * tìm kiếm — không thì hai url savefile/gốc của cùng một bài sẽ hiện hai
+     * dòng y hệt nhau trong bảng duyệt.
+     */
+    public ListResult listAll(int from, int size, String host, boolean theoUrl) throws IOException {
+        IndexSearcher s = searchers.acquire();
+        try {
+            Query q = new MatchAllDocsQuery();
+            if (host != null && !host.isBlank()) {
+                BooleanQuery.Builder b = new BooleanQuery.Builder();
+                b.add(q, BooleanClause.Occur.MUST);
+                b.add(new TermQuery(new Term(F_HOST, host)), BooleanClause.Occur.FILTER);
+                q = b.build();
+            }
+            // Tổng khớp filter, tính TRƯỚC khi gộp trùng — cũng là chặn trên như ở
+            // search(), vì count() không biết trước bước gộp sẽ bớt đi bao nhiêu.
+            long total = s.count(q);
+
+            int can = Math.max(from + size, 1);
+            int cuaSo = Math.min(5000, Math.max(can * 2, 200));
+
+            Sort sap = theoUrl
+                    ? new Sort(new SortField(F_URL, SortField.Type.STRING, false))
+                    : new Sort(new SortField(F_NGAY_SO, SortField.Type.LONG, true));
+            TopDocs top = s.search(q, cuaSo, sap, false);
+
+            StoredFields sf = s.storedFields();
+            List<Object[]> xep = new ArrayList<>(top.scoreDocs.length);
+            for (ScoreDoc sd : top.scoreDocs) {
+                xep.add(new Object[]{sf.document(sd.doc), 0.0, new ArrayList<String>()});
+            }
+            List<Object[]> gon = gopTrung(xep);
+
+            List<ListItem> items = new ArrayList<>();
+            for (int i = from; i < gon.size() && i < from + size; i++) {
+                Document d = (Document) gon.get(i)[0];
+                items.add(new ListItem(d.get(F_URL), d.get(F_TITLE), d.get(F_HOST),
+                        d.get(F_SECTION), d.get(F_DATE)));
+            }
+            return new ListResult(total, items);
+        } finally {
+            searchers.release(s);
+        }
+    }
 
     /** Tham số của một lượt tìm. Gom thành record cho khỏi truyền nhiều đối số rời. */
     public record Truy(String q, int from, int size, String host,

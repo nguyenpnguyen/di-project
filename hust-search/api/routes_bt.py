@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import csv
+import os
+import pathlib
 import io
 import threading
 import time
@@ -11,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 import db as _db
+import tep_job
 import trich
 from boc_tach.html_sach import norm
 
@@ -72,6 +75,56 @@ def extract_status():
 @router.get("/api/extract/coverage")
 def extract_coverage():
     return trich.coverage(mdb())
+
+
+FILES_DIR = str(pathlib.Path(os.getenv("DATA_DIR", "/crawler/data")) / "files")
+
+
+@router.post("/api/files/fetch")
+def files_fetch(limit: int = 0):
+    """Lập danh mục tệp từ đồ thị rồi tải, chạy nền. 409 khi crawler đang chạy: hai
+    tiến trình mỗi bên 2,5 s là ~48 request/phút, gấp đôi ngưỡng site chặn."""
+    import main
+    if main._alive():
+        raise HTTPException(409, "crawler đang chạy, dừng trước rồi hãy tải tệp")
+    d = mdb()
+    _db.init(d)
+
+    def job(cb):
+        r = tep_job.danh_muc(d, main.tat_ca_ban_ghi())
+        return {**r, **tep_job.tai(d, pathlib.Path(FILES_DIR), cb, limit=limit)}
+    return _chay_nen("files", job)
+
+
+@router.post("/api/files/extract")
+def files_extract():
+    """Bóc chữ các tệp đã tải -> documents.text."""
+    d = mdb()
+    return _chay_nen("files-extract", lambda cb: tep_job.boc_chu(d, pathlib.Path(FILES_DIR), cb))
+
+
+@router.get("/api/files")
+def files_list(status: str | None = None, host: str | None = None, skip: int = 0, limit: int = 50):
+    """Danh sách tệp, mỗi tệp kèm số trang giới thiệu nó (cạnh nội dung đi vào)."""
+    d = mdb()
+    q = {k: v for k, v in (("status", status), ("host", host)) if v}
+    rows = list(d.documents.find(q, {"text": 0}).sort("_id", 1).skip(skip).limit(min(limit, 200)))
+    return {"total": d.documents.count_documents(q),
+            "by_status": {r["_id"]: r["n"] for r in d.documents.aggregate(
+                [{"$group": {"_id": "$status", "n": {"$sum": 1}}}])},
+            "items": [{**{k: v for k, v in r.items() if k != "_id"}, "url": r["_id"],
+                       "referrers": d.links.count_documents({"dst": r["_id"]})} for r in rows]}
+
+
+@router.get("/api/images")
+def images_list(template: bool | None = None, skip: int = 0, limit: int = 50):
+    d = mdb()
+    q = {} if template is None else {"is_template": template}
+    rows = list(d.images.find(q).sort("_id", 1).skip(skip).limit(min(limit, 200)))
+    return {"total": d.images.count_documents(q),
+            "items": [{"url": r["_id"], "host": r["host"], "alts": r["alts"],
+                       "is_template": r["is_template"],
+                       "referrers": d.links.count_documents({"dst": r["_id"]})} for r in rows]}
 
 
 def _canon(d, url: str) -> tuple[str, list[str]]:

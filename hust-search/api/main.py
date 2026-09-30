@@ -258,6 +258,9 @@ def crawl_start(req: CrawlReq):
     with _job_lock:
         if _alive():
             raise HTTPException(409, "đang có mẻ chạy, dừng trước đã")
+        from routes_bt import _job as _bt_job
+        if _bt_job["running"] and _bt_job["what"] == "files":
+            raise HTTPException(409, "đang tải tệp tài liệu, đợi xong rồi hãy crawl")
         cmd = ["python", "crawl_all.py"]
         if req.mode in ("resume", "listing"):
             cmd.append("--resume")

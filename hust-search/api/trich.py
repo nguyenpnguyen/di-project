@@ -65,6 +65,54 @@ def _khuon_theo_host(db) -> dict[str, set[str]]:
     return {t["_id"]: khuon.tap_khuon(t) for t in db.templates.find()}
 
 
+def dung_ban_ghi(url: str, host: str, d: dict, rec: dict, html: str) -> tuple[dict, list[dict]]:
+    """Kết quả boc_tach -> (document `pages`, các document `links`)."""
+    raw_html = html.encode("utf-8", "replace")
+    page = {
+        "_id": url, "aliases": [], "host": host,
+        "lang": "en" if urllib.parse.urlsplit(url).path.startswith("/en/") else "vi",
+        "kind": crawl_all.kind_of(url),
+        "title": d["title"], "title_src": d["title_src"],
+        "published_at": d["date"], "published_at_src": d["date_src"],
+        "author": d["author"], "author_src": d["author_src"], "cited_source": d["cited_source"],
+        "section": d["section"],
+        "content": {"text": d["text"], "html": d["html"], "word_count": len(d["text"].split()),
+                    "block": d["block"]},
+        "raw": {"sha1": hashlib.sha1(raw_html).hexdigest(), "fetched_at": rec.get("fetched_at", "")},
+        "extractor_version": VERSION, "extracted_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+    links = [{
+        "_id": _sha1(url, e["dst"], e["type"], e["text"]), "src": url, "dst": e["dst"],
+        "type": e["type"], "text": e["text"], "dst_kind": e["dst_kind"], "count": e["count"],
+        "src_host": host, "dst_host": (urllib.parse.urlsplit(e["dst"]).hostname or "").lower(),
+    } for e in d["links"]]
+    return page, links
+
+
+def ghi_mot_trang(db, url: str, d: dict, rec: dict, html: str) -> None:
+    """Ghi một trang tải lẻ (`/api/fetch`): pages + links của nó, không đụng nav_links
+    và images (hai bảng đó là tổng hợp, dựng lại ở lần extract/run)."""
+    url = crawl_all.norm(url) or url
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    page, links = dung_ban_ghi(url, host, d, rec, html)
+    db.pages.replace_one({"_id": url}, page, upsert=True)
+    db.links.delete_many({"src": url})
+    if links:
+        db.links.insert_many(links, ordered=False)
+
+
+def lucene_tu_mongo(db) -> Iterable[dict]:
+    """Tài liệu để index, đọc từ Mongo: mọi trang, và tệp đã bóc được chữ."""
+    for p in db.pages.find({}):
+        yield {"url": p["_id"], "title": p["title"], "text": p["content"]["text"],
+               "host": p["host"], "section": p.get("section", ""), "date": p.get("published_at", ""),
+               "html": p["content"].get("html", ""), "author": p.get("author", ""), "kind": "page"}
+    for f in db.documents.find({"status": "ok", "text": {"$nin": [None, ""]}}):
+        ten = urllib.parse.unquote(f["_id"].rsplit("/", 1)[-1])
+        yield {"url": f["_id"], "title": f.get("title") or ten, "text": f["text"], "host": f["host"],
+               "section": "", "date": "", "html": "", "author": "", "kind": "document"}
+
+
 def chay_extract(db, records: Iterable[dict], limit: int = 0,
                  on_progress: Callable[[int], None] = lambda n: None, batch: int = 200) -> dict:
     kh = _khuon_theo_host(db)
@@ -107,28 +155,12 @@ def chay_extract(db, records: Iterable[dict], limit: int = 0,
             skipped += 1
             continue
         da_thay[key] = url
-        raw_html = html.encode("utf-8", "replace")
-        pages_buf.append({
-            "_id": url, "aliases": [], "host": host,
-            "lang": "en" if urllib.parse.urlsplit(url).path.startswith("/en/") else "vi",
-            "kind": crawl_all.kind_of(url),
-            "title": d["title"], "title_src": d["title_src"],
-            "published_at": d["date"], "published_at_src": d["date_src"],
-            "author": d["author"], "author_src": d["author_src"], "cited_source": d["cited_source"],
-            "section": d["section"],
-            "content": {"text": d["text"], "html": d["html"], "word_count": len(d["text"].split()),
-                        "block": d["block"]},
-            "raw": {"sha1": hashlib.sha1(raw_html).hexdigest(), "fetched_at": rec.get("fetched_at", "")},
-            "extractor_version": VERSION, "extracted_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        })
+        page, links = dung_ban_ghi(url, host, d, rec, html)
+        pages_buf.append(page)
         src_buf.append(url)
-        buf_idx[url] = pages_buf[-1]
+        buf_idx[url] = page
+        links_buf.extend(links)
         for e in d["links"]:
-            links_buf.append({
-                "_id": _sha1(url, e["dst"], e["type"], e["text"]), "src": url, "dst": e["dst"],
-                "type": e["type"], "text": e["text"], "dst_kind": e["dst_kind"], "count": e["count"],
-                "src_host": host, "dst_host": (urllib.parse.urlsplit(e["dst"]).hostname or "").lower(),
-            })
             if e["dst_kind"] == "image":
                 a = anh.setdefault(e["dst"], {"alts": set(), "content": False})
                 a["content"] = True

@@ -393,4 +393,28 @@ class IndexTest {
         assertEquals(0L, Index.ngaySo("2026-13-40"));
         assertEquals(0L, Index.ngaySo("hôm qua"));
     }
+
+    @Test void tacGiaVaKindDuocLuuVaLocDuoc() throws Exception {
+        idx.put(Map.of("url", "https://hust.edu.vn/t-1.html", "title", "Bài có tác giả",
+                "text", "nội dung học bổng", "host", "hust.edu.vn", "author", "Trần Thị B"));
+        idx.put(Map.of("url", "https://hust.edu.vn/uploads/f.pdf", "title", "Tệp đính kèm",
+                "text", "nội dung học bổng trong tệp", "host", "hust.edu.vn", "kind", "document"));
+        idx.commit();
+
+        Index.Result tat = idx.search("học bổng", 0, 10, null);
+        assertEquals(2, tat.total());
+        Index.Hit bai = tat.hits().stream().filter(h -> h.url().endsWith("t-1.html")).findFirst().get();
+        assertEquals("Trần Thị B", bai.author());
+        assertEquals("page", bai.kind(), "không ghi kind thì mặc định là page");
+
+        Index.Result chiTep = idx.search(new Index.Truy("học bổng", 0, 10, null, null, null,
+                false, "tfidf", "document"));
+        assertEquals(1, chiTep.total());
+        assertEquals("document", chiTep.hits().get(0).kind());
+
+        Index.ListResult ds = idx.listAll(0, 10, null, true, "page");
+        assertEquals(1, ds.total());
+        assertEquals("Trần Thị B", ds.items().get(0).author());
+        assertEquals("Trần Thị B", idx.layTaiLieu("https://hust.edu.vn/t-1.html").get("author"));
+    }
 }

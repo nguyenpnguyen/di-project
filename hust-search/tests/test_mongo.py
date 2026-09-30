@@ -81,6 +81,67 @@ class TrichTest(unittest.TestCase):
         self.assertGreaterEqual(out["a.hust.edu.vn"]["template_blocks"], 1)
 
 
+class IndexTuMongoTest(unittest.TestCase):
+    def setUp(self):
+        self.db = mongomock.MongoClient().db
+        html = ("<html><head><meta name='author' content='Lê Văn C'></head><body><main>"
+                "<p>Nội dung học bổng của trường dành cho sinh viên năm cuối.</p></main></body></html>")
+        trich.chay_extract(self.db, [rec("https://hust.edu.vn/vi/a-1.html", html)])
+        self.db.documents.insert_many([
+            {"_id": "https://hust.edu.vn/uploads/thong-bao%20hoc-bong.pdf", "host": "hust.edu.vn",
+             "ext": "pdf", "status": "ok", "text": "Thông báo học bổng"},
+            {"_id": "https://hust.edu.vn/uploads/scan.pdf", "host": "hust.edu.vn", "ext": "pdf",
+             "status": "ok", "text": "", "needs_ocr": True}])
+
+    def test_lucene_tu_mongo_co_trang_va_tep_co_chu_khong_lay_tep_scan(self):
+        docs = {d["url"]: d for d in trich.lucene_tu_mongo(self.db)}
+        self.assertEqual(len(docs), 2)
+        trang = docs["https://hust.edu.vn/vi/a-1.html"]
+        self.assertEqual((trang["kind"], trang["author"]), ("page", "Lê Văn C"))
+        tep = docs["https://hust.edu.vn/uploads/thong-bao%20hoc-bong.pdf"]
+        self.assertEqual((tep["kind"], tep["title"]), ("document", "thong-bao hoc-bong.pdf"))
+
+    def _index(self, source):
+        sent = []
+
+        class Client:
+            def __init__(self, *a, **k): pass
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def post(self, url, **k):
+                if url == "/bulk":
+                    sent.extend(k["json"])
+                return type("R", (), {"raise_for_status": lambda s: None})()
+            def get(self, url, **k):
+                return type("R", (), {"raise_for_status": lambda s: None, "json": lambda s: {"docs": len(sent)}})()
+
+        with patch.object(main.httpx, "Client", Client), patch.object(main, "_mongo", lambda: self.db):
+            return main.index_run(main.IndexReq(source=source)), sent
+
+    def test_index_run_source_mongo_day_author_va_kind_sang_lucene(self):
+        r, sent = self._index("mongo")
+        self.assertEqual((r["source"], r["indexed"]), ("mongo", 2))
+        self.assertEqual({d["kind"] for d in sent}, {"page", "document"})
+
+    def test_index_run_auto_chon_mongo_khi_co_du_lieu_va_raw_khi_rong(self):
+        self.assertEqual(self._index("auto")[0]["source"], "mongo")
+        self.db.pages.delete_many({})
+        with patch.object(main, "tat_ca_ban_ghi", lambda: iter([])):
+            self.assertEqual(self._index("auto")[0]["source"], "raw")
+
+    def test_source_khong_hop_le_tra_400(self):
+        with self.assertRaises(HTTPException) as c:
+            main.index_run(main.IndexReq(source="xyz"))
+        self.assertEqual(c.exception.status_code, 400)
+
+    def test_public_document_kind_hop_le(self):
+        with self.assertRaises(Exception):
+            main.PublicDocument(url="https://a.b/c", title="x", kind="video")
+        d = main.PublicDocument(url="https://a.b/c", title="x", author="Y")
+        self.assertEqual(main.lucene_document(d)["author"], "Y")
+        self.assertEqual(main.lucene_document(d)["kind"], "page")
+
+
 class RoutesTest(unittest.TestCase):
     def setUp(self):
         self.db = mongomock.MongoClient().db

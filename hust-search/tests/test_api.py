@@ -124,7 +124,7 @@ class ApiSchemaTest(unittest.TestCase):
                 return Response(url="http://lucene:8081/bulk", body={"indexed": 1})
 
         main._lan_tai["luc"] = time.time()
-        with patch.object(main.httpx, "Client", Client), patch.object(main, "_ghi_kho"):
+        with patch.object(main.httpx, "Client", Client), patch.object(main, "_ghi_kho"), patch.object(main, "_ghi_mongo"):
             result = main.fetch_one(main.LayReq(url="https://fixture.local/article"))
 
         self.assertEqual(result["document"]["title"], "Bai test")

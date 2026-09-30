@@ -18,10 +18,10 @@ import java.util.concurrent.Executors;
  * HTTP mỏng bọc quanh Lucene. Dùng com.sun.net.httpserver có sẵn trong JDK nên
  * không kéo thêm framework nào — cả dịch vụ chỉ còn Lucene và Jackson.
  *
- *   POST /bulk    [{url,title,text,host,section,date}, …]   thêm/ghi đè, trả số đã nhận
- *   GET  /search?q=&from=&size=&host=&date_from=&date_to=&sort=&ranking=
+ *   POST /bulk    [{url,title,text,host,section,date,author,kind}, …]   thêm/ghi đè, trả số đã nhận
+ *   GET  /search?q=&from=&size=&host=&kind=&date_from=&date_to=&sort=&ranking=
  *                                                          kết quả kèm đoạn tô sáng
- *   GET  /list?from=&size=&host=&sort=                    liệt kê toàn bộ, không cần q
+ *   GET  /list?from=&size=&host=&kind=&sort=                  liệt kê toàn bộ, không cần q
  *   GET  /dict?field=&after=&limit=                        duyệt từ điển (term dictionary)
  *   GET  /posting?field=&term=&limit=                      posting list đầy đủ của 1 từ
  *   GET  /doc?url=                                          một tài liệu kèm HTML đã dọn
@@ -97,7 +97,7 @@ public class SearchServer {
         boolean theoNgay = "date".equalsIgnoreCase(p.get("sort"));
         try {
             Index.Result r = index.search(new Index.Truy(q, from, size, p.get("host"),
-                    p.get("date_from"), p.get("date_to"), theoNgay, ranking));
+                    p.get("date_from"), p.get("date_to"), theoNgay, ranking, p.get("kind")));
             List<Map<String, Object>> hits = new ArrayList<>();
             for (Index.Hit h : r.hits()) {
                 Map<String, Object> m = new LinkedHashMap<>();
@@ -106,6 +106,8 @@ public class SearchServer {
                 m.put("host", nz(h.host()));
                 m.put("section", nz(h.section()));
                 m.put("date", nz(h.date()));
+                m.put("author", nz(h.author()));
+                m.put("kind", nz(h.kind()));
                 m.put("score", h.score());
                 m.put("fragments", h.fragments());
                 m.put("duplicates", h.duplicates());
@@ -135,7 +137,7 @@ public class SearchServer {
         String host = p.get("host");
         boolean theoUrl = "url".equalsIgnoreCase(p.get("sort"));
         try {
-            Index.ListResult r = index.listAll(from, size, host, theoUrl);
+            Index.ListResult r = index.listAll(from, size, host, theoUrl, p.get("kind"));
             List<Map<String, Object>> items = new ArrayList<>();
             for (Index.ListItem it : r.items()) {
                 Map<String, Object> m = new LinkedHashMap<>();
@@ -144,6 +146,8 @@ public class SearchServer {
                 m.put("host", nz(it.host()));
                 m.put("section", nz(it.section()));
                 m.put("date", nz(it.date()));
+                m.put("author", nz(it.author()));
+                m.put("kind", nz(it.kind()));
                 items.add(m);
             }
             Map<String, Object> out = new LinkedHashMap<>();

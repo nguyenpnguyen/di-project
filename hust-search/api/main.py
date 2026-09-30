@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from boc_tach import boc_tach, lien_ket
+import trich
 from routes_bt import router as bt_router
 from boc_tach.html_sach import clean_space, don_html, join_http
 
@@ -135,6 +136,8 @@ class PublicDocument(BaseModel):
     host: str = ""
     section: str = ""
     published_at: str = ""
+    author: str = ""
+    kind: str = "page"
     outgoing_links: list[OutgoingLink] = Field(default_factory=list)
 
     @field_validator("url")
@@ -144,6 +147,13 @@ class PublicDocument(BaseModel):
         parsed = urllib.parse.urlsplit(value)
         if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
             raise ValueError("url phải là HTTP hoặc HTTPS đầy đủ")
+        return value
+
+    @field_validator("kind")
+    @classmethod
+    def valid_kind(cls, value: str) -> str:
+        if value not in {"page", "document"}:
+            raise ValueError("kind phải là page hoặc document")
         return value
 
     @field_validator("title", mode="before")
@@ -197,6 +207,9 @@ class LayReq(BaseModel):
 
 class IndexReq(BaseModel):
     limit: int = Field(default=0, ge=0)  # 0 = không giới hạn
+    # mongo: đọc kết quả đã bóc tách; raw: bóc lại từ kho thô (cách cũ, không cần Mongo);
+    # auto: mongo nếu collection pages có dữ liệu, không thì raw.
+    source: str = "auto"
     batch: int = Field(default=200, ge=1, le=1000)
     reset: bool = False
 
@@ -212,7 +225,7 @@ def public_document(d: dict) -> dict:
     return PublicDocument(
         url=d["url"], title=d.get("title", ""), content=d.get("text", ""),
         host=d.get("host", ""), section=d.get("section", ""),
-        published_at=_date_or_empty(d.get("date")),
+        published_at=_date_or_empty(d.get("date")), author=d.get("author", "")[:200],
         outgoing_links=d.get("outgoing_links", []),
     ).model_dump()
 
@@ -221,13 +234,20 @@ def lucene_document(d: PublicDocument | dict) -> dict:
     if isinstance(d, PublicDocument):
         host = d.host.strip().lower() or (urllib.parse.urlsplit(d.url).hostname or "").lower()
         return {"url": d.url, "title": d.title, "text": d.content,
-                "host": host, "section": d.section, "date": d.published_at}
+                "host": host, "section": d.section, "date": d.published_at,
+                "author": d.author, "kind": d.kind}
     return {"url": d["url"], "title": d.get("title", ""), "text": d.get("text", ""),
             "host": d.get("host", ""), "section": d.get("section", ""),
-            "date": d.get("date", ""), "html": d.get("html", "")}
+            "date": d.get("date", ""), "html": d.get("html", ""),
+            "author": d.get("author", ""), "kind": d.get("kind", "page")}
 
 
 # ------------------------------------------------------------------- crawl API
+def _mongo():
+    from routes_bt import mdb
+    return mdb()
+
+
 def _alive() -> subprocess.Popen | None:
     p = _job.get("proc")
     return p if p and p.poll() is None else None
@@ -331,38 +351,48 @@ def stats():
 
 
 # ------------------------------------------------------------------- index API
+def _nguon_index(source: str):
+    """Chọn nơi lấy tài liệu để index. Trả (tên nguồn, iterator các dict cho Lucene)."""
+    if source not in {"auto", "mongo", "raw"}:
+        raise HTTPException(400, "source phải là auto, mongo hoặc raw")
+    if source in {"auto", "mongo"}:
+        try:
+            d = _mongo()
+            if source == "mongo" or d.pages.count_documents({}, limit=1):
+                return "mongo", trich.lucene_tu_mongo(d)
+        except HTTPException:
+            if source == "mongo":
+                raise
+    def tu_kho():
+        for rec in tat_ca_ban_ghi():
+            doc = extract(rec)
+            if doc:
+                yield lucene_document(doc)
+    return "raw", tu_kho()
+
+
 @app.post("/api/index/run")
 def index_run(req: IndexReq):
+    nguon, docs = _nguon_index(req.source)
     with httpx.Client(base_url=LUCENE, timeout=120) as cli:
         if req.reset:
             cli.post("/reset").raise_for_status()
-        sent = skipped = 0
+        sent = 0
         batch: list[dict] = []
-        seen: set[str] = set()
-        for d in kho_dirs():
-            for rec in records(d):
-                if rec["url"] in seen:
-                    continue
-                seen.add(rec["url"])
-                doc = extract(rec)
-                if not doc:
-                    skipped += 1
-                    continue
-                batch.append(lucene_document(doc))
-                if len(batch) >= req.batch:
-                    cli.post("/bulk", json=batch).raise_for_status()
-                    sent += len(batch)
-                    batch = []
-                if req.limit and sent >= req.limit:
-                    break
-            if req.limit and sent >= req.limit:
+        for doc in docs:
+            batch.append(doc)
+            if len(batch) >= req.batch:
+                cli.post("/bulk", json=batch).raise_for_status()
+                sent += len(batch)
+                batch = []
+            if req.limit and sent + len(batch) >= req.limit:
                 break
         if batch:
             cli.post("/bulk", json=batch).raise_for_status()
             sent += len(batch)
         total = cli.get("/stats")
         total.raise_for_status()
-    return {"indexed": sent, "skipped_non_html": skipped, "index": total.json()}
+    return {"indexed": sent, "source": nguon, "index": total.json()}
 
 
 @app.post("/api/index/documents")
@@ -399,14 +429,14 @@ def index_stats():
 @app.get("/api/search")
 def search(q: str, from_: int = 0, size: int = 10, host: str | None = None,
            date_from: str | None = None, date_to: str | None = None,
-           sort: str = "score", ranking: str = "tfidf"):
+           sort: str = "score", ranking: str = "tfidf", kind: str | None = None):
     """Chuyển thẳng sang Lucene. Tầng này không tự lọc gì: lọc ở Lucene thì bộ
     đếm tổng và việc chia trang mới khớp nhau."""
     ranking = ranking.strip().lower()
     if ranking not in {"tfidf", "enhanced"}:
         raise HTTPException(400, "ranking phải là tfidf hoặc enhanced")
     params: dict = {"q": q, "from": from_, "size": size, "ranking": ranking}
-    for k, v in (("host", host), ("date_from", date_from), ("date_to", date_to)):
+    for k, v in (("host", host), ("date_from", date_from), ("date_to", date_to), ("kind", kind)):
         if v:
             params[k] = v
     if sort == "date":
@@ -417,13 +447,16 @@ def search(q: str, from_: int = 0, size: int = 10, host: str | None = None,
 
 
 @app.get("/api/index/list")
-def index_list(from_: int = 0, size: int = 20, host: str | None = None, sort: str = "date"):
+def index_list(from_: int = 0, size: int = 20, host: str | None = None, sort: str = "date",
+               kind: str | None = None):
     """Liệt kê toàn bộ tài liệu đã index, không cần từ khoá — cho tab Duyệt tất cả,
     để hình dung tổng thể kho (bao nhiêu bài, thuộc site nào, thời gian nào) thay vì
     chỉ xem con số tổng như /api/index/stats."""
     params: dict = {"from": from_, "size": size}
     if host:
         params["host"] = host
+    if kind:
+        params["kind"] = kind
     if sort == "url":
         params["sort"] = "url"
     with httpx.Client(base_url=LUCENE, timeout=30) as cli:
@@ -474,6 +507,16 @@ def _ghi_kho(rec: dict) -> None:
     with gzip.open(p, "at", encoding="utf-8") as fh:
         fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
         fh.flush()          # flush từng dòng: cùng lý do như crawl_all.py
+
+
+def _ghi_mongo(doc: dict, rec: dict) -> None:
+    """Ghi trang tải lẻ vào Mongo; Mongo chưa lên thì bỏ qua, tải lẻ vẫn thành công."""
+    try:
+        d = _mongo()
+        html = base64.b64decode(rec["html_b64"]).decode(rec.get("encoding") or "utf-8", "replace")
+        trich.ghi_mot_trang(d, doc["url"], doc, rec, html)
+    except Exception as e:
+        print(f"[mongo] không ghi được trang tải lẻ: {e}", flush=True)
 
 
 @app.post("/api/fetch")
@@ -531,6 +574,7 @@ def fetch_one(req: LayReq):
     except httpx.HTTPError as e:
         raise HTTPException(502, f"Lucene không sẵn sàng: {e}") from e
     _ghi_kho(rec)
+    _ghi_mongo(doc, rec)
     document = public_document(doc)
 
     return {

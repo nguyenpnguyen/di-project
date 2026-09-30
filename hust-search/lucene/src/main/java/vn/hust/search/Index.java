@@ -43,6 +43,10 @@ public class Index implements AutoCloseable {
     public static final String F_HOST = "host";
     public static final String F_SECTION = "section";
     public static final String F_DATE = "date";
+    /** Tác giả bóc từ bài (meta / JSON-LD / dòng "Tác giả:"); rỗng nếu không rõ. */
+    public static final String F_AUTHOR = "author";
+    /** page | document — lọc được, để tách bài viết khỏi tệp đính kèm. */
+    public static final String F_KIND = "kind";
     /** Bản bỏ dấu, chỉ để tìm chứ không lưu — đoạn trích vẫn lấy từ bản gốc. */
     public static final String F_TITLE_KD = "title_kd";
     public static final String F_TEXT_KD = "text_kd";
@@ -108,6 +112,10 @@ public class Index implements AutoCloseable {
         doc.add(new TextField(F_SECTION, d.getOrDefault(F_SECTION, ""), Field.Store.YES));
         String ngay = d.getOrDefault(F_DATE, "");
         doc.add(new StringField(F_DATE, ngay, Field.Store.YES));
+        doc.add(new TextField(F_AUTHOR, d.getOrDefault(F_AUTHOR, ""), Field.Store.YES));
+        String kind = d.getOrDefault(F_KIND, "");
+        if (kind.isBlank()) kind = "page";           // tài liệu cũ không có kind coi là trang
+        doc.add(new StringField(F_KIND, kind, Field.Store.YES));
         long ns = ngaySo(ngay);
         doc.add(new LongPoint(F_NGAY_SO, ns));                  // để lọc khoảng
         doc.add(new NumericDocValuesField(F_NGAY_SO, ns));      // để sắp xếp
@@ -175,9 +183,11 @@ public class Index implements AutoCloseable {
     }
 
     public record Hit(String url, String title, String host, String section, String date,
-                      float score, List<String> fragments, List<String> duplicates) { }
+                      float score, List<String> fragments, List<String> duplicates,
+                      String author, String kind) { }
 
-    public record ListItem(String url, String title, String host, String section, String date) { }
+    public record ListItem(String url, String title, String host, String section, String date,
+                          String author, String kind) { }
     public record ListResult(long total, List<ListItem> items) { }
 
     public record TermInfo(String term, long docFreq, long totalTermFreq) { }
@@ -302,13 +312,19 @@ public class Index implements AutoCloseable {
      * dòng y hệt nhau trong bảng duyệt.
      */
     public ListResult listAll(int from, int size, String host, boolean theoUrl) throws IOException {
+        return listAll(from, size, host, theoUrl, null);
+    }
+
+    public ListResult listAll(int from, int size, String host, boolean theoUrl, String kind)
+            throws IOException {
         IndexSearcher s = searchers.acquire();
         try {
             Query q = new MatchAllDocsQuery();
-            if (host != null && !host.isBlank()) {
+            if (kho(host) || kho(kind)) {
                 BooleanQuery.Builder b = new BooleanQuery.Builder();
                 b.add(q, BooleanClause.Occur.MUST);
-                b.add(new TermQuery(new Term(F_HOST, host)), BooleanClause.Occur.FILTER);
+                if (kho(host)) b.add(new TermQuery(new Term(F_HOST, host)), BooleanClause.Occur.FILTER);
+                if (kho(kind)) b.add(new TermQuery(new Term(F_KIND, kind)), BooleanClause.Occur.FILTER);
                 q = b.build();
             }
             // Tổng khớp filter, tính TRƯỚC khi gộp trùng — cũng là chặn trên như ở
@@ -334,7 +350,7 @@ public class Index implements AutoCloseable {
             for (int i = from; i < gon.size() && i < from + size; i++) {
                 Document d = (Document) gon.get(i)[0];
                 items.add(new ListItem(d.get(F_URL), d.get(F_TITLE), d.get(F_HOST),
-                        d.get(F_SECTION), d.get(F_DATE)));
+                        d.get(F_SECTION), d.get(F_DATE), d.get(F_AUTHOR), d.get(F_KIND)));
             }
             return new ListResult(total, items);
         } finally {
@@ -345,7 +361,7 @@ public class Index implements AutoCloseable {
     /** Tham số của một lượt tìm. Gom thành record cho khỏi truyền nhiều đối số rời. */
     public record Truy(String q, int from, int size, String host,
                        String tuNgay, String denNgay, boolean sapTheoNgay,
-                       String ranking) {
+                       String ranking, String kind) {
         public Truy {
             ranking = ranking == null || ranking.isBlank()
                     ? "tfidf" : ranking.toLowerCase(Locale.ROOT);
@@ -355,12 +371,17 @@ public class Index implements AutoCloseable {
         }
 
         public Truy(String q, int from, int size, String host,
+                    String tuNgay, String denNgay, boolean sapTheoNgay, String ranking) {
+            this(q, from, size, host, tuNgay, denNgay, sapTheoNgay, ranking, null);
+        }
+
+        public Truy(String q, int from, int size, String host,
                     String tuNgay, String denNgay, boolean sapTheoNgay) {
-            this(q, from, size, host, tuNgay, denNgay, sapTheoNgay, "tfidf");
+            this(q, from, size, host, tuNgay, denNgay, sapTheoNgay, "tfidf", null);
         }
 
         public Truy(String q, int from, int size, String host) {
-            this(q, from, size, host, null, null, false, "tfidf");
+            this(q, from, size, host, null, null, false, "tfidf", null);
         }
     }
 
@@ -509,12 +530,15 @@ public class Index implements AutoCloseable {
      */
     private Query loc(Query q, Truy t) {
         boolean coNgay = kho(t.tuNgay()) || kho(t.denNgay());
-        if ((t.host() == null || t.host().isBlank()) && !coNgay) return q;
+        if ((t.host() == null || t.host().isBlank()) && !coNgay && !kho(t.kind())) return q;
 
         BooleanQuery.Builder b = new BooleanQuery.Builder();
         b.add(q, BooleanClause.Occur.MUST);
         if (t.host() != null && !t.host().isBlank()) {
             b.add(new TermQuery(new Term(F_HOST, t.host())), BooleanClause.Occur.FILTER);
+        }
+        if (kho(t.kind())) {
+            b.add(new TermQuery(new Term(F_KIND, t.kind())), BooleanClause.Occur.FILTER);
         }
         if (coNgay) {
             // Cận dưới bắt đầu từ 1 chứ không phải 0: 0 là "không rõ ngày", lọc
@@ -597,7 +621,8 @@ public class Index implements AutoCloseable {
                 List<String> trung = (List<String>) gon.get(i)[2];
                 hits.add(new Hit(d.get(F_URL), d.get(F_TITLE), d.get(F_HOST),
                         d.get(F_SECTION), d.get(F_DATE),
-                        ((Double) gon.get(i)[1]).floatValue(), doanTrich(hl, d), trung));
+                        ((Double) gon.get(i)[1]).floatValue(), doanTrich(hl, d), trung,
+                        d.get(F_AUTHOR), d.get(F_KIND)));
             }
             // Tổng đã trừ đi số bản trùng nhìn thấy được trong cửa sổ. Ngoài cửa
             // sổ thì không biết, nên con số này là chặn trên chứ không phải đếm
@@ -760,7 +785,7 @@ public class Index implements AutoCloseable {
             if (top.scoreDocs.length == 0) return null;
             Document d = s.storedFields().document(top.scoreDocs[0].doc);
             Map<String, String> out = new LinkedHashMap<>();
-            for (String f : new String[]{F_URL, F_TITLE, F_HOST, F_SECTION, F_DATE, F_HTML}) {
+            for (String f : new String[]{F_URL, F_TITLE, F_HOST, F_SECTION, F_DATE, F_AUTHOR, F_KIND, F_HTML}) {
                 String v = d.get(f);
                 out.put(f, v == null ? "" : v);
             }

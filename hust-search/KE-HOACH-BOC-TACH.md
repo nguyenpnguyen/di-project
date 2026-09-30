@@ -445,3 +445,21 @@ không nhân bản ghi; `/api/files/fetch` trả 409 khi crawler đang chạy;
 
 1. Đồ thị lưu hai tầng `links` (cạnh nội dung, từng cạnh) + `nav_links` (cạnh
    menu/footer, gộp theo host) như mục 5.4 — đồng ý không?
+
+---
+
+## 11. Tiến độ (30/9)
+
+| # | Việc | Trạng thái |
+|---|---|---|
+| 0-1 | `boc_tach`, thuật toán khối + `danh_gia_khoi.py` | xong; đo trên trang **tổng hợp**, chưa trên trang thật |
+| 2 | trường trang (tiêu đề, ngày, tác giả, nguồn trích dẫn) | xong, có `/api/extract/coverage` |
+| 3 | Mongo: service, `db.py`, `SCHEMA.md`, `/api/extract/*` | xong; `$jsonSchema` chưa kiểm trên Mongo thật |
+| 4 | đồ thị hai tầng (`links` / `nav_links`), ảnh, `/api/referrers`, `/api/graph/*` | xong, làm theo đề xuất mục 5.4 (mục 10 chưa được xác nhận) |
+| 5 | `index/run` đọc Mongo; Lucene `author`, `kind` | xong; `author` chưa được đưa vào truy vấn tìm (chỉ lưu và hiển thị) |
+| 6 | tệp: danh mục → tải → bóc chữ → index `kind=document` | xong, chưa chạy với site thật |
+| 7 | giao diện: referrers, tab Đồ thị, tab Tệp & ảnh, điều khiển bóc tách | xong; đã thử bằng trình duyệt trên stack cục bộ |
+| 8 | README, CLAUDE.md | xong |
+
+Còn lại: chạy trên stack docker với kho thật, đọc coverage, dò lại hằng số ở `khoi.py`
+và ngưỡng khử khuôn; đo số dòng `nav_links`; quyết định có đưa `author`/anchor text vào xếp hạng không.

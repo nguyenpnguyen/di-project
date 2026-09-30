@@ -56,7 +56,9 @@ DI/
 │       └── raw-<host>/            mỗi subdomain một kho riêng, cùng cấu trúc
 │
 └── hust-search/                   STACK DOCKER
-    ├── docker-compose.yml         2 dịch vụ: lucene (Java) + api (Python)
+    ├── docker-compose.yml         3 dịch vụ: lucene (Java) + api (Python) + mongo
+    ├── SCHEMA.md                  lược đồ MongoDB (pages, links, nav_links, images, documents, templates)
+    ├── KE-HOACH-BOC-TACH.md       kế hoạch bóc tách / đồ thị / Mongo và các quyết định đã chốt
     ├── lucene/                    DỊCH VỤ TÌM KIẾM — Java 21 + Lucene 9.11
     │   ├── pom.xml
     │   ├── Dockerfile             build đa tầng: maven → JRE
@@ -66,13 +68,25 @@ DI/
     │       │   └── SearchServer.java  HTTP bằng com.sun.net.httpserver của JDK
     │       └── test/java/.../IndexTest.java   29 test
     ├── api/                       ĐIỀU KHIỂN + GIAO DIỆN — Python FastAPI
-    │   ├── main.py                crawl start/stop/status, index, search, stats
+    │   ├── main.py                crawl start/stop/status, index, search, stats, fetch
+    │   ├── boc_tach/              khoi.py (khối nội dung) · khuon.py (khử khuôn theo host)
+    │   │                          truong.py (tiêu đề/ngày/tác giả/nguồn) · lien_ket.py (đồ thị)
+    │   │                          tep.py (bóc chữ pdf/docx/xlsx/pptx) · html_sach.py
+    │   ├── db.py                  kết nối Mongo + $jsonSchema + index
+    │   ├── trich.py               kho thô → boc_tach → Mongo; index từ Mongo
+    │   ├── tep_job.py             danh mục / tải / bóc chữ tệp tài liệu
+    │   ├── routes_bt.py           /api/extract/*, /api/referrers, /api/graph/*, /api/files, /api/images
     │   ├── static/index.html      giao diện một trang, không framework
     │   ├── requirements.txt
     │   └── Dockerfile             nền image playwright (có sẵn Chromium)
     ├── tests/fixtures/corpus.json corpus mẫu theo schema public
-    ├── tests/test_api.py          5 test parser/schema bằng unittest
-    └── tests/integration.sh       33 kiểm tra trên stack đang chạy
+    ├── tests/test_api.py          5 test parser/schema
+    ├── tests/test_boc_tach.py     khối nội dung, khuôn, trường, đồ thị
+    ├── tests/test_mongo.py        Mongo bằng mongomock (không thực thi $jsonSchema)
+    ├── tests/test_tep.py          bóc chữ tệp, tải bằng httpx.MockTransport
+    ├── tests/sinh_mau.py          sinh trang mẫu TỔNG HỢP; danh_gia_khoi.py đo P/R/F1
+    ├── tests/integration.sh       kiểm tra trên stack đang chạy (đường tìm kiếm)
+    └── tests/integration_bt.sh    kiểm tra bóc tách + đồ thị + Mongo trên stack đang chạy
 ```
 
 **Chia việc giữa hai ngôn ngữ:** Python bóc chữ từ HTML (BeautifulSoup và bộ
@@ -89,12 +103,15 @@ cấu trúc site.
         │  crawl_all.py  (nhịp tự dò, robots.txt, render khi cần)
         ▼
    data/raw*/pages-*.jsonl.gz        HTML thô base64, chưa parse
-        │  api/main.py extract()     BeautifulSoup → schema public
-        │                             {url,title,content,host,section,published_at,outgoing_links}
+        │  api/boc_tach              khối nội dung → tiêu đề/ngày/tác giả → cạnh liên kết
+        ▼                             POST /api/extract/run (chạy lại không nhân đôi)
+   MongoDB  pages · links · nav_links · images · documents · templates
+        │        ▲  /api/files/fetch + /api/files/extract: tải và bóc chữ tệp *.hust.edu.vn
+        │  POST /api/index/run       source=auto: đọc từ Mongo; không có Mongo thì bóc lại từ kho thô
         ▼
    POST lucene:8081/bulk             updateDocument theo Term(url) → không đẻ trùng
         ▼
-   index Lucene (volume)
+   index Lucene (volume)              thêm author, kind = page | document
         │  GET /search?q=&ranking=tfidf
         ▼
    giao diện: tô <mark>, bấm mở tab mới
@@ -198,10 +215,17 @@ Tất cả dưới `http://localhost:8000`.
 | POST | `/api/crawl/start` | chạy một mẻ crawl |
 | POST | `/api/crawl/stop` | SIGTERM rồi chờ 30s, cùng lắm mới kill |
 | GET | `/api/crawl/status` | đang chạy không, log 12 dòng cuối |
-| POST | `/api/index/run` | đọc kho → bóc chữ → đẩy vào Lucene |
+| POST | `/api/index/run` | `source=auto\|mongo\|raw`: Mongo (hoặc kho thô) → Lucene |
+| POST | `/api/extract/templates` | dựng bảng khối lặp theo host (chạy nền) |
+| POST | `/api/extract/run?limit=` | kho thô → boc_tach → Mongo (chạy nền, idempotent) |
+| GET | `/api/extract/status`, `/api/extract/coverage` | tiến độ; % trường đầy đủ và cách chọn khối theo host |
+| GET | `/api/referrers?url=` | nguồn giới thiệu: cạnh trong bài + cạnh menu/footer trỏ vào url |
+| GET | `/api/graph/out?url=`, `/api/graph/stats`, `/api/graph/edges.csv` | cạnh đi ra; thống kê; xuất `source,target,text` |
+| POST | `/api/files/fetch`, `/api/files/extract` | tải tệp (409 khi crawler đang chạy) và bóc chữ |
+| GET | `/api/files`, `/api/images` | danh mục tệp / ảnh kèm số trang giới thiệu |
 | POST | `/api/index/documents` | nhận corpus JSON theo schema public |
 | GET | `/api/index/stats` | số tài liệu, dung lượng index, theo host |
-| GET | `/api/search?q=&size=&host=&ranking=` | kết quả kèm đoạn đã tô `<mark>` |
+| GET | `/api/search?q=&size=&host=&kind=&ranking=` | kết quả kèm đoạn đã tô `<mark>` |
 | POST | `/api/fetch` | tải một URL, trả document và index ngay |
 
 ```bash
@@ -414,19 +438,26 @@ Kết quả hiện tại: **33 integration, 29 JUnit, 5 API và 32 crawler test 
 # engine (32 test)
 cd hust-crawler && .venv/bin/python -m pytest tests -q
 
-# parser/schema API (5 test, không gọi mạng thật)
-cd hust-search && docker run --rm -v "$PWD":/workspace -w /workspace \
-    hust-search-api:latest python tests/test_api.py -v
+# Python phía api (59 test: parser, boc_tach, Mongo bằng mongomock, tệp; không gọi mạng thật)
+cd hust-search && docker run --rm -v "$PWD":/workspace -v "$PWD/../hust-crawler":/crawler \
+    -w /workspace hust-search-api:latest python -m pytest tests -q
 
-# Lucene (29 test)
+# đo thuật toán khối nội dung (trên trang TỔNG HỢP — xem tests/sinh_mau.py)
+python tests/danh_gia_khoi.py
+
+# Lucene (30 test)
 cd hust-search/lucene && docker run --rm -v "$PWD":/w -v hust-m2:/root/.m2 \
     -w /w maven:3.9-eclipse-temurin-21 mvn -B test
 
-# tích hợp (33 kiểm tra, cần stack đang chạy)
-cd hust-search && ./tests/integration.sh
+# tích hợp (cần stack đang chạy)
+cd hust-search && ./tests/integration.sh        # đường tìm kiếm
+cd hust-search && ./tests/integration_bt.sh     # bóc tách, đồ thị, Mongo (chờ job nền, WAIT=900 giây)
 ```
 
-Trạng thái gần nhất: **32 engine + 5 API + 29 Lucene + 33 tích hợp = 99 đạt, 0 hỏng**.
+Trạng thái đã chạy được trong môi trường viết code (không có docker, không có kho thật):
+**59 pytest phía api + 30 JUnit = đạt**; `integration_bt.sh` chạy được 17/17 trên Lucene thật + API
+với mongomock + corpus tổng hợp. **Chưa chạy** trên stack docker đầy đủ với MongoDB thật và kho thật —
+nên chưa kiểm chứng `$jsonSchema`, hiệu năng, và độ chính xác thuật toán khối trên trang thật.
 
 Mỗi test ứng với một lỗi đã gặp thật, tên test nói rõ lỗi đó — sửa code mà làm
 đỏ test nào thì đọc tên test là biết mình vừa phá cái gì.
@@ -514,7 +545,11 @@ không thêm link nào đi tới được.
 | Đổi luật bỏ qua url | `crawl_all.py` | `SKIP_SEG`, `SKIP_QUERY`, `ASSET` |
 | Đổi cách nhận diện bài viết | `crawl_all.py` | `ART_ID`, `dedup_key()`, `kind_of()` |
 | Đổi ngưỡng "trang cần render" | `render.py` | `looks_blocked()` |
-| Đổi cách bóc tiêu đề/nội dung | `api/main.py` | `extract()` |
+| Đổi cách chọn khối nội dung | `api/boc_tach/khoi.py` | `ALPHA/BETA/GAMMA/DELTA`, `SELECTOR_THEO_HOST`, `tim_khoi()` |
+| Đổi ngưỡng khử khuôn | `api/boc_tach/khuon.py` | `NGUONG_TRANG`, `TOI_THIEU_TRANG` |
+| Đổi cách bóc tiêu đề/ngày/tác giả | `api/boc_tach/truong.py` | các hàm `tieu_de`, `ngay_dang`, `tac_gia_meta` |
+| Đổi luật cạnh nội dung / cạnh khuôn | `api/boc_tach/lien_ket.py` | `chia()`, `loai_dich()` |
+| Đổi lược đồ Mongo | `api/db.py` + `SCHEMA.md` | `SCHEMAS` |
 | Đổi trọng số xếp hạng | `Index.java` | `MultiFieldQueryParser`, map boost |
 | Đổi cách tô sáng | `Index.java` | `SimpleHTMLFormatter("<mark>", "</mark>")` |
 | Đổi màu, bố cục | `api/static/index.html` | khối `:root` ở đầu `<style>` |
@@ -541,7 +576,12 @@ container ở `/crawler`.
 * **Chưa tải nội dung hết**: lần rebuild baseline có 3.406 tài liệu index trên ~5.600 bài đã phát hiện.
   Chạy tiếp bằng `./hustctl resume` (~3 giờ ở nhịp 24 trang/phút).
 * **Subdomain mới chạm 11/51 host**, phần lớn chỉ mới trang chủ.
-* **Không tải file đính kèm** — PDF/DOC chỉ lập danh mục url trong `assets.txt`.
+* **Tệp đính kèm**: chỉ tải host `*.hust.edu.vn` (host ngoài như Google Drive chỉ có cạnh trong đồ thị);
+  không OCR — PDF scan gắn `needs_ocr`; doc/xls/ppt cũ là `unsupported`.
+* **Thuật toán khối nội dung chưa được đo trên trang thật**: bộ đánh giá hiện là trang tổng hợp,
+  các hằng số ở `khoi.py` là khởi điểm chưa dò. Xem `/api/extract/coverage` sau khi bóc tách kho thật.
+* **`nav_links` có thể phình** vì gồm cả liên kết ngoài khối nội dung nhưng riêng cho từng trang
+  (vd. "tin liên quan"); chưa đo số dòng trên kho thật.
 * **Phân tích tiếng Việt ở mức âm tiết**: `StandardAnalyzer` tách theo chuẩn
   Unicode nên "điểm chuẩn" thành hai token. Tìm cụm vẫn đúng, nhưng chưa có tách
   từ ghép. Muốn tốt hơn thì cắm một `Analyzer` tiếng Việt vào `Index.java`.

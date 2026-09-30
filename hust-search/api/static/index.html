@@ -188,6 +188,8 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
       <button class="tab" role="tab" aria-selected="false" data-p="fetch">Tải một trang</button>
       <button class="tab" role="tab" aria-selected="false" data-p="browse">Duyệt tất cả</button>
       <button class="tab" role="tab" aria-selected="false" data-p="dict">Chỉ mục ngược</button>
+      <button class="tab" role="tab" aria-selected="false" data-p="graph">Đồ thị liên kết</button>
+      <button class="tab" role="tab" aria-selected="false" data-p="files">Tệp &amp; ảnh</button>
       <button class="tab" role="tab" aria-selected="false" data-p="dash">Bảng điều khiển</button>
     </div>
     <div class="searchbar" id="sb">
@@ -202,6 +204,11 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
     <div class="searchbar" id="sb2" style="margin-top:8px">
       <label class="lb">Từ ngày</label><input type="date" id="d1">
       <label class="lb">Đến</label><input type="date" id="d2">
+      <select id="kind" aria-label="Loại">
+        <option value="">Trang và tệp</option>
+        <option value="page">Chỉ trang</option>
+        <option value="document">Chỉ tệp tài liệu</option>
+      </select>
       <select id="sort">
         <option value="score">Xếp theo độ khớp</option>
         <option value="date">Xếp theo ngày, mới trước</option>
@@ -312,6 +319,43 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
     </div>
   </section>
 
+  <section class="panel" id="p-graph">
+    <div class="card">
+      <h2>Nguồn giới thiệu và liên kết đi ra</h2>
+      <p class="note">Nhập url của một trang, tệp hoặc ảnh. "Trong bài" là trang chủ động dẫn tới nó
+        (chữ mô tả là chữ trên thẻ &lt;a&gt;); "Menu/footer" là liên kết khuôn, gộp theo site.</p>
+      <div class="bigbar">
+        <input id="gurl" placeholder="https://hust.edu.vn/uploads/…/diem-chuan.pdf">
+        <button class="btn" id="ggo">Xem đồ thị</button>
+        <a class="x" href="/api/graph/edges.csv" download="edges.csv">Tải edges.csv</a>
+      </div>
+      <div id="gout"></div>
+    </div>
+    <div class="card"><h2>Thống kê đồ thị</h2><div id="gstats" class="meta">—</div></div>
+  </section>
+
+  <section class="panel" id="p-files">
+    <div class="card">
+      <h2>Tệp tài liệu</h2>
+      <div class="row" style="margin-bottom:10px">
+        <select id="fstatus"><option value="">Mọi trạng thái</option><option>pending</option><option>ok</option>
+          <option>unsupported</option><option>skipped_too_large</option><option>error</option></select>
+        <span class="meta" id="fmeta" style="margin:0"></span>
+      </div>
+      <div class="links"><table><thead><tr><th>Tệp</th><th>Trạng thái</th><th class="n">Trang giới thiệu</th><th>Ghi chú</th><th></th></tr></thead>
+        <tbody id="frows"></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>Ảnh</h2>
+      <div class="row" style="margin-bottom:10px">
+        <select id="itpl"><option value="false">Ảnh trong bài</option><option value="true">Logo/icon khuôn</option></select>
+        <span class="meta" id="imeta" style="margin:0"></span>
+      </div>
+      <div class="links"><table><thead><tr><th>Ảnh</th><th>Chữ mô tả</th><th class="n">Trang giới thiệu</th><th></th></tr></thead>
+        <tbody id="irows"></tbody></table></div>
+    </div>
+  </section>
+
   <section class="panel" id="p-dash">
     <div class="grid" id="cards"></div>
 
@@ -349,6 +393,21 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
     </div>
 
     <div class="card">
+      <h2>Bóc tách và tệp (MongoDB)</h2>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn ghost" data-job="/api/extract/templates">1. Dựng bảng khuôn</button>
+        <button class="btn ghost" data-job="/api/extract/run">2. Bóc tách kho → Mongo</button>
+        <button class="btn ghost" data-job="/api/files/fetch">3. Tải tệp tài liệu</button>
+        <button class="btn ghost" data-job="/api/files/extract">4. Bóc chữ tệp</button>
+      </div>
+      <pre id="xlog">—</pre>
+      <h2 style="margin-top:14px">Độ phủ trường theo site</h2>
+      <div class="links"><table><thead><tr><th>Host</th><th class="n">Trang</th><th class="n">% tiêu đề</th>
+        <th class="n">% ngày</th><th class="n">% tác giả</th><th>Cách chọn khối</th></tr></thead>
+        <tbody id="covRows"></tbody></table></div>
+    </div>
+
+    <div class="card">
       <h2>Kho theo site</h2>
       <table><thead><tr>
         <th>Host</th><th class="n">Đã tải</th><th class="n">Hàng đợi</th>
@@ -365,6 +424,9 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
       <a class="x" id="mopen" href="#" target="_blank" rel="noopener noreferrer">Mở trang gốc</a>
       <button class="x" id="mclose">Đóng</button>
     </header>
+    <details id="mref" style="padding:6px 16px;font-size:13px;border-bottom:1px solid var(--line)">
+      <summary>Được giới thiệu bởi</summary><div id="mrefbody" class="meta">—</div>
+    </details>
     <!-- sandbox rỗng: không chạy script, không đọc được gì của trang cha -->
     <iframe id="mframe" sandbox=""></iframe>
   </div>
@@ -378,11 +440,14 @@ const mb = b => b >= 1e9 ? (b/1e9).toFixed(1)+' GB' : (b/1e6).toFixed(1)+' MB';
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   const p = t.dataset.p;
   document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
-  ['search', 'fetch', 'dash', 'browse', 'dict'].forEach(k => $('#p-' + k).classList.toggle('on', k === p));
+  ['search', 'fetch', 'dash', 'browse', 'dict', 'graph', 'files'].forEach(k => $('#p-' + k).classList.toggle('on', k === p));
   $('#sb').style.display = p === 'search' ? 'flex' : 'none';
   $('#sb2').style.display = p === 'search' ? 'flex' : 'none';
   if (p === 'dash') refresh();
   if (p === 'browse') { refresh(); doBrowse(); }
+  if (p === 'graph') veThongKeDoThi();
+  if (p === 'files') { veTep(); veAnh(); }
+  if (p === 'dash') veCoverage();
   if (p === 'dict' && !dictDaNap) { dictDaNap = true; docBrowseDict(true); }
 });
 
@@ -409,6 +474,7 @@ function thamSo() {
   if ($('#d1').value) p.set('date_from', $('#d1').value);
   if ($('#d2').value) p.set('date_to', $('#d2').value);
   if ($('#sort').value === 'date') p.set('sort', 'date');
+  if ($('#kind').value) p.set('kind', $('#kind').value);
   return p;
 }
 
@@ -461,8 +527,10 @@ async function doSearch(giuTrang) {
         <p class="frag">${fragHtml(h.fragments[0] || '')}</p>
         <div class="foot">
           <span class="chip g">${esc(h.host)}</span>
+          ${chipTepTacGia(h)}
           ${h.date ? `<span class="chip b">${esc(h.date)}</span>` : ''}
           ${diemHtml(h, d)}
+          ${nutDoThi(h.url)}
           ${dupHtml(h)}
         </div>
       </div>
@@ -476,15 +544,26 @@ async function doSearch(giuTrang) {
       ${h.fragments.slice(0, 2).map(f => `<p class="frag">…${fragHtml(f)}…</p>`).join('')}
       <div class="foot" style="margin-top:6px">
         <span class="chip g">${esc(h.host)}</span>
+        ${chipTepTacGia(h)}
         ${h.section ? `<span class="chip">${esc(h.section)}</span>` : ''}
         ${h.date ? `<span class="chip b">${esc(h.date)}</span>` : ''}
         ${diemHtml(h, d)}
+        ${nutDoThi(h.url)}
       </div>
       ${dupHtml(h)}
     </article>`).join('');
 
   vePhanTrang();
   noiBat.forEach((h, i) => dungAnh(h.url, i));
+}
+
+/** Nhãn "Tệp" cho kind=document và tên tác giả nếu có. */
+function chipTepTacGia(h) {
+  return (h.kind === 'document' ? '<span class="chip b">Tệp</span>' : '') +
+         (h.author ? `<span class="chip">✍ ${esc(h.author)}</span>` : '');
+}
+function nutDoThi(url) {
+  return `<button class="x" style="padding:2px 8px;font-size:12px" onclick="moDoThi(this.dataset.u)" data-u="${esc(url)}">Nguồn giới thiệu</button>`;
 }
 
 /** Điểm chỉ có ý nghĩa khi kết quả đang xếp theo score. */
@@ -563,6 +642,11 @@ async function moKhungLon(url) {
   const f = $('#mframe');
   nap(f, KHUNG_CSS + '<p style="color:#6f7180">đang mở…</p>');
   m.classList.add('on');
+  $('#mref').open = false;
+  $('#mrefbody').textContent = 'đang tải…';
+  fetch('/api/referrers?url=' + encodeURIComponent(url) + '&limit=15').then(r => r.json())
+    .then(d => { $('#mrefbody').innerHTML = d.content ? bangNguon(d) : esc(d.detail || 'không có dữ liệu Mongo'); })
+    .catch(() => { $('#mrefbody').textContent = 'không tải được'; });
   let html = khoAnh.get(url);
   if (html === undefined) {
     const r = await fetch('/api/preview?url=' + encodeURIComponent(url));
@@ -865,6 +949,109 @@ async function runIndex(reset) {
 $('#mclose').onclick = () => $('#modal').classList.remove('on');
 $('#modal').onclick = e => { if (e.target === $('#modal')) $('#modal').classList.remove('on'); };
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').classList.remove('on'); });
+
+// ---------------- đồ thị liên kết ----------------
+function bangNguon(d) {
+  const trong = d.content.map(e => `<tr><td><a href="${esc(e.src)}" target="_blank" rel="noopener noreferrer">${esc(e.src)}</a></td>
+    <td>${esc(e.text) || '<i>(không có chữ)</i>'}</td><td>${esc(e.type)}</td></tr>`).join('');
+  const menu = d.nav.map(e => `<tr><td>${esc(e.host)}</td><td>${esc(e.text) || '<i>(không có chữ)</i>'}</td>
+    <td class="n">${fmt(e.n_pages)} trang</td></tr>`).join('');
+  return `<p><b>${fmt(d.total_content)}</b> trang giới thiệu trong bài · <b>${fmt(d.total_nav)}</b> liên kết menu/footer</p>
+    ${trong ? `<div class="links"><table><thead><tr><th>Trang nguồn</th><th>Chữ mô tả</th><th>Loại</th></tr></thead><tbody>${trong}</tbody></table></div>` : ''}
+    ${menu ? `<div class="links" style="margin-top:8px"><table><thead><tr><th>Menu/footer của site</th><th>Chữ mô tả</th><th class="n">Có trên</th></tr></thead><tbody>${menu}</tbody></table></div>` : ''}
+    ${!trong && !menu ? '<p>Chưa có cạnh nào trỏ tới url này (hoặc chưa chạy bóc tách).</p>' : ''}`;
+}
+
+async function xemDoThi() {
+  const u = $('#gurl').value.trim();
+  if (!u) return;
+  $('#gout').textContent = 'Đang tải…';
+  try {
+    const [vao, ra] = await Promise.all([
+      fetch('/api/referrers?url=' + encodeURIComponent(u)).then(r => r.json()),
+      fetch('/api/graph/out?url=' + encodeURIComponent(u)).then(r => r.json())]);
+    if (!vao.content) { $('#gout').innerHTML = `<div class="err">${esc(vao.detail || 'lỗi')}</div>`; return; }
+    const rows = ra.edges.map(e => `<tr><td><a href="${esc(e.dst)}" target="_blank" rel="noopener noreferrer">${esc(e.dst)}</a></td>
+      <td>${esc(e.text) || '<i>(không có chữ)</i>'}</td><td>${esc(e.dst_kind)}</td></tr>`).join('');
+    $('#gout').innerHTML = `<h3>Đi vào ${esc(vao.url)}</h3>${bangNguon(vao)}
+      <h3 style="margin-top:14px">Đi ra (${ra.edges.length} cạnh trong bài)</h3>
+      <div class="links"><table><thead><tr><th>Đích</th><th>Chữ mô tả</th><th>Loại</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3">Không có.</td></tr>'}</tbody></table></div>`;
+  } catch (e) { $('#gout').innerHTML = `<div class="err">${esc(String(e))}</div>`; }
+}
+$('#ggo').onclick = xemDoThi;
+$('#gurl').onkeydown = e => { if (e.key === 'Enter') xemDoThi(); };
+function moDoThi(url) {
+  $('#gurl').value = url;
+  document.querySelector('.tab[data-p="graph"]').click();
+  xemDoThi();
+}
+async function veThongKeDoThi() {
+  try {
+    const d = await (await fetch('/api/graph/stats')).json();
+    if (d.pages === undefined) { $('#gstats').textContent = d.detail || 'chưa có dữ liệu'; return; }
+    $('#gstats').innerHTML = `${fmt(d.pages)} trang · ${fmt(d.content_edges)} cạnh trong bài · ${fmt(d.nav_edges)} cạnh menu/footer · ${fmt(d.images)} ảnh
+      <div class="links"><table><thead><tr><th>Được trỏ tới nhiều nhất (cạnh trong bài)</th><th class="n">Cạnh vào</th></tr></thead><tbody>
+      ${d.top_in_degree.map(t => `<tr><td><a href="#" onclick="moDoThi(this.dataset.u);return false" data-u="${esc(t.url)}">${esc(t.url)}</a></td><td class="n">${fmt(t.in_content_edges)}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  } catch (e) { $('#gstats').textContent = 'không tải được'; }
+}
+
+// ---------------- tệp & ảnh ----------------
+async function veTep() {
+  const p = new URLSearchParams({ limit: 100 });
+  if ($('#fstatus').value) p.set('status', $('#fstatus').value);
+  const d = await (await fetch('/api/files?' + p)).json();
+  if (d.items === undefined) { $('#fmeta').textContent = d.detail || 'lỗi'; $('#frows').innerHTML = ''; return; }
+  $('#fmeta').textContent = `${fmt(d.total)} tệp · ` + Object.entries(d.by_status).map(([k, v]) => `${k}: ${fmt(v)}`).join(' · ');
+  $('#frows').innerHTML = d.items.map(f => `<tr>
+    <td><a href="${esc(f.url)}" target="_blank" rel="noopener noreferrer">${esc(decodeURIComponent(f.url.split('/').pop().split('?')[0]) || f.url)}</a>
+      <div class="url">${esc(f.host)} · ${esc(f.ext)}</div></td>
+    <td>${esc(f.status)}</td><td class="n">${fmt(f.referrers)}</td>
+    <td>${f.needs_ocr ? 'PDF scan, chưa OCR' : ''}${f.encoding_suspect ? ' nghi sai bảng mã' : ''}${esc(f.error || '')}</td>
+    <td><button class="x" onclick="moDoThi(this.dataset.u)" data-u="${esc(f.url)}">Nguồn</button></td></tr>`).join('')
+    || '<tr><td colspan="5">Chưa có tệp nào. Chạy bước 3 ở Bảng điều khiển.</td></tr>';
+}
+async function veAnh() {
+  const d = await (await fetch('/api/images?limit=100&template=' + $('#itpl').value)).json();
+  if (d.items === undefined) { $('#imeta').textContent = d.detail || 'lỗi'; $('#irows').innerHTML = ''; return; }
+  $('#imeta').textContent = `${fmt(d.total)} ảnh (không tải, chỉ lưu nguồn)`;
+  $('#irows').innerHTML = d.items.map(i => `<tr>
+    <td class="url"><a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${esc(i.url)}</a></td>
+    <td>${esc(i.alts.join(' · '))}</td><td class="n">${fmt(i.referrers)}</td>
+    <td><button class="x" onclick="moDoThi(this.dataset.u)" data-u="${esc(i.url)}">Nguồn</button></td></tr>`).join('')
+    || '<tr><td colspan="4">Chưa có ảnh nào.</td></tr>';
+}
+$('#fstatus').onchange = veTep;
+$('#itpl').onchange = veAnh;
+
+// ---------------- bóc tách (Mongo) trên bảng điều khiển ----------------
+let xTimer = null;
+document.querySelectorAll('[data-job]').forEach(b => b.onclick = async () => {
+  const r = await fetch(b.dataset.job, { method: 'POST' });
+  const d = await r.json();
+  if (!r.ok) { $('#xlog').textContent = 'Lỗi ' + r.status + ': ' + (d.detail || JSON.stringify(d)); return; }
+  theoDoiJob();
+});
+async function theoDoiJob() {
+  clearInterval(xTimer);
+  const tick = async () => {
+    const d = await (await fetch('/api/extract/status')).json();
+    $('#xlog').textContent = JSON.stringify(d, null, 2);
+    if (!d.running) { clearInterval(xTimer); veCoverage(); }
+  };
+  xTimer = setInterval(tick, 2000); tick();
+}
+async function veCoverage() {
+  try {
+    const d = await (await fetch('/api/extract/coverage')).json();
+    if (d.detail) { $('#covRows').innerHTML = `<tr><td colspan="6">${esc(d.detail)}</td></tr>`; return; }
+    $('#covRows').innerHTML = Object.entries(d).sort((a, b) => b[1].pages - a[1].pages).map(([h, v]) => `<tr>
+      <td>${esc(h)}</td><td class="n">${fmt(v.pages)}</td><td class="n">${v.title_pct}</td><td class="n">${v.published_at_pct}</td>
+      <td class="n">${v.author_pct}</td><td>${Object.entries(v.methods).map(([k, n]) => k + ' ' + n).join(' · ')}</td></tr>`).join('')
+      || '<tr><td colspan="6">Chưa bóc tách. Bấm bước 2.</td></tr>';
+  } catch (e) { /* Mongo chưa lên: bỏ qua */ }
+}
 
 $('#irun').onclick = () => runIndex(false);
 $('#ireset').onclick = () => { if (confirm('Xoá sạch index rồi dựng lại từ đầu?')) runIndex(true); };

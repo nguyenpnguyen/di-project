@@ -22,11 +22,14 @@ import urllib.parse
 from typing import Iterator
 
 import httpx
-from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+from boc_tach import boc_tach, lien_ket
+from routes_bt import router as bt_router
+from boc_tach.html_sach import clean_space, don_html, join_http
 
 CRAWLER = pathlib.Path(os.getenv("CRAWLER_DIR", "/crawler"))
 DATA = pathlib.Path(os.getenv("DATA_DIR", "/crawler/data"))
@@ -69,41 +72,16 @@ def records(d: pathlib.Path) -> Iterator[dict]:
             continue
 
 
-def _join_http(base_url: str, href: str) -> str:
-    """Ghép url và chỉ trả về link HTTP(S), bỏ fragment."""
-    href = (href or "").strip()
-    if not href:
-        return ""
-    url = urllib.parse.urldefrag(urllib.parse.urljoin(base_url, href))[0]
-    parsed = urllib.parse.urlsplit(url)
-    return url if parsed.scheme.lower() in {"http", "https"} and parsed.netloc else ""
-
-
-def _clean_space(value: str) -> str:
-    return re.sub(r"\s+", " ", value or "").strip()
+_join_http = join_http
+_clean_space = clean_space
 
 
 def outgoing_links(body, base_url: str) -> list[dict]:
-    """Bóc các liên kết trong phần thân, chuẩn hóa và khử trùng theo URL."""
-    out: list[dict] = []
-    seen: dict[str, int] = {}
+    """Liên kết href trong phần thân, chuẩn hoá qua norm() và khử trùng theo url."""
     if body is None:
-        return out
-    for anchor in body.select("a[href]"):
-        url = _join_http(base_url, anchor.get("href") or "")
-        if not url:
-            continue
-        text = _clean_space(anchor.get_text(" ", strip=True))
-        if not text:
-            text = _clean_space(anchor.get("title") or anchor.get("aria-label") or "")
-        if url in seen:
-            i = seen[url]
-            if not out[i]["text"] and text:
-                out[i]["text"] = text
-            continue
-        seen[url] = len(out)
-        out.append({"url": url, "text": text})
-    return out
+        return []
+    noi_dung, _ = lien_ket.chia(lien_ket.thu_thap(body, base_url), body)
+    return lien_ket.canh_ra_cong_khai(noi_dung)
 
 
 def _date_or_empty(value: str | None) -> str:
@@ -117,93 +95,12 @@ def _date_or_empty(value: str | None) -> str:
     return value
 
 
-def extract(rec: dict) -> dict | None:
-    """Bản ghi thô -> tài liệu để index. None nếu không phải trang đọc được."""
+def extract(rec: dict, khuon: set[str] | None = None) -> dict | None:
+    """Bản ghi thô -> tài liệu bóc tách. None nếu không phải trang đọc được."""
     if not rec.get("html_b64") or (rec.get("status") or 0) >= 400:
         return None
     html = base64.b64decode(rec["html_b64"]).decode(rec.get("encoding") or "utf-8", "replace")
-    soup = BeautifulSoup(html, "lxml")
-
-    def prop(name):
-        t = soup.select_one(f"[itemprop='{name}']")
-        return (t.get("content") or t.get_text(" ", strip=True)).strip() if t else ""
-
-    def meta(**kw):
-        t = soup.find("meta", kw)
-        return (t.get("content") or "").strip() if t else ""
-
-    title = (prop("headline") or meta(property="og:title")
-             or (soup.title.get_text(strip=True) if soup.title else ""))
-    body = soup.select_one(".bodytext") or soup.select_one("main") or soup.body
-    if body:
-        for tag in body(["script", "style", "nav", "footer"]):
-            tag.decompose()
-    text = body.get_text(" ", strip=True) if body else ""
-    text = re.sub(r"\s+", " ", text)
-    if not title and not text:
-        return None
-    parsed = urllib.parse.urlsplit(rec["url"])
-    return {
-        "url": rec["url"],
-        "title": title[:500],
-        "text": text[:200_000],
-        "html": don_html(body, rec["url"]),
-        "host": (parsed.hostname or "").lower(),
-        "section": meta(property="article:section") or "",
-        "date": (prop("datePublished") or rec.get("lastmod") or "")[:10],
-        "outgoing_links": outgoing_links(body, rec["url"]),
-    }
-
-
-# thẻ giữ lại khi dọn: đủ để trang xem trước còn ra hình hài bài báo
-THE_GIU = {"p", "br", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li",
-           "blockquote", "figure", "figcaption", "table", "thead", "tbody", "tr",
-           "th", "td", "strong", "b", "em", "i", "u", "sub", "sup", "img", "a",
-           "div", "span", "section", "article"}
-THUOC_TINH_GIU = {"a": ["href"], "img": ["src", "alt"]}
-
-
-def don_html(body, goc: str) -> str:
-    """HTML rút gọn để xem trước, dựng từ bản đã tải chứ không gọi lại site.
-
-    Bỏ script/style/form/iframe và toàn bộ thuộc tính trừ href/src/alt: giữ
-    nguyên class của trang gốc thì phải kéo cả CSS của họ về mới ra hình, mà
-    kéo CSS nghĩa là mỗi lần xem trước lại bắn thêm chục request sang
-    hust.edu.vn — đúng cái đang bị chặn. Bỏ hết rồi tự tô bằng CSS của mình thì
-    trang xem trước không phát sinh request nào ngoài ảnh.
-    """
-    if body is None:
-        return ""
-    ban = BeautifulSoup(str(body), "lxml")
-    for tag in ban(["script", "style", "form", "iframe", "noscript", "svg",
-                    "button", "input", "select", "nav", "footer", "header"]):
-        tag.decompose()
-    for tag in ban.find_all(True):
-        if tag.name not in THE_GIU:
-            tag.unwrap()
-            continue
-        giu = THUOC_TINH_GIU.get(tag.name, [])
-        tag.attrs = {k: v for k, v in tag.attrs.items() if k in giu}
-        if tag.name == "img":
-            src = _join_http(goc, tag.get("src") or "")
-            if not src:
-                tag.decompose()
-                continue
-            tag["src"] = src
-            tag["loading"] = "lazy"
-        elif tag.name == "a":
-            href = _join_http(goc, tag.get("href") or "")
-            if not href:
-                tag.unwrap()
-                continue
-            tag["href"] = href
-            tag["target"] = "_blank"
-            tag["rel"] = "noopener"
-    out = str(ban)
-    # Chặn ở 40 KB: trang xem trước chỉ cần đủ nhận ra bài, mà 2.800 tài liệu
-    # nhân vài chục KB là index phình lên hàng trăm MB cho một thứ chỉ dùng cho
-    # năm kết quả đầu mỗi lượt tìm.
-    return out[:40_000]
+    return boc_tach(html, rec["url"], khuon)
 
 
 # --------------------------------------------------------------------- mô hình
@@ -676,10 +573,34 @@ def health():
     return {"api": True, "lucene": lucene_ok, "crawler_dir": str(CRAWLER), "data_dir": str(DATA)}
 
 
+def tat_ca_ban_ghi() -> Iterator[dict]:
+    """Mọi bản ghi của mọi kho, bỏ url trùng."""
+    seen: set[str] = set()
+    for d in kho_dirs():
+        for rec in records(d):
+            if rec["url"] not in seen:
+                seen.add(rec["url"])
+                yield rec
+
+
 # --------------------------------------------------------------------- giao diện
 @app.get("/")
 def home():
     return FileResponse(STATIC / "index.html")
+
+
+app.include_router(bt_router)
+
+
+@app.on_event("startup")
+def _khoi_tao_mongo():
+    """Tạo lược đồ Mongo nếu kết nối được; Mongo chưa lên thì API vẫn chạy (tìm kiếm
+    không phụ thuộc Mongo), các route bóc tách sẽ trả 503."""
+    try:
+        import db
+        db.init(db.get_db())
+    except Exception as e:
+        print(f"[mongo] chưa khởi tạo được lược đồ: {e}", flush=True)
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

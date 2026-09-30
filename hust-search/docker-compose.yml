@@ -10,16 +10,30 @@ services:
       timeout: 3s
       retries: 12
 
+  mongo:
+    image: mongo:7.0
+    volumes:
+      - mongo-data:/data/db          # kết quả bóc tách; xoá container không mất
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    # không mở cổng ra host: stack chưa có xác thực (README mục 10)
+
   api:
     build: ./api
     depends_on:
       lucene: {condition: service_healthy}
+      mongo: {condition: service_healthy}
     volumes:
       - ../hust-crawler:/crawler     # dùng chung code và kho với crawler đang có
       - ./api:/app                   # sửa API hoặc giao diện không phải build lại image
     ports: ["8000:8000"]
     environment:
       LUCENE_URL: http://lucene:8081
+      MONGO_URL: mongodb://mongo:27017
 
 volumes:
   lucene-index:
+  mongo-data:

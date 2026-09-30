@@ -46,17 +46,15 @@ Luồng hiện tại: `kho thô → api/main.py extract() → POST lucene:8081/b
 
 ---
 
-## 2. Cách hiểu đề — chỗ còn mơ hồ
+## 2. Các quyết định đã chốt (30/9)
 
-**"Nguồn giới thiệu"** có ít nhất hai cách hiểu:
-
-- (A) *Trang nào trỏ tới đối tượng này, bằng dòng chữ gì.* Là cách hiểu duy nhất
-  dùng được cho **ảnh**, và khớp với mục "đồ thị liên kết". → **Kế hoạch theo
-  cách này**: nguồn giới thiệu của X = các cạnh `nguồn --> X`.
-- (B) *Dòng trích nguồn trong bài* ("Nguồn: …", "Theo …"). Bóc thêm thành
-  trường phụ `cited_source`.
-
-**"Lưu vào MongoDB?"** chưa chốt — xem mục 8. Nên hỏi giảng viên cả hai điểm.
+| Câu hỏi | Chốt |
+|---|---|
+| "Nguồn giới thiệu" nghĩa là gì | **Trang nào trỏ tới đối tượng này, bằng dòng chữ gì** — tức các cạnh `nguồn --> X` trong đồ thị. Dòng "Nguồn: …" trong bài chỉ bóc thêm thành trường phụ `cited_source`. |
+| Có dùng MongoDB | **Có.** Không bắt buộc nhưng chọn dùng. |
+| Tải tệp ở host ngoài (Google Drive…) | **Không.** Chỉ ghi cạnh trỏ tới, không tải, không bóc chữ. |
+| OCR PDF scan | **Không.** Vẫn gắn cờ `needs_ocr` để biết tệp nào không có lớp chữ. |
+| Đồ thị gồm những cạnh nào | **Chưa chốt** — xem giải thích và đề xuất ở mục 5.4. |
 
 ---
 
@@ -206,8 +204,8 @@ Mỗi trường là chuỗi ưu tiên, lưu `*_src` (lấy từ đâu) để đo
 
 **Danh mục (offline, từ HTML đã có):** `a[href]` đuôi `pdf doc docx xls xlsx
 ppt pptx`; url có `download=1`; bản ghi kho thô có `html_b64 = null` và
-`content_type` là pdf/word/excel (byte chưa được lưu). Host `*.hust.edu.vn` thì
-tải; host ngoài (Google Drive…) chỉ ghi cạnh — **cần chốt** (mục 10).
+`content_type` là pdf/word/excel (byte chưa được lưu). **Chỉ tải host
+`*.hust.edu.vn`**; host ngoài (Google Drive…) chỉ ghi cạnh, `dst_kind = "external"`.
 
 **Tải — `POST /api/files/fetch` (chạy nền, cùng kiểu `/api/crawl/start`):**
 - **từ chối (409) khi crawler đang chạy** (`_alive()`), và ngược lại
@@ -230,7 +228,8 @@ chưa biết.
 | doc/xls/ppt cũ | bỏ, `status="unsupported"` | LibreOffice headless làm image nặng thêm nhiều |
 
 Cờ rủi ro: `needs_ocr` (PDF scan, ≈ 0 ký tự/trang), `encoding_suspect` (bảng mã
-cũ TCVN3/VNI, tỉ lệ ký tự có dấu hợp lệ thấp bất thường). OCR là tuỳ chọn.
+cũ TCVN3/VNI, tỉ lệ ký tự có dấu hợp lệ thấp bất thường). **Không làm OCR** —
+tệp `needs_ocr` vẫn có bản ghi và nguồn giới thiệu, chỉ không có `text`.
 
 **Tìm được:** tệp có chữ được index vào Lucene với `kind="document"`.
 
@@ -238,30 +237,86 @@ cũ TCVN3/VNI, tỉ lệ ký tự có dấu hợp lệ thấp bất thường). 
 
 Không tải ảnh — đề chỉ cần nguồn giới thiệu. Bóc offline: `img[src]`,
 `img[data-src]`, `og:image`, microdata `image`. Văn bản mô tả: `alt` → `title`
-→ `figcaption`. Cờ `in_content`, `is_template` (logo/icon lặp khắp host, đường
-dẫn `/themes/`, `width/height ≤ 16`) — đánh dấu, không xoá.
+→ `figcaption`. Ảnh trong thân bài → cạnh `embed` ở `links`; logo/icon lặp khắp
+host (đường dẫn `/themes/`, `width/height ≤ 16`, hoặc lặp theo lớp 2) → `nav_links`
+và `images.is_template = true` — đánh dấu, không xoá.
 
 ### 5.4. Đồ thị liên kết (`lien_ket.py`)
 
-Cạnh = `(src, dst, type, text)`:
+#### Đồ thị biểu diễn cái gì
 
-| Trường | Giá trị |
-|---|---|
-| `src`, `dst` | url qua `crawl_all.norm()` |
-| `type` | `href` / `embed` (ảnh) |
-| `text` | chữ `<a>` → `title` → `aria-label` → `alt` ảnh con |
-| `dst_kind` | `page` / `document` / `image` / `external` / `other` |
-| `in_content`, `is_template` | cạnh trong khối nội dung / cạnh khuôn (menu, footer) |
-| `count`, `src_host`, `dst_host` | |
+- **Nút** = một url: trang, tệp tài liệu, ảnh, hoặc trang ở site ngoài.
+- **Cạnh** `A --> B : "chữ"` = trang A có một thẻ `<a href=B>chữ</a>` (hoặc
+  `<img src=B alt="chữ">`). "Văn bản mô tả" là dòng chữ người viết trang A dùng
+  để giới thiệu B.
 
-Thay `outgoing_links()` hiện tại bằng bản này: `outgoing_links` trong schema
-public = cạnh `href` có `in_content = true` → giữ tương thích test cũ.
+Ví dụ **minh hoạ** (url và chữ bịa cho dễ hình dung, không lấy từ kho thật):
 
-Quy mô: menu in cả trăm link mỗi trang, cạnh thô có thể lên hàng triệu —
-**chưa đo**. Giữ hết nhưng mặc định truy vấn chỉ lấy `in_content = true`.
+```
+                              menu "Tuyển sinh"  (có trên MỌI trang)
+      mọi trang hust.edu.vn ─────────────────────────────► /vi/tuyen-sinh/
 
-Xuất `GET /api/graph/edges.csv` (`source,target,text`) cho Gephi / networkx.
-Tuỳ chọn về sau: bậc vào / PageRank làm tín hiệu cho `ranking=enhanced`.
+ /vi/tuyen-sinh/  ──"Điểm chuẩn năm 2026"──►  .../diem-chuan-...-656013.html
+                                                     │
+                   ┌──"Xem chi tiết tại đây"─────────┤  (trong thân bài)
+                   ▼                                 │
+       /uploads/.../diem-chuan-2026.pdf              │
+                                                     └──(img alt="Lễ khai giảng")──► /uploads/.../anh1.jpg
+```
+
+Đọc ngược mũi tên là ra **nguồn giới thiệu**:
+- `diem-chuan-2026.pdf` được giới thiệu bởi bài điểm chuẩn, bằng chữ "Xem chi tiết tại đây";
+- bài điểm chuẩn được giới thiệu bởi trang `/vi/tuyen-sinh/`, bằng chữ "Điểm chuẩn năm 2026";
+- `/vi/tuyen-sinh/` được giới thiệu bởi menu của cả site.
+
+Nghĩa là **đồ thị chính là cách tính "nguồn giới thiệu"** cho cả ba loại (trang,
+tệp, ảnh) — không phải một việc riêng rẽ.
+
+#### Hai loại cạnh khác hẳn nhau về ý nghĩa
+
+| | Cạnh nội dung | Cạnh khuôn (menu, footer, sidebar) |
+|---|---|---|
+| Nằm ở | trong khối nội dung (mục 4) | ngoài khối, lặp trên nhiều trang |
+| Ý nghĩa | người viết bài **chủ động** giới thiệu B | cấu trúc điều hướng của site |
+| Số lượng | vài đến vài chục cạnh mỗi trang | cả trăm link mỗi trang × mọi trang |
+| Ví dụ | bài → tệp PDF đính kèm | mọi trang → "Tuyển sinh" |
+
+Nếu lưu cạnh khuôn theo từng trang thì mỗi link menu thành hàng nghìn cạnh giống
+hệt nhau: "nguồn giới thiệu" của `/vi/tuyen-sinh/` sẽ là một danh sách hàng
+nghìn trang, không ai đọc được. Quy mô thô có thể lên hàng triệu cạnh — **ước
+lượng, chưa đo**.
+
+#### Đề xuất (chờ xác nhận)
+
+Lưu hai tầng:
+
+1. **`links` — cạnh nội dung, giữ từng cạnh:** `src` (trang), `dst`, `type`
+   (`href` / `embed`), `text`, `dst_kind` (`page` / `document` / `image` /
+   `external`), `count`, `src_host`, `dst_host`.
+2. **`nav_links` — cạnh khuôn, gộp mỗi host một bản:** `host`, `dst`, `text`,
+   `n_pages` (xuất hiện trên bao nhiêu trang), `sample_src` (vài trang ví dụ).
+   Nguồn giới thiệu của `/vi/tuyen-sinh/` khi đó đọc được: *"menu của
+   hust.edu.vn, chữ 'Tuyển sinh', có trên 1.980 trang"* (số minh hoạ).
+
+Cạnh được xếp vào tầng nào là nhờ thuật toán khối nội dung (mục 4) và bảng khối
+lặp (lớp 2) — thêm một lý do để làm mục 4 trước.
+
+Mọi url qua `crawl_all.norm()`. Văn bản mô tả: chữ `<a>` → `title` →
+`aria-label` → `alt` của ảnh con; với ảnh là `alt` → `title` → `figcaption`.
+
+`outgoing_links` trong schema public = cạnh `href` trong `links` của trang đó →
+giữ tương thích test cũ.
+
+#### Đồ thị dùng để làm gì
+
+- **Nguồn giới thiệu** cho trang / tệp / ảnh (yêu cầu chính của đề).
+- **Tệp và ảnh nào được giới thiệu nhiều nhất**, trang nào trỏ tới nhiều tệp nhất.
+- **Liên kết giữa các site:** subdomain nào trỏ sang subdomain nào (gộp nút theo host).
+- **Tuỳ chọn cho tìm kiếm:** chữ mô tả của cạnh trỏ vào là một cách người khác
+  "gọi tên" trang đó — index thêm làm trường phụ (anchor text); bậc vào / PageRank
+  làm tín hiệu cho `ranking=enhanced`.
+- **Xuất** `GET /api/graph/edges.csv` (`source,target,text`) để vẽ bằng Gephi /
+  networkx.
 
 ---
 
@@ -284,22 +339,25 @@ documents {
 }
 images    { _id: "<url>", host, alts: [str], is_template }
 links     { _id: sha1(src|dst|type|text), src, dst, type, text, dst_kind,
-            in_content, is_template, count, src_host, dst_host }
+            count, src_host, dst_host }                  // cạnh nội dung
+nav_links { _id: sha1(host|dst|type|text), host, dst, type, text, dst_kind,
+            n_pages, sample_src: [url] }                  // cạnh khuôn, gộp theo host
 templates { _id: "<host>", n_pages, blocks: { <vân tay>: số trang } }
 ```
 
 Ràng buộc bằng `$jsonSchema` (phần "tự xây dựng lược đồ"), tạo trong `db.py`
-lúc `api` khởi động. Index: `links {dst:1}`, `links {src:1}`, `pages {host:1,
-published_at:-1}`.
+lúc `api` khởi động. Index: `links {dst:1}`, `links {src:1}`, `nav_links {dst:1}`,
+`pages {host:1, published_at:-1}`.
 
 Nguồn giới thiệu của bất kỳ trang / tệp / ảnh nào:
 
 ```js
-db.links.find({ dst: "<url>", is_template: false }, { src: 1, text: 1 })
+db.links.find({ dst: "<url>" }, { src: 1, text: 1 })            // ai giới thiệu trong bài
+db.nav_links.find({ dst: "<url>" }, { host: 1, text: 1, n_pages: 1 })  // menu nào trỏ tới
 ```
 
-Một nguồn sự thật là `links`, không chép mảng `referrers` vào từng bản ghi — nạp
-lại không bị lệch. Ghi bằng upsert theo `_id` nên chạy lại không nhân đôi.
+Nguồn sự thật là `links` + `nav_links`, không chép mảng `referrers` vào từng bản
+ghi — nạp lại không bị lệch. Ghi bằng upsert theo `_id` nên chạy lại không nhân đôi.
 
 `docker-compose.yml`: thêm service `mongo` (image `mongo`, volume `mongo-data`,
 healthcheck), `api` thêm `depends_on: mongo` và biến `MONGO_URL`. Không mở cổng
@@ -335,11 +393,11 @@ Giao diện (`static/index.html`):
 - kết quả tìm: hiện tác giả, ngày, nhãn `Trang`/`Tệp`; bộ lọc `kind`;
 - xem trước: khối **"Được giới thiệu bởi"** (gọi `/api/referrers`);
 - tab **Đồ thị liên kết**: nhập url → bảng cạnh vào / ra kèm văn bản mô tả;
-- tab **Tệp & ảnh**: danh sách tệp (trạng thái, cờ OCR) và ảnh, mỗi dòng có nguồn.
+- tab **Tệp & ảnh**: danh sách tệp (trạng thái, cờ `needs_ocr`) và ảnh, mỗi dòng có nguồn.
 
 ---
 
-## 8. Có nên dùng MongoDB? (đề xuất, không phải kết luận)
+## 8. Vì sao MongoDB (đã chọn)
 
 | | MongoDB | Chỉ Lucene như hiện nay | PostgreSQL | Neo4j |
 |---|---|---|---|---|
@@ -348,10 +406,10 @@ Giao diện (`static/index.html`):
 | Truy vấn đồ thị nhiều bước | `$graphLookup`, hạn chế | không | CTE đệ quy | mạnh nhất |
 | Thêm vào stack | 1 service | 0 | 1 service | 1 service |
 
-Lucene không hợp để lưu đồ thị và quan hệ "ai trỏ tới ai", nên cần thêm một kho.
-MongoDB hợp với dữ liệu bán cấu trúc này nếu môn không bắt buộc hệ khác; nếu
-trọng tâm chấm điểm là phân tích đồ thị thì Neo4j đáng cân nhắc hơn. Tôi không
-biết yêu cầu chấm của môn — cần hỏi giảng viên.
+Lucene không hợp để lưu quan hệ "ai trỏ tới ai", nên cần thêm một kho. Truy vấn
+cần cho đề bài (nguồn giới thiệu = cạnh đi vào một bước, thống kê bậc, xuất
+CSV) đều là truy vấn một bước — MongoDB làm tốt. Phân tích nhiều bước (đường đi,
+PageRank) nếu cần thì xuất CSV sang networkx, không đòi hỏi đổi kho.
 
 ---
 
@@ -383,10 +441,7 @@ không nhân bản ghi; `/api/files/fetch` trả 409 khi crawler đang chạy;
 
 ---
 
-## 10. Câu hỏi cần chốt trước khi làm
+## 10. Còn cần chốt
 
-1. "Nguồn giới thiệu" theo cách hiểu (A) hay (B)?
-2. MongoDB bắt buộc hay tuỳ chọn? Có yêu cầu phân tích đồ thị không?
-3. Tệp ở host ngoài (Google Drive…) có phải tải và bóc chữ không?
-4. Đồ thị nộp toàn bộ cạnh hay chỉ cạnh trong khối nội dung?
-5. Có cần OCR PDF scan không?
+1. Đồ thị lưu hai tầng `links` (cạnh nội dung, từng cạnh) + `nav_links` (cạnh
+   menu/footer, gộp theo host) như mục 5.4 — đồng ý không?

@@ -74,6 +74,18 @@ read_raw.py    → mở kho thô: thống kê, tìm kiếm, đối chiếu khuy�
 crawl_hust.py  → wrapper có parse: bóc bài viết ra bản ghi phẳng JSONL/CSV
 ```
 
+```mermaid
+flowchart LR
+    WEB(["hust.edu.vn"]) -->|"crawl_all.py<br/>≤ 25 req/phút"| KHO[("data/raw*/<br/>pages-*.jsonl.gz<br/>state.json")]
+    KHO --> RR["read_raw.py<br/>--stats --audit --check<br/>--fix-roots --links"]
+    RR --> LINKS["N1-links"]
+    KHO --> CH["crawl_hust.py<br/>17 trường JSONL/CSV"]
+    KHO -->|"mount /crawler"| HS["hust-search<br/>bóc tách → Mongo → Lucene"]
+```
+
+Sơ đồ chi tiết của vòng crawl, nhịp tự dò, khử trùng và phân trang ở
+`../BAO-CAO-KY-THUAT.md` mục 2.
+
 Tách ba tầng vì **tải là phần đắt và bị rate-limit, parse thì rẻ và hay phải sửa**.
 Có kho thô rồi thì sửa selector bao nhiêu lần cũng không phải đụng lại mạng —
 đúng tinh thần wrapper trong bài giảng: nguồn dữ liệu và bộ bóc tách là hai thứ
@@ -825,15 +837,19 @@ kho biết mình đến từ nguồn nào, qua đường nào.
 
 ## 9. Giới hạn đã biết
 
-* **Không tải file đính kèm.** PDF/DOC/ảnh chỉ được *lập danh mục* url
-  (197 file, xem `assets.txt`), không tải nội dung. Muốn tải thì viết thêm một
-  vòng đọc `assets.txt` — cùng nhịp rate-limit, 197 file ≈ 8 phút.
+* **Crawler không tải file đính kèm.** PDF/DOC/ảnh chỉ được *lập danh mục* url
+  (197 file, xem `assets.txt`). Việc tải và bóc chữ tệp nay làm ở tầng
+  `hust-search` (`POST /api/files/fetch`, `/api/files/extract`, ghi vào
+  `data/files/`), lấy danh sách tệp từ đồ thị liên kết chứ không từ `assets.txt`.
+  Hai việc không được chạy cùng lúc (API trả 409) vì cộng nhịp sẽ vượt ngưỡng chặn.
 * **Trang không phải HTML chỉ lưu metadata.** Endpoint kiểu
   `/vi/lich-lam-viec/export/?...` trả về PDF/DOCX; bản ghi vẫn có `url`, `status`,
   `content_type`, `sha1` nhưng `html_b64` là `null`. `read_raw.py --check` tính
   chúng là "có bản ghi", không phải khuyết.
-* **Không chạy JavaScript.** Trang nào dựng nội dung bằng JS thì crawler chỉ thấy
-  khung rỗng. Đã kiểm tra: phần tin tức là HTML tĩnh nên không ảnh hưởng.
+* **Đường tải chính không chạy JavaScript.** Trang dựng nội dung bằng JS thì
+  `requests` chỉ thấy khung rỗng; bật `--render auto|always` để dùng `render.py`
+  (Chromium qua Playwright), chậm hơn nhiều. Phần tin tức của hust.edu.vn là HTML
+  tĩnh nên không ảnh hưởng.
 * **`/70year/index.html` nặng 7 MB** — một trang chuyên đề dựng sẵn, tải được
   nhưng chiếm chỗ bất thường so với trang thường (~130 KB).
 * **Mẫu thiên về bài mới.** Sitemap sắp theo `lastmod` giảm dần nên bài cũ nằm ở

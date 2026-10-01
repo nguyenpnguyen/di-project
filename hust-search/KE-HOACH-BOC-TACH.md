@@ -18,9 +18,13 @@ Mọi ước lượng thời gian, ngưỡng và quy mô ở đây là **phỏng
 dữ liệu thật (container dùng để viết tài liệu này không có `data/` và không vào
 được hust.edu.vn).
 
+> Đây là tài liệu **kế hoạch**; mục 1 tả hiện trạng *trước khi làm*. Cách hệ thống
+> chạy **hiện nay**, kèm sơ đồ từng thuật toán, ở `../BAO-CAO-KY-THUAT.md` mục 3-5.
+> Tiến độ ở mục 11.
+
 ---
 
-## 1. Hiện trạng `hust-search` so với đề
+## 1. Hiện trạng `hust-search` so với đề (lúc lập kế hoạch, 26/9)
 
 Luồng hiện tại: `kho thô → api/main.py extract() → POST lucene:8081/bulk → index`.
 
@@ -132,7 +136,7 @@ Boilerpipe — Kohlschütter và cs., WSDM 2010) và khử khuôn mẫu theo c�
 lại trước khi trích dẫn.
 
 **Lớp 1 — dọn cây.** Bỏ `script style noscript iframe form svg button input
-select`, thẻ `hidden` / `style="display:none"`, comment.
+select nav footer aside template`, thẻ `hidden` / `style="display:none"`, comment.
 
 **Lớp 2 — khử khuôn theo host (`khuon.py`).** Kho có nhiều trang mỗi host nên
 đếm được khối nào lặp:
@@ -145,24 +149,28 @@ select`, thẻ `hidden` / `style="display:none"`, comment.
 Lưu bảng đếm vào Mongo collection `templates` (một document mỗi host), dựng một
 lần qua `POST /api/extract/templates`, dùng lại cho `/api/fetch` lẻ.
 
-**Lớp 3 — chấm điểm nút.** Với mỗi ứng viên (`div section article main td`):
+**Lớp 3 — chấm điểm nút.** Với mỗi ứng viên (`div section article main td table tbody tr`):
 
 | Đặc trưng | Ý nghĩa |
 |---|---|
 | `C` | số ký tự văn bản |
 | `LC` | số ký tự trong `<a>` |
-| `P` | số đoạn `<p>` có ≥ 1 câu |
+| `P` | số đoạn `<p>` có ≥ 25 ký tự và ≥ 1 dấu câu |
 | `Q` | số dấu câu `. , ; : ? !` |
 
 ```
 mật_độ_link = LC / max(C, 1)
-điểm(n) = (C - LC) · (1 - mật_độ_link)^α + β·P + γ·Q
-          × phạt nếu class/id khớp nav|menu|footer|header|sidebar|comment|share|related|breadcrumb|banner|widget
-          × thưởng nếu khớp content|article|post|entry|detail|bodytext
+điểm(n) = (C - LC) · (1 - mật_độ_link)^α + β·P + γ·Q            α=2, β=30, γ=1
+          × 0,3 nếu class/id khớp nav|menu|footer|header|sidebar|comment|share|related|breadcrumb|banner|widget|…
+          × 1,3 nếu khớp content|article|post|entry|detail|bodytext|main|news-body|noi-dung
 ```
 
-Chọn nút điểm cao nhất, nới sang anh em cùng cha có điểm ≥ δ·điểm_max và mật độ
-link thấp. α, β, γ, δ **dò trên tập đánh giá**.
+**Đã cài khác bản nháp:** bản nháp định "chọn nút điểm cao nhất rồi nới sang anh
+em". Bản cài đặt đi **từ `body` xuống**: mỗi bậc chọn con có điểm × hệ số cao nhất,
+còn giữ được ≥ δ = 0,65 điểm của cha thì đi tiếp, không thì dừng và lấy cha (chữ
+đang trải đều nhiều con). Không có bước nới sang anh em. α, β, γ, δ vẫn là khởi
+điểm, **chưa dò trên tập đánh giá**. Sơ đồ: `../BAO-CAO-KY-THUAT.md` mục 3.2; xem
+từng trang ở tab **Bóc tách khối**.
 
 **Thứ tự áp dụng trong `extract()`:** host có selector đã kiểm chứng (`.bodytext`
 cho hust.edu.vn) → `method="selector"`; không có hoặc selector trả rỗng →
@@ -392,7 +400,8 @@ DocValues, lọc được). Đổi schema → `docker compose build lucene` và 
 Giao diện (`static/index.html`):
 - kết quả tìm: hiện tác giả, ngày, nhãn `Trang`/`Tệp`; bộ lọc `kind`;
 - xem trước: khối **"Được giới thiệu bởi"** (gọi `/api/referrers`);
-- tab **Đồ thị liên kết**: nhập url → bảng cạnh vào / ra kèm văn bản mô tả;
+- tab **Đồ thị liên kết**: nhập url → bảng cạnh vào / ra kèm văn bản mô tả
+  (đã làm thêm: đồ thị hình sao SVG, xem mục 11 việc 9);
 - tab **Tệp & ảnh**: danh sách tệp (trạng thái, cờ `needs_ocr`) và ảnh, mỗi dòng có nguồn.
 
 ---
@@ -448,7 +457,7 @@ không nhân bản ghi; `/api/files/fetch` trả 409 khi crawler đang chạy;
 
 ---
 
-## 11. Tiến độ (30/9)
+## 11. Tiến độ (cập nhật 01/10)
 
 | # | Việc | Trạng thái |
 |---|---|---|
@@ -460,6 +469,8 @@ không nhân bản ghi; `/api/files/fetch` trả 409 khi crawler đang chạy;
 | 6 | tệp: danh mục → tải → bóc chữ → index `kind=document` | xong, chưa chạy với site thật |
 | 7 | giao diện: referrers, tab Đồ thị, tab Tệp & ảnh, điều khiển bóc tách | xong; đã thử bằng trình duyệt trên stack cục bộ |
 | 8 | README, CLAUDE.md | xong |
+| 9 | giao diện trực quan: tab **Bóc tách khối** (phễu, các bậc đi xuống cây, chia cạnh), đồ thị hình sao SVG, dải 4 bước ở Bảng điều khiển; API `/api/extract/explain`, `/api/extract/overview`; `tim_khoi(vet=…)` | xong; 64 pytest đạt; giao diện mới thử trên dữ liệu giả |
+| 10 | viết lại tài liệu, thêm sơ đồ Mermaid cho luồng dữ liệu và các thuật toán | xong |
 
 Còn lại: chạy trên stack docker với kho thật, đọc coverage, dò lại hằng số ở `khoi.py`
 và ngưỡng khử khuôn; đo số dòng `nav_links`; quyết định có đưa `author`/anchor text vào xếp hạng không.

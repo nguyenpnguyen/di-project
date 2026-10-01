@@ -12,6 +12,7 @@ Nên hai thứ đi hai đường:
 | Code (`crawl_all.py`, `read_raw.py`, `hust-search/`) | git push / pull | có |
 | Kho HTML thô + hàng đợi crawl (`data/`) | gói `.tar.gz` gửi tay | phải xin |
 | Index Lucene | **không gửi** — dựng lại tại chỗ trong ~2 phút | tự dựng |
+| MongoDB (kết quả bóc tách, đồ thị) và `data/files/` (tệp đã tải) | **không gửi** — dựng lại từ kho | tự dựng |
 
 Index cố ý không nằm trong gói: nó chỉ là dữ liệu phái sinh từ kho, mà lược đồ
 index còn đổi theo code (đã đổi bốn lần trong lúc làm), gửi kèm thì rất dễ rơi
@@ -156,28 +157,36 @@ Sau mỗi mẻ dài, soát lại:
 .venv/bin/python read_raw.py --links         # xuất lại N1-links
 ```
 
-## 5. Người nhận: index và tìm kiếm
+## 5. Người nhận: bóc tách, index và tìm kiếm
 
-Index không đi kèm gói, phải dựng lại — mất khoảng hai phút cho 3.000 tài liệu.
+Mongo và index không đi kèm gói, phải dựng lại. Index mất khoảng hai phút cho
+3.000 tài liệu (đo lúc index thẳng từ kho thô); thời gian bóc tách vào Mongo trên
+kho thật **chưa đo**.
 
 ```bash
 cd ../hust-search
 docker compose up -d --build          # lần đầu; Java build cỡ 1 phút
 ```
 
-Rồi dựng index từ kho vừa import:
+Muốn có đồ thị liên kết và tệp thì bóc tách vào Mongo trước — ở tab Bảng điều
+khiển chạy lần lượt bốn ô "Dựng bảng khuôn → Bóc tách → Tải tệp → Bóc chữ tệp",
+mỗi bước đợi bước trước xong (job nền, mỗi lúc một job). Bước tải tệp gọi ra
+site, chỉ chạy khi crawler đang dừng.
+
+Rồi dựng index:
 
 ```bash
 curl -X POST http://localhost:8000/api/index/run \
      -H 'content-type: application/json' -d '{"reset":true,"batch":150}'
 ```
 
-hoặc bấm **Dựng lại từ đầu** ở tab Bảng điều khiển của http://localhost:8000.
+hoặc bấm **Dựng lại từ đầu**. `source` mặc định `auto`: có dữ liệu trong Mongo thì
+index từ Mongo (kèm tệp), Mongo rỗng thì bóc thẳng từ kho thô.
 
 Kiểm tra:
 
 ```bash
-./tests/integration.sh                # 25 kiểm tra đường đi thật
+./tests/integration.sh                # 33 kiểm tra đường đi thật
 ```
 
 Sau này crawl thêm thì chỉ cần **Index thêm vào kho** (`{"reset":false}`) — nó

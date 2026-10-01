@@ -183,6 +183,35 @@ class RoutesTest(unittest.TestCase):
         self.assertEqual(c["hust.edu.vn"]["pages"], 1)
         self.assertEqual(c["hust.edu.vn"]["title_pct"], 0.0)   # fixture không có tiêu đề
 
+    def test_explain_doc_kho_qua_bi_danh_va_404_khi_khong_co(self):
+        u = "https://hust.edu.vn/vi/tin-tuc/diem-chuan-654601.html"
+        with patch.object(main, "tim_ban_ghi", lambda urls: rec(u, BAI) if u in urls else None):
+            r = routes_bt.extract_explain("https://hust.edu.vn/vi/khac/diem-chuan-654601.html")
+            self.assertEqual(r["block"]["path"], "html > body > main")
+            self.assertEqual(r["canh"]["noi_dung"], 2)          # tệp pdf + ảnh trong bài
+            self.assertEqual(r["canh"]["khuon"], 1)             # menu
+            with self.assertRaises(HTTPException) as c:
+                routes_bt.extract_explain("https://hust.edu.vn/vi/khong-co.html")
+            self.assertEqual(c.exception.status_code, 404)
+
+    def test_tim_ban_ghi_trong_kho_that(self):
+        import gzip, json, tempfile
+        with tempfile.TemporaryDirectory() as t:
+            kho = pathlib.Path(t) / "raw"
+            kho.mkdir()
+            with gzip.open(kho / "pages-0001.jsonl.gz", "wt", encoding="utf-8") as fh:
+                for u in ("http://hust.edu.vn/vi/a.html", "https://hust.edu.vn/vi/b.html"):
+                    fh.write(json.dumps(rec(u, BAI)) + "\n")
+            with patch.object(main, "DATA", pathlib.Path(t)):
+                self.assertEqual(main.tim_ban_ghi({"https://hust.edu.vn/vi/a.html"})["url"],
+                                 "http://hust.edu.vn/vi/a.html")   # khớp qua norm()
+                self.assertIsNone(main.tim_ban_ghi({"https://hust.edu.vn/vi/c.html"}))
+
+    def test_overview_dem_tung_buoc(self):
+        o = routes_bt.extract_overview()
+        self.assertEqual((o["pages"], o["links"], o["nav_links"]), (1, 2, 1))
+        self.assertEqual(o["templates"], 0)
+
     def test_referrers_tu_choi_url_khong_phai_http(self):
         with self.assertRaises(HTTPException) as c:
             routes_bt.referrers("ftp://x")

@@ -219,6 +219,8 @@ Tất cả dưới `http://localhost:8000`.
 | POST | `/api/extract/templates` | dựng bảng khối lặp theo host (chạy nền) |
 | POST | `/api/extract/run?limit=` | kho thô → boc_tach → Mongo (chạy nền, idempotent) |
 | GET | `/api/extract/status`, `/api/extract/coverage` | tiến độ; % trường đầy đủ và cách chọn khối theo host |
+| GET | `/api/extract/explain?url=` | chạy lại bước chọn khối trên HTML thô trong kho, trả từng bước để vẽ (không cần Mongo) |
+| GET | `/api/extract/overview` | số liệu từng bước khuôn → bóc tách → tệp → bóc chữ |
 | GET | `/api/referrers?url=` | nguồn giới thiệu: cạnh trong bài + cạnh menu/footer trỏ vào url |
 | GET | `/api/graph/out?url=`, `/api/graph/stats`, `/api/graph/edges.csv` | cạnh đi ra; thống kê; xuất `source,target,text` |
 | POST | `/api/files/fetch`, `/api/files/extract` | tải tệp (409 khi crawler đang chạy) và bóc chữ |
@@ -301,8 +303,16 @@ Một file `api/static/index.html`, không framework, không bước build.
   gốc ở tab mới; khi xếp theo điểm, giao diện ghi rõ điểm TF-IDF.
 * **Tải một trang** — trả tiêu đề, nội dung, URL đầy đủ và văn bản mô tả của
   link đi ra; nội dung thu gọn mặc định và có nút tải JSON.
+* **Bóc tách khối** — nhập url một trang trong kho, vẽ lại ba bước: phễu số chữ
+  còn lại qua từng lớp (dọn cây → khử khuôn → khối chọn), các bậc đi xuống cây HTML
+  (thanh điểm của từng khối con, vạch ngưỡng 65%), và thanh chia liên kết trong khối
+  (cạnh nội dung) / ngoài khối (cạnh khuôn). Mỗi kết quả tìm kiếm có nút "Khối nội dung".
+* **Đồ thị liên kết** — đồ thị hình sao bằng SVG tự vẽ: trái là trang trỏ tới, giữa là
+  url đang xem, phải là nơi nó trỏ đi; màu theo loại (trang / tệp / ảnh / ngoài HUST /
+  menu-footer nét đứt). Bấm một ô để chuyển tâm. Dạng bảng cũ vẫn còn trong "Xem dạng bảng".
 * **Bảng điều khiển** — số trang crawl, số tài liệu index, số link, dung lượng;
-  bảng từng site; nút chạy/dừng crawl; nút index thêm hoặc dựng lại; log trực tiếp.
+  bảng từng site; nút chạy/dừng crawl; nút index thêm hoặc dựng lại; log trực tiếp;
+  bốn bước bóc tách vẽ thành dải ô nối mũi tên, mỗi ô ghi số liệu đã có và sáng lên khi đang chạy.
 
 Tô sáng làm ở **server chứ không phải trình duyệt**: Lucene biết chính xác token
 nào khớp sau khi phân tích, còn JS phía trình duyệt chỉ so chuỗi thô nên sẽ trượt
@@ -438,7 +448,7 @@ Kết quả hiện tại: **33 integration, 29 JUnit, 5 API và 32 crawler test 
 # engine (32 test)
 cd hust-crawler && .venv/bin/python -m pytest tests -q
 
-# Python phía api (59 test: parser, boc_tach, Mongo bằng mongomock, tệp; không gọi mạng thật)
+# Python phía api (64 test: parser, boc_tach, Mongo bằng mongomock, tệp; không gọi mạng thật)
 cd hust-search && docker run --rm -v "$PWD":/workspace -v "$PWD/../hust-crawler":/crawler \
     -w /workspace hust-search-api:latest python -m pytest tests -q
 
@@ -455,7 +465,7 @@ cd hust-search && ./tests/integration_bt.sh     # bóc tách, đồ thị, Mongo
 ```
 
 Trạng thái đã chạy được trong môi trường viết code (không có docker, không có kho thật):
-**59 pytest phía api + 30 JUnit = đạt**; `integration_bt.sh` chạy được 17/17 trên Lucene thật + API
+**64 pytest phía api + 30 JUnit = đạt**; `integration_bt.sh` chạy được 17/17 trên Lucene thật + API
 với mongomock + corpus tổng hợp. **Chưa chạy** trên stack docker đầy đủ với MongoDB thật và kho thật —
 nên chưa kiểm chứng `$jsonSchema`, hiệu năng, và độ chính xác thuật toán khối trên trang thật.
 

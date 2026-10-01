@@ -111,11 +111,40 @@ def _he_so(t: Tag) -> float:
     return 1.0
 
 
-def tim_khoi(soup, host: str = "", khuon: set[str] | None = None) -> Khoi:
-    """Chọn khối nội dung. Soup bị sửa tại chỗ (dọn cây, bỏ khuôn)."""
+def so_chu(node) -> int:
+    """Số ký tự chữ hiển thị (bỏ chữ trong script/style), khoảng trắng gộp."""
+    if node is None:
+        return 0
+    n = 0
+    for s in node.find_all(string=True):
+        if isinstance(s, Comment) or s.parent.name in ("script", "style", "noscript", "template"):
+            continue
+        t = re.sub(r"\s+", " ", str(s)).strip()
+        n += len(t)
+    return n
+
+
+def nhan(t: Tag) -> str:
+    """Nhãn ngắn của một nút: tag#id hoặc tag.lop-dau."""
+    if t.get("id"):
+        return f"{t.name}#{t['id']}"
+    if t.get("class"):
+        return f"{t.name}.{t['class'][0]}"
+    return t.name
+
+
+def tim_khoi(soup, host: str = "", khuon: set[str] | None = None, vet: dict | None = None) -> Khoi:
+    """Chọn khối nội dung. Soup bị sửa tại chỗ (dọn cây, bỏ khuôn).
+
+    `vet` (tuỳ chọn): dict được điền số chữ sau từng lớp và các bậc đi xuống cây,
+    để giao diện vẽ lại thuật toán đã chọn thế nào. Không truyền thì không tốn gì thêm."""
     don_cay(soup)
-    _khuon.bo_khuon(soup, khuon or set())
+    if vet is not None:
+        vet["sau_don"] = so_chu(soup.body or soup)
+    n_khuon = _khuon.bo_khuon(soup, khuon or set())
     body = soup.body or soup
+    if vet is not None:
+        vet.update(sau_khuon=so_chu(body), khoi_khuon_bo=n_khuon, bac=[])
 
     sel = SELECTOR_THEO_HOST.get(host)
     if sel:
@@ -133,9 +162,27 @@ def tim_khoi(soup, host: str = "", khuon: set[str] | None = None) -> Khoi:
         if not con:
             break
         tot = max(con, key=lambda c: _diem(tk[id(c)]) * _he_so(c))
-        if _diem(tk[id(tot)]) * _he_so(tot) < DELTA * _diem(tk[id(node)]):
+        dung = _diem(tk[id(tot)]) * _he_so(tot) < DELTA * _diem(tk[id(node)])
+        if vet is not None:
+            vet["bac"].append(_ghi_bac(node, con, tot, tk, dung))
+        if dung:
             break
         node = tot
     if node is body and (node.name == "body") and tk[id(node)][0] == 0:
         return Khoi(body, "body", 0.0, "fallback")
     return Khoi(node, duong_dan(node), _diem(tk[id(node)]), "heuristic")
+
+
+def _ghi_bac(cha: Tag, con: list[Tag], tot: Tag, tk: dict, dung: bool, toi_da: int = 6) -> dict:
+    """Một bậc đi xuống: nút cha, các con ứng viên (điểm cao nhất trước) và con thắng."""
+    xep = sorted(con, key=lambda c: _diem(tk[id(c)]) * _he_so(c), reverse=True)
+    return {
+        "cha": nhan(cha), "diem_cha": round(_diem(tk[id(cha)]), 1),
+        "nguong": round(DELTA * _diem(tk[id(cha)]), 1),
+        "ung_vien": [{"nhan": nhan(c), "chu": tk[id(c)][0], "chu_link": tk[id(c)][1],
+                      "doan": tk[id(c)][2], "he_so": _he_so(c),
+                      "diem": round(_diem(tk[id(c)]) * _he_so(c), 1), "thang": c is tot}
+                     for c in xep[:toi_da]],
+        "con_lai": max(0, len(xep) - toi_da),
+        "dung": dung,
+    }

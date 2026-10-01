@@ -45,3 +45,34 @@ def boc_tach(html: str, url: str, khuon: set[str] | None = None) -> dict | None:
         "outgoing_links": lien_ket.canh_ra_cong_khai(noi_dung),
         "links": noi_dung, "nav_links": khuon_canh,
     }
+
+
+def giai_thich(html: str, url: str, khuon: set[str] | None = None) -> dict:
+    """Chạy lại bước chọn khối + chia cạnh của `boc_tach` và trả về từng bước để
+    giao diện vẽ: phễu số chữ qua từng lớp, các bậc đi xuống cây, cạnh trong/ngoài khối."""
+    soup = BeautifulSoup(html, "lxml")
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    raw = lien_ket.thu_thap(soup, url)
+    toan_trang = _khoi.so_chu(soup.body or soup)
+    vet: dict = {}
+    k = _khoi.tim_khoi(soup, host, khuon, vet)
+    noi_dung, khuon_canh = lien_ket.chia(raw, k.node)
+    text = clean_space(k.node.get_text(" ", strip=True)) if k.node is not None else ""
+    theo_loai: dict[str, int] = {}
+    for e in noi_dung:
+        theo_loai[e["dst_kind"]] = theo_loai.get(e["dst_kind"], 0) + 1
+    return {
+        "url": url, "host": host,
+        "block": {"path": k.path, "score": round(k.score, 2), "method": k.method,
+                  "selector": _khoi.SELECTOR_THEO_HOST.get(host, "")},
+        "pheu": [
+            {"buoc": "Toàn trang", "chu": toan_trang},
+            {"buoc": "Sau dọn cây", "chu": vet.get("sau_don", 0)},
+            {"buoc": "Sau khử khuôn", "chu": vet.get("sau_khuon", 0)},
+            {"buoc": "Khối được chọn", "chu": _khoi.so_chu(k.node)},
+        ],
+        "khoi_khuon_bo": vet.get("khoi_khuon_bo", 0),
+        "bac": vet.get("bac", []),
+        "trich": text[:600],
+        "canh": {"noi_dung": len(noi_dung), "khuon": len(khuon_canh), "noi_dung_theo_loai": theo_loai},
+    }

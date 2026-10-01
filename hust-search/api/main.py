@@ -73,6 +73,33 @@ def records(d: pathlib.Path) -> Iterator[dict]:
             continue
 
 
+def tim_ban_ghi(urls: set[str]) -> dict | None:
+    """Bản ghi kho thô đầu tiên có url (đã norm) thuộc `urls`. Lọc thô bằng chuỗi
+    đường dẫn trước khi json.loads — kho hàng trăm MB, giải mã mọi dòng thì chậm."""
+    dich = {trich.crawl_all.norm(u) or u for u in urls}
+    khoa = set()
+    for u in dich:
+        path = urllib.parse.urlsplit(u).path or "/"
+        khoa.update({path, json.dumps(path)[1:-1]})
+    for d in kho_dirs():
+        for p in sorted(list(d.glob("pages-*.jsonl.gz")) + list(d.glob("pages-*.jsonl"))):
+            op = gzip.open if p.suffix == ".gz" else open
+            try:
+                with op(p, "rt", encoding="utf-8") as fh:
+                    for line in fh:
+                        if not any(k in line for k in khoa):
+                            continue
+                        try:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
+                            break
+                        if (trich.crawl_all.norm(rec.get("url", "")) or rec.get("url")) in dich:
+                            return rec
+            except (EOFError, OSError, gzip.BadGzipFile):
+                continue
+    return None
+
+
 _join_http = join_http
 _clean_space = clean_space
 

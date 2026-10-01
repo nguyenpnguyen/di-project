@@ -26,7 +26,7 @@ giao diện, cổng 8000) và `mongo` (không mở cổng). Python bóc tách HT
 Kế hoạch và quyết định: `hust-search/KE-HOACH-BOC-TACH.md`, lược đồ: `hust-search/SCHEMA.md`. Kho `hust-crawler/data` được mount vào container ở `/crawler`
 nên **sửa `crawl_all.py` không cần build lại image**.
 
-Test: 32 (pytest engine) + 59 (pytest api) + 30 (JUnit Lucene). Tích hợp: `integration.sh`
+Test: 32 (pytest engine) + 64 (pytest api) + 30 (JUnit Lucene). Tích hợp: `integration.sh`
 (tìm kiếm) và `integration_bt.sh` (bóc tách/Mongo) — cần stack docker; phần bóc tách
 chưa từng chạy trên MongoDB thật và kho thật.
 

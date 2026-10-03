@@ -476,6 +476,40 @@ khung rỗng và `tuyendung` hỏng hẳn; qua trình duyệt thì lần lượt
 
 ---
 
+## 7b. So sánh bóc cũ với bóc mới (đo xem bóc tách có làm tìm kiếm tốt hơn không)
+
+`api/so_sanh.py` dựng **hai instance Lucene riêng** (không đụng index chính) từ cùng một kho thô:
+arm *cũ* = hành vi `extract()` trước `boc_tach` (`.bodytext` → `main` → `body`), arm *mới* = `boc_tach`
+(có khử khuôn theo host; tắt bằng `--no-khuon`). Sau đó chạy cùng một bộ truy vấn trên cả hai.
+
+```bash
+cd hust-search
+docker compose --profile compare up -d --build lucene-cu lucene-moi
+# bước 1: không cần nhãn. --reset chỉ cần nếu hai instance đã có dữ liệu từ lần chạy trước
+docker compose exec api python so_sanh.py --queries /app/truyvan.txt   # bỏ --queries để dùng bộ đoán sẵn
+# kết quả ở hust-crawler/data/so_sanh/: report.md, phan_loai.csv, raw.json
+
+# bước 2: mở phan_loai.csv, điền cột relevant = 1/0 cho từng dòng, rồi
+docker compose exec api python so_sanh.py --evaluate /crawler/data/so_sanh/phan_loai.csv
+# → danh_gia.md: P@K và MRR của từng arm
+```
+
+* **Bước 1 chỉ mô tả sự khác biệt, không phán bên nào tốt hơn:** quy mô index, từ có mặt ở gần mọi trang
+  (dấu hiệu rác khuôn), trang nghi bị cắt quá tay, độ trùng top-K theo từng truy vấn, trang "mất/thêm" kèm
+  đoạn trích. Cột `mất` có thể là khớp nhờ menu (loại đúng) hoặc nội dung bị cắt (loại sai) — phải đọc ví dụ.
+* **Chỉ bước 2 mới cho kết luận**, và chỉ đáng tin khi bộ truy vấn là truy vấn người dùng thật và nhãn do
+  người đọc gán. Nhãn lấy từ top-K của hai arm nên không đo được recall.
+* Bộ truy vấn mặc định trong code là **đoán** về chủ đề hay gặp, chưa kiểm với kho thật; vài từ cuối
+  ("liên hệ", "giới thiệu", "tin tức") cố ý là từ hay nằm ở menu để dò nhiễu. Nên thay bằng `--queries`.
+* Cột `tổng` là số Lucene trả về, có thể gồm lượt "vét" khớp một phần; xem ghi chú trong báo cáo.
+* Nên chạy thử `--limit 300` trước để thấy báo cáo, rồi mới chạy cả kho. Xong thì
+  `docker compose --profile compare down` (thêm `-v` nếu muốn xoá hai volume index so sánh).
+
+Đã kiểm trên corpus tổng hợp (Lucene thật, 150 trang): chạy hết cả hai bước, báo cáo và file nhãn sinh đúng.
+Chưa chạy trên kho thật.
+
+---
+
 ## 8. Những chỗ từng hỏng — đọc trước khi sửa
 
 ### 8.1. Site chặn ~20-25 request/phút

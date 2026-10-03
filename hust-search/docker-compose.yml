@@ -10,6 +10,24 @@ services:
       timeout: 3s
       retries: 12
 
+  # Hai instance Lucene riêng cho api/so_sanh.py (so bóc cũ với bóc mới). Chỉ bật khi cần:
+  #   docker compose --profile compare up -d --build lucene-cu lucene-moi
+  # Index nằm ở volume riêng, không đụng index chính ở cổng 8081.
+  lucene-cu: &lucene-so-sanh
+    profiles: ["compare"]
+    build: ./lucene
+    volumes: ["lucene-cu:/index"]
+    ports: ["8091:8081"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+  lucene-moi:
+    <<: *lucene-so-sanh
+    volumes: ["lucene-moi:/index"]
+    ports: ["8092:8081"]
+
   mongo:
     image: mongo:7.0
     volumes:
@@ -37,3 +55,5 @@ services:
 volumes:
   lucene-index:
   mongo-data:
+  lucene-cu:
+  lucene-moi:

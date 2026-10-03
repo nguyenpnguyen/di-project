@@ -454,8 +454,8 @@ svg.g .n{cursor:pointer}svg.g .n:hover rect{stroke-width:2.5}
         <span class="meta" id="istat" style="margin:0">—</span>
         <select id="isrc" aria-label="Nguồn dữ liệu để index" title="Nguồn dữ liệu để index">
           <option value="auto">Nguồn: tự chọn (Mongo nếu có)</option>
-          <option value="mongo">Nguồn: MongoDB (đã bóc tách)</option>
-          <option value="raw">Nguồn: kho thô (bóc lại HTML)</option>
+          <option value="mongo">Nguồn: MongoDB (bản đã bóc tách, có khử khuôn nếu đã dựng bảng khuôn)</option>
+          <option value="raw">Nguồn: kho thô (bóc lại bằng cùng thuật toán, không khử khuôn, không có tệp)</option>
         </select>
         <button class="btn ghost" id="irun">Index thêm vào kho</button>
         <button class="btn ghost" id="ireset">Dựng lại từ đầu</button>
@@ -1023,7 +1023,10 @@ $('#cstop').onclick = async () => {
   setTimeout(refresh, 1000);
 };
 
-const TEN_NGUON = { mongo: 'MongoDB (kết quả bóc tách)', raw: 'kho thô (bóc lại HTML, không qua Mongo)' };
+// Hai nguồn dùng CÙNG thuật toán boc_tach; khác nhau ở khử khuôn (chỉ Mongo, khi đã dựng bảng khuôn),
+// khử trùng (Mongo theo dedup_key, kho thô theo url) và tệp tài liệu (chỉ Mongo). Mongo nhanh hơn vì
+// không phải parse lại HTML. Muốn so với cách bóc CŨ (.bodytext → main → body) thì dùng api/so_sanh.py.
+const TEN_NGUON = { mongo: 'MongoDB (kết quả bóc tách đã lưu)', raw: 'kho thô (bóc lại HTML bằng cùng thuật toán, không khử khuôn)' };
 async function runIndex(reset) {
   const chon = $('#isrc').value;
   $('#ilog').textContent = 'Đang index từ ' + (TEN_NGUON[chon] || 'nguồn tự chọn') + ', kho lớn thì mất vài phút…';

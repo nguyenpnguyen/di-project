@@ -129,6 +129,17 @@ class IndexTuMongoTest(unittest.TestCase):
         with patch.object(main, "tat_ca_ban_ghi", lambda: iter([])):
             self.assertEqual(self._index("auto")[0]["source"], "raw")
 
+    def test_dung_lai_bang_kho_tho_van_giu_tep_tu_mongo(self):
+        # trang lấy từ kho thô, tệp lấy từ Mongo: trước đây nguồn raw làm mất mọi pdf
+        self.db.pages.delete_many({})
+        with patch.object(main, "tat_ca_ban_ghi", lambda: iter([])):
+            for source in ("raw", "auto"):
+                r, sent = self._index(source)
+                self.assertEqual(r["source"], "raw")
+                self.assertEqual([d["url"] for d in sent],
+                                 ["https://hust.edu.vn/uploads/thong-bao%20hoc-bong.pdf"], source)
+                self.assertEqual(sent[0]["kind"], "document")
+
     def test_source_khong_hop_le_tra_400(self):
         with self.assertRaises(HTTPException) as c:
             main.index_run(main.IndexReq(source="xyz"))

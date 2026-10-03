@@ -143,6 +143,12 @@ def lucene_tu_mongo(db) -> Iterable[dict]:
         yield {"url": p["_id"], "title": p["title"], "text": p["content"]["text"],
                "host": p["host"], "section": p.get("section", ""), "date": p.get("published_at", ""),
                "html": p["content"].get("html", ""), "author": p.get("author", ""), "kind": "page"}
+    yield from tep_tu_mongo(db)
+
+
+def tep_tu_mongo(db) -> Iterable[dict]:
+    """Tệp tài liệu đã bóc được chữ. Chữ của tệp CHỈ có trong Mongo (kho crawl không lưu byte
+    pdf/docx), nên mọi nguồn index — kể cả kho thô — đều phải lấy tệp từ đây."""
     for f in db.documents.find({"status": "ok", "text": {"$nin": [None, ""]}}):
         ten = urllib.parse.unquote(f["_id"].rsplit("/", 1)[-1])
         yield {"url": f["_id"], "title": f.get("title") or ten, "text": f["text"], "host": f["host"],

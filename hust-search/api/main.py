@@ -385,19 +385,24 @@ def _nguon_index(source: str):
     """Chọn nơi lấy tài liệu để index. Trả (tên nguồn, iterator các dict cho Lucene)."""
     if source not in {"auto", "mongo", "raw"}:
         raise HTTPException(400, "source phải là auto, mongo hoặc raw")
-    if source in {"auto", "mongo"}:
-        try:
-            d = _mongo()
-            if source == "mongo" or d.pages.count_documents({}, limit=1):
-                return "mongo", trich.lucene_tu_mongo(d)
-        except HTTPException:
-            if source == "mongo":
-                raise
+    d = None
+    try:
+        d = _mongo()
+    except HTTPException:
+        if source == "mongo":
+            raise
+    if d is not None and (source == "mongo" or (source == "auto" and d.pages.count_documents({}, limit=1))):
+        return "mongo", trich.lucene_tu_mongo(d)
+
     def tu_kho():
         for rec in tat_ca_ban_ghi():
             doc = extract(rec)
             if doc:
                 yield lucene_document(doc)
+        # Tệp tài liệu không có chữ trong kho crawl — thiếu bước này thì "dựng lại từ đầu"
+        # bằng kho thô (hoặc tự chọn khi Mongo chưa có trang) xoá mất mọi pdf/docx khỏi chỉ mục.
+        if d is not None:
+            yield from trich.tep_tu_mongo(d)
     return "raw", tu_kho()
 
 

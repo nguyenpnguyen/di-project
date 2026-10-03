@@ -284,9 +284,6 @@ svg.g .n{cursor:pointer}svg.g .n:hover rect{stroke-width:2.5}
         <input id="one" placeholder="Dán url bất kỳ, ví dụ https://soict.hust.edu.vn/ts-nguyen-ba-ngoc.html">
         <button class="btn" id="onego">Tải và index</button>
       </div>
-      <p class="note">Một url một lần, máy chủ tự giữ nhịp tối thiểu 3 giây giữa hai lần
-        tải. Trang tải xong được ghi vào kho <code>data/raw-adhoc</code> và đẩy thẳng
-        vào Lucene — tìm được ngay, không phải chạy lại mẻ index nào.</p>
       <div id="oneout"></div>
     </div>
   </section>
@@ -294,10 +291,6 @@ svg.g .n{cursor:pointer}svg.g .n:hover rect{stroke-width:2.5}
   <section class="panel" id="p-browse">
     <div class="card">
       <h2>Duyệt toàn bộ tài liệu đã index</h2>
-      <p class="note">Không cần gõ từ khoá — liệt kê nguyên trạng mọi tài liệu trong
-        Lucene, để hình dung tổng thể kho: bao nhiêu bài, thuộc site nào, chuyên mục
-        gì, cũ/mới ra sao. Các bản trùng nội dung (cùng bài, khác url) được gộp lại
-        y như khi tìm kiếm.</p>
       <div class="row" style="margin-bottom:12px">
         <label>Site</label>
         <select id="bhost"><option value="">Mọi site</option></select>
@@ -320,11 +313,6 @@ svg.g .n{cursor:pointer}svg.g .n:hover rect{stroke-width:2.5}
   <section class="panel" id="p-dict">
     <div class="card">
       <h2>Từ điển chỉ mục ngược (term dictionary)</h2>
-      <p class="note">Lucene lưu <b>từ → danh sách tài liệu chứa từ đó</b> (posting
-        list), kèm tần suất và vị trí token — đây là cấu trúc dữ liệu lõi của "chỉ
-        mục ngược" (inverted index), khác với chỉ mục thuận (tài liệu → danh sách
-        từ). Chọn field rồi duyệt từ điển bên dưới, hoặc bấm "Xem posting" ở một từ
-        để xem chi tiết nó nằm trong bài nào, tần suất và vị trí token trong bài.</p>
       <div class="row" style="margin-bottom:12px">
         <label>Field</label>
         <select id="dfield">
@@ -367,18 +355,15 @@ svg.g .n{cursor:pointer}svg.g .n:hover rect{stroke-width:2.5}
 
   <section class="panel" id="p-block">
     <div class="card">
-      <h2>Thuật toán đã chọn khối nội dung thế nào</h2>
-      <p class="note" style="margin:0 0 10px">Nhập <b>url bất kỳ</b> — trang HTML hoặc tệp pdf/docx/xlsx/pptx.
-        Đã có trong kho thì dùng HTML đã lưu (không gọi lại site); chưa có thì tải về từ web (cách nhau ≥ 3 giây).
-        Sau đó chạy thuật toán chọn khối, bóc tiêu đề / ngày / tác giả / nguồn, rồi vẽ lại từng bước.</p>
+      <h2>Bóc tách khối</h2>
       <div class="bigbar">
-        <input id="kurl" placeholder="https://soict.hust.edu.vn/… hoặc https://hust.edu.vn/uploads/….pdf">
+        <input id="kurl" placeholder="Url trang HTML hoặc tệp pdf / docx / xlsx / pptx">
         <button class="btn" id="kgo">Bóc tách</button>
       </div>
       <div class="row" style="gap:16px;font-size:13px;margin:-4px 0 10px">
-        <label><input type="checkbox" id="kluu" checked> Lưu vào MongoDB</label>
-        <label><input type="checkbox" id="kidx" checked> Index vào Lucene (tìm được ngay)</label>
-        <label><input type="checkbox" id="ktai"> Tải lại từ web dù kho đã có</label>
+        <label><input type="checkbox" id="kluu" checked> Lưu MongoDB</label>
+        <label><input type="checkbox" id="kidx" checked> Index Lucene</label>
+        <label title="Bỏ qua bản trong kho, tải lại từ web"><input type="checkbox" id="ktai"> Tải lại từ web</label>
       </div>
       <div id="kout"></div>
     </div>
@@ -386,13 +371,11 @@ svg.g .n{cursor:pointer}svg.g .n:hover rect{stroke-width:2.5}
 
   <section class="panel" id="p-graph">
     <div class="card">
-      <h2>Nguồn giới thiệu và liên kết đi ra</h2>
-      <p class="note">Nhập url của một trang, tệp hoặc ảnh. Bên trái là những trang trỏ tới nó, bên phải là
-        những nơi nó trỏ đi. Bấm vào một ô để chuyển tâm đồ thị sang ô đó.</p>
+      <h2>Đồ thị liên kết</h2>
       <div class="bigbar">
-        <input id="gurl" placeholder="https://hust.edu.vn/uploads/…/diem-chuan.pdf">
+        <input id="gurl" placeholder="Url trang, tệp hoặc ảnh">
         <button class="btn" id="ggo">Xem đồ thị</button>
-        <button class="btn ghost" id="gboc" title="Tải (nếu chưa có), bóc tách, lưu Mongo rồi vẽ lại đồ thị">Tải &amp; bóc tách url này</button>
+        <button class="btn ghost" id="gboc" title="Tải (nếu chưa có), bóc tách, lưu Mongo rồi vẽ lại đồ thị">Tải &amp; bóc tách</button>
         <a class="x" href="/api/graph/edges.csv" download="edges.csv">Tải edges.csv</a>
       </div>
       <div id="gout"></div>
@@ -453,9 +436,9 @@ svg.g .n{cursor:pointer}svg.g .n:hover rect{stroke-width:2.5}
       <div class="row" style="margin-bottom:12px">
         <span class="meta" id="istat" style="margin:0">—</span>
         <select id="isrc" aria-label="Nguồn dữ liệu để index" title="Nguồn dữ liệu để index">
-          <option value="auto">Nguồn: tự chọn (Mongo nếu có)</option>
-          <option value="mongo">Nguồn: MongoDB (bản đã bóc tách, có khử khuôn nếu đã dựng bảng khuôn)</option>
-          <option value="raw">Nguồn: kho thô (bóc lại bằng cùng thuật toán, không khử khuôn, không có tệp)</option>
+          <option value="auto" title="MongoDB nếu đã bóc tách, không thì kho thô">Nguồn: tự chọn</option>
+          <option value="mongo" title="Bản đã bóc tách, có khử khuôn nếu đã dựng bảng khuôn, có tệp tài liệu">Nguồn: MongoDB</option>
+          <option value="raw" title="Bóc lại HTML bằng cùng thuật toán, không khử khuôn, không có tệp">Nguồn: kho thô</option>
         </select>
         <button class="btn ghost" id="irun">Index thêm vào kho</button>
         <button class="btn ghost" id="ireset">Dựng lại từ đầu</button>
@@ -465,23 +448,21 @@ svg.g .n{cursor:pointer}svg.g .n:hover rect{stroke-width:2.5}
 
     <div class="card">
       <h2>Bóc tách và tệp (MongoDB)</h2>
-      <p class="note" style="margin:0 0 10px">Chạy lần lượt từ trái sang phải. Ô viền xanh là bước đang chạy;
-        vạch xanh trên đầu ô là bước đã có kết quả.</p>
       <div class="steps">
         <div class="step" data-buoc="templates"><h4>1. Dựng bảng khuôn</h4>
-          <div class="so">Đếm khối lặp trên nhiều trang cùng site (menu, footer…)</div>
+          <div class="so">Khối lặp theo site</div>
           <button class="btn ghost" data-job="/api/extract/templates">Chạy</button></div>
         <span class="arrow">→</span>
         <div class="step" data-buoc="extract"><h4>2. Bóc tách → đồ thị</h4>
-          <div class="so">Chọn khối nội dung, bóc trường, chia cạnh trong/ngoài khối</div>
+          <div class="so">Khối, trường, cạnh</div>
           <button class="btn ghost" data-job="/api/extract/run">Chạy</button></div>
         <span class="arrow">→</span>
         <div class="step" data-buoc="files"><h4>3. Tải tệp</h4>
-          <div class="so">Tải các tệp PDF/Word mà cạnh nội dung trỏ tới</div>
+          <div class="so">PDF / Word được trỏ tới</div>
           <button class="btn ghost" data-job="/api/files/fetch">Chạy</button></div>
         <span class="arrow">→</span>
         <div class="step" data-buoc="files-extract"><h4>4. Bóc chữ tệp</h4>
-          <div class="so">Lấy chữ trong tệp đã tải để đưa vào tìm kiếm</div>
+          <div class="so">Chữ trong tệp đã tải</div>
           <button class="btn ghost" data-job="/api/files/extract">Chạy</button></div>
       </div>
       <details><summary class="note" style="cursor:pointer;margin:0">Nhật ký chi tiết</summary>
@@ -1070,9 +1051,8 @@ async function xemDoThi() {
     if (!vao.content) { $('#gout').innerHTML = `<div class="err">${esc(vao.detail || 'lỗi')}</div>`; return; }
     const rows = ra.edges.map(e => `<tr><td><a href="${esc(e.dst)}" target="_blank" rel="noopener noreferrer">${esc(e.dst)}</a></td>
       <td>${esc(e.text) || '<i>(không có chữ)</i>'}</td><td>${esc(e.dst_kind)}</td></tr>`).join('');
-    const goiY = ra.co_trang ? '' : `<div class="err" style="background:#fdf6e6;border-color:#efdcae;color:#6b5418;margin-bottom:10px">
-      Url này chưa được bóc tách vào MongoDB nên chưa có liên kết đi ra${vao.total_content + vao.total_nav ? '' : ' và chưa ai trỏ tới'}.
-      <button class="btn ghost" style="margin-left:8px" onclick="bocDoThi()">Tải &amp; bóc tách ngay</button></div>`;
+    const goiY = ra.co_trang ? '' : `<div class="err" style="background:#fdf6e6;border-color:#efdcae;color:#6b5418;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+      Url chưa được bóc tách — bấm "Tải &amp; bóc tách".</div>`;
     $('#gout').innerHTML = goiY + veDoThiSao(vao, ra) + `
       <details style="margin-top:12px"><summary style="cursor:pointer">Xem dạng bảng</summary>
       <h3>Đi vào ${esc(vao.url)}</h3>${bangNguon(vao)}
@@ -1087,7 +1067,7 @@ async function bocDoThi() {
   const u = $('#gurl').value.trim();
   if (!u) return;
   $('#gboc').disabled = true;
-  $('#gout').innerHTML = '<p class="note">Đang lấy trang (kho hoặc web) và bóc tách…</p>';
+  $('#gout').innerHTML = '<p class="note">Đang xử lý…</p>';
   try {
     const r = await fetch('/api/extract/url', { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ url: u }) });
@@ -1096,7 +1076,7 @@ async function bocDoThi() {
     $('#gurl').value = d.url;
     await xemDoThi();
     $('#gout').insertAdjacentHTML('afterbegin', veLuu(d) +
-      (d.loai === 'page' ? `<p class="note" style="margin:-4px 0 8px"><a href="#" onclick="moKhoi(this.dataset.u);return false" data-u="${esc(d.url)}">Xem thuật toán đã chọn khối thế nào →</a></p>` : ''));
+      (d.loai === 'page' ? `<p class="note" style="margin:-4px 0 8px"><a href="#" onclick="moKhoi(this.dataset.u);return false" data-u="${esc(d.url)}">Xem khối nội dung →</a></p>` : ''));
   } catch (e) { $('#gout').innerHTML = `<div class="err">${esc(String(e))}</div>`; }
   finally { $('#gboc').disabled = false; }
 }
@@ -1169,15 +1149,14 @@ function veDoThiSao(vao, ra) {
     <text x="${xG + NW / 2}" y="${cy + 15}" font-size="11.5" text-anchor="middle" fill="#6f7180">${fmt(vao.total_content)} trỏ tới · ${fmt(ra.edges.length)} trỏ đi</text></g>`;
   const tieuDe = `<text x="${xT}" y="26" font-size="12.5" font-weight="600" fill="#6f7180">AI TRỎ TỚI (${fmt(vao.total_content + vao.total_nav)})</text>
     <text x="${xP + NW}" y="26" font-size="12.5" font-weight="600" fill="#6f7180" text-anchor="end">TRỎ ĐI ĐÂU (${fmt(ra.edges.length)})</text>`;
-  const rong = !trai.length && !phai.length
-    ? '<p class="note">Chưa có cạnh nào quanh url này (hoặc chưa chạy bước 2 "Bóc tách → đồ thị").</p>' : '';
+  const rong = !trai.length && !phai.length && ra.co_trang !== false
+    ? '<p class="note">Chưa có cạnh nào.</p>' : '';
   return `${chuGiai(['page', 'document', 'image', 'external', 'nav'])}
     <svg class="g" viewBox="0 0 ${W} ${H}" role="img" aria-label="Đồ thị liên kết quanh ${esc(vao.url)}">
       <defs><marker id="mui" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" fill="#9aa0aa"/></marker></defs>
       ${tieuDe}${svg}</svg>${rong}
-    <p class="note">Rê chuột lên ô để xem url đầy đủ và chữ mô tả của liên kết.
-      ${k0 === 'page' ? `<a href="#" onclick="moKhoi(this.dataset.u);return false" data-u="${esc(vao.url)}">Xem khối nội dung của trang này →</a>` : ''}</p>`;
+    ${k0 === 'page' ? `<p class="note"><a href="#" onclick="moKhoi(this.dataset.u);return false" data-u="${esc(vao.url)}">Xem khối nội dung →</a></p>` : ''}`;
 }
 document.addEventListener('click', e => {
   const n = e.target.closest('svg.g .n');
@@ -1222,7 +1201,7 @@ async function xemKhoi() {
   const u = $('#kurl').value.trim();
   if (!u) return;
   $('#kgo').disabled = true;
-  $('#kout').innerHTML = '<p class="note">Đang tìm trong kho, chưa có thì tải từ web, rồi chạy thuật toán… (vài giây)</p>';
+  $('#kout').innerHTML = '<p class="note">Đang xử lý…</p>';
   try {
     const r = await fetch('/api/extract/url', {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -1236,11 +1215,11 @@ async function xemKhoi() {
 
 /** Dòng trạng thái: lấy từ đâu, đã lưu Mongo / index Lucene chưa. */
 function veLuu(d) {
-  const L = d.luu, nguon = d.nguon === 'kho' ? 'HTML đã có trong kho' : 'vừa tải từ web' + (d.fetched_at ? ' lúc ' + esc(d.fetched_at) : '');
-  const mongo = L.mongo ? '✓ đã lưu MongoDB' : (L.loi_mongo ? '✗ MongoDB: ' + esc(L.loi_mongo) : '— không lưu MongoDB');
-  const idx = L.index ? '✓ đã index Lucene' : (L.loi_index ? '✗ ' + esc(L.loi_index) : '— không index');
-  const phu = L.mongo && d.loai === 'page' ? ` · ${fmt(L.images || 0)} ảnh, ${fmt(L.new_documents || 0)} tệp mới vào danh mục` : '';
-  return `<p class="note" style="margin:0 0 8px">Nguồn: <b>${nguon}</b> · ${mongo} · ${idx}${phu}</p>`;
+  const L = d.luu, chip = (ok, nhan, loi) => ok ? `<span class="chip g">✓ ${nhan}</span>`
+    : loi ? `<span class="chip" style="background:#fdeceb;color:#8d3125" title="${esc(loi)}">✗ ${nhan}</span>` : '';
+  return `<div class="foot" style="margin:0 0 10px">
+    <span class="chip" title="${esc(d.fetched_at || '')}">${d.nguon === 'kho' ? 'Từ kho' : 'Tải từ web'}</span>
+    ${chip(L.mongo, 'MongoDB', L.loi_mongo)}${chip(L.index, 'Lucene', L.loi_index)}</div>`;
 }
 
 const TEN_SRC = { headline: 'microdata headline', 'og:title': 'thẻ og:title', 'json-ld': 'JSON-LD', h1: 'thẻ h1',
@@ -1250,8 +1229,7 @@ const TEN_SRC = { headline: 'microdata headline', 'og:title': 'thẻ og:title', 
 
 function veKetQuaTrang(d) {
   const t = d.truong, o = (v, src) => v
-    ? `${esc(v)} <span class="note" style="margin:0">— lấy từ ${TEN_SRC[src] || esc(src)}</span>`
-    : '<i class="note" style="margin:0">không tìm thấy</i>';
+    ? `<span title="Lấy từ ${TEN_SRC[src] || esc(src)}">${esc(v)}</span>` : '<span class="note" style="margin:0">—</span>';
   return `<div class="card" style="box-shadow:none">
     <h2>Kết quả bóc tách</h2>${veLuu(d)}
     <div class="links"><table><tbody>
@@ -1259,15 +1237,15 @@ function veKetQuaTrang(d) {
       <tr><th>Tiêu đề</th><td>${o(t.title, t.title_src)}</td></tr>
       <tr><th>Ngày đăng</th><td>${o(t.date, t.date_src)}</td></tr>
       <tr><th>Tác giả</th><td>${o(t.author, t.author_src)}</td></tr>
-      <tr><th>Nguồn trích dẫn</th><td>${t.cited_source ? esc(t.cited_source) : '<i class="note" style="margin:0">không có dòng "Nguồn:"</i>'}</td></tr>
-      <tr><th>Nội dung</th><td>${fmt(d.so_tu)} từ — khối <code>${esc(d.block.method)}</code></td></tr>
-      <tr><th>Nguồn giới thiệu</th><td><a href="#" onclick="moDoThi(this.dataset.u);return false" data-u="${esc(d.url)}">xem ai trỏ tới trang này →</a></td></tr>
+      <tr><th>Nguồn trích dẫn</th><td>${o(t.cited_source, 'dòng "Nguồn:" cuối bài')}</td></tr>
+      <tr><th>Nội dung</th><td>${fmt(d.so_tu)} từ</td></tr>
+      <tr><th>Nguồn giới thiệu</th><td><a href="#" onclick="moDoThi(this.dataset.u);return false" data-u="${esc(d.url)}">Xem đồ thị →</a></td></tr>
     </tbody></table></div></div>`;
 }
 
 function veKetQuaTep(d) {
-  const f = d.tep, tt = f.status === 'ok' ? (f.needs_ocr ? 'PDF scan, không có lớp chữ (không OCR)' : `bóc được ${fmt(d.so_ky_tu)} ký tự`)
-    : f.status === 'unsupported' ? 'định dạng cũ (doc/xls/ppt) — không hỗ trợ' : 'lỗi: ' + esc(f.error);
+  const f = d.tep, tt = f.status === 'ok' ? (f.needs_ocr ? 'PDF scan, không có lớp chữ' : `${fmt(d.so_ky_tu)} ký tự`)
+    : f.status === 'unsupported' ? 'Định dạng không hỗ trợ' : 'Lỗi: ' + esc(f.error);
   return `<div class="card" style="box-shadow:none">
     <h2>Tệp tài liệu (.${esc(d.ext || '?')}, ${fmt(Math.round(d.size / 1024))} KB)</h2>${veLuu(d)}
     <p>${tt}${f.n_pages ? ` · ${fmt(f.n_pages)} trang` : ''}${f.encoding_suspect ? ' · nghi sai bảng mã (TCVN3/VNI)' : ''}</p>
@@ -1278,18 +1256,17 @@ function veKetQuaTep(d) {
 $('#kgo').onclick = xemKhoi;
 $('#kurl').onkeydown = e => { if (e.key === 'Enter') xemKhoi(); };
 
-const LY_DO_BO = ['', 'bỏ script, menu &lt;nav&gt;, &lt;footer&gt;, &lt;aside&gt;, form, phần ẩn',
-  'bỏ khối lặp trên nhiều trang cùng site', 'bỏ phần ngoài khối được chọn (sidebar, tin liên quan…)'];
+const LY_DO_BO = ['', 'script, nav, footer, form, phần ẩn', 'khối lặp trong site', 'ngoài khối được chọn'];
 
 function veKhoi(d) {
   // 1. phễu: còn bao nhiêu chữ sau mỗi lớp
   const max = Math.max(...d.pheu.map(b => b.chu), 1);
   const pheu = d.pheu.map((b, i) => {
     const bo = i ? d.pheu[i - 1].chu - b.chu : 0;
-    let ghiChu = bo > 0 ? `− ${fmt(bo)} ký tự: ${LY_DO_BO[i]}` : (i ? 'không bỏ gì' : '');
-    if (i === 2 && !d.khuon_host) ghiChu = d.co_mongo ? 'site chưa có bảng khuôn đủ mẫu (cần ≥ 20 trang) — bỏ qua' : 'không nối được Mongo nên không dùng bảng khuôn';
+    let ghiChu = bo > 0 ? `− ${fmt(bo)} · ${LY_DO_BO[i]}` : (i ? '—' : '');
+    if (i === 2 && !d.khuon_host) ghiChu = d.co_mongo ? 'bỏ qua (chưa đủ mẫu)' : 'bỏ qua (không có Mongo)';
     else if (i === 2 && d.khoi_khuon_bo) ghiChu += ` (${fmt(d.khoi_khuon_bo)} khối)`;
-    return `${i ? `<div class="bo">↓ ${ghiChu}</div>` : ''}
+    return `${i && ghiChu !== '—' ? `<div class="bo">↓ ${ghiChu}</div>` : ''}
       <div class="r ${i === d.pheu.length - 1 ? 'chon' : ''}"><b>${esc(b.buoc)}</b>
         <div><div class="bar" style="width:${(b.chu / max * 100).toFixed(1)}%"></div></div>
         <span class="n">${fmt(b.chu)}</span></div>`;
@@ -1300,14 +1277,11 @@ function veKhoi(d) {
   const duong = nut.map((x, i) => `<span class="${i === nut.length - 1 ? 'on' : ''}">${esc(x)}</span>`).join('<span style="border:0;background:none;padding:0">›</span>');
   let cachChon;
   if (d.block.method === 'selector') {
-    cachChon = `<p>Site này có bộ chọn cố định <code>${esc(d.block.selector)}</code> đã kiểm chứng, nên lấy thẳng khối đó, không cần chấm điểm.</p>`;
+    cachChon = `<p class="note">Selector <code>${esc(d.block.selector)}</code></p>`;
   } else if (d.block.method === 'fallback') {
-    cachChon = '<p>Trang gần như không có chữ sau khi dọn, nên lấy cả &lt;body&gt; (phương án dự phòng).</p>';
+    cachChon = '<p class="note">Không tìm được khối — dùng cả &lt;body&gt;</p>';
   } else {
-    cachChon = (d.block.selector ? `<p class="note" style="margin:0 0 4px">Bộ chọn cố định <code>${esc(d.block.selector)}</code> của site không khớp trang này, nên chuyển sang chấm điểm.</p>` : '') +
-      `<p class="note" style="margin:0 0 4px">Bắt đầu từ &lt;body&gt;, mỗi bậc chấm điểm các khối con rồi đi xuống con điểm cao nhất —
-      miễn là nó còn giữ ≥ 65% điểm của cha (vạch đỏ đứt). Điểm cao khi nhiều chữ thường, ít chữ trong link, nhiều đoạn văn;
-      tên lớp kiểu <i>content/article</i> được ×1,3, kiểu <i>menu/sidebar/footer</i> bị ×0,3.</p>` + d.bac.map(veBac).join('');
+    cachChon = d.bac.map(veBac).join('');
   }
 
   // 3. cạnh: trong khối -> đồ thị nội dung, ngoài khối -> khuôn
@@ -1316,28 +1290,27 @@ function veKhoi(d) {
       <div style="flex:${c.noi_dung || 0.001};background:var(--mint-deep)" title="Trong khối">${c.noi_dung / tong > .12 ? `Trong khối: ${fmt(c.noi_dung)}` : ''}</div>
       <div style="flex:${c.khuon || 0.001};background:#9aa0aa" title="Ngoài khối">${c.khuon / tong > .12 ? `Ngoài khối: ${fmt(c.khuon)}` : ''}</div></div>
     <div class="cols2" style="gap:8px;font-size:13px">
-      <div><b style="color:var(--mint-deep)">${fmt(c.noi_dung)} cạnh nội dung</b> → bảng <code>links</code>: người viết chủ động dẫn tới
-        ${Object.entries(c.noi_dung_theo_loai).map(([k, n]) => `${fmt(n)} ${(LOAI[k] || {}).ten || k}`.toLowerCase()).join(', ') || '—'}</div>
-      <div><b style="color:#6f7180">${fmt(c.khuon)} cạnh khuôn</b> → bảng <code>nav_links</code>: menu, footer, logo — gộp theo site</div>
+      <div><b style="color:var(--mint-deep)">${fmt(c.noi_dung)} cạnh nội dung</b> <code>links</code>
+        <span class="note" style="margin:0">${Object.entries(c.noi_dung_theo_loai).map(([k, n]) => `${fmt(n)} ${(LOAI[k] || {}).ten || k}`.toLowerCase()).join(', ')}</span></div>
+      <div><b style="color:#6f7180">${fmt(c.khuon)} cạnh khuôn</b> <code>nav_links</code></div>
     </div>`;
 
   return `
     <div class="card" style="box-shadow:none">
-      <h2>① Còn lại bao nhiêu chữ qua từng lớp</h2>
+      <h2>① Số chữ qua từng lớp</h2>
       <div class="pheu">${pheu}</div>
     </div>
     <div class="card" style="box-shadow:none">
-      <h2>② Đi xuống cây HTML để chọn khối</h2>
+      <h2>② Chọn khối</h2>
       <div class="path">${duong}</div>
       ${cachChon}
     </div>
     <div class="card" style="box-shadow:none">
-      <h2>③ Từ khối sang đồ thị liên kết</h2>
-      <p class="note" style="margin:0 0 4px">Liên kết nằm trong khối là cạnh nội dung; ngoài khối là cạnh khuôn.</p>
+      <h2>③ Cạnh liên kết</h2>
       ${chia}
-      <p class="note"><a href="#" onclick="moDoThi(this.dataset.u);return false" data-u="${esc(d.url)}">Xem đồ thị quanh trang này →</a></p>
+      <p class="note"><a href="#" onclick="moDoThi(this.dataset.u);return false" data-u="${esc(d.url)}">Xem đồ thị →</a></p>
     </div>
-    <details class="card" style="box-shadow:none"><summary style="cursor:pointer"><b>Đoạn đầu khối được chọn</b></summary>
+    <details class="card" style="box-shadow:none"><summary style="cursor:pointer"><b>Nội dung khối</b></summary>
       <div class="content" style="margin-top:8px">${esc(d.trich)}${d.trich.length >= 600 ? '…' : ''}</div></details>`;
 }
 
@@ -1352,11 +1325,11 @@ function veBac(b, i) {
   const con = b.ung_vien.map(u => hang(u.thang ? 'thang' : '', u.nhan, u.diem,
     `${fmt(u.chu)} ký tự, ${fmt(u.chu_link)} trong link (${Math.round(u.chu_link / Math.max(u.chu, 1) * 100)}%), ${u.doan} đoạn văn, hệ số tên lớp ×${u.he_so}`)).join('');
   const ket = b.dung
-    ? `■ Dừng ở <code>${esc(b.cha)}</code>: con tốt nhất <code>${esc(thang.nhan)}</code> chỉ được ${fmt(Math.round(thang.diem))} &lt; ngưỡng ${fmt(Math.round(b.nguong))}, tức chữ đang trải đều nhiều con — giữ cả khối cha.`
-    : `↓ Đi xuống <code>${esc(thang.nhan)}</code> (${fmt(Math.round(thang.diem))} ≥ ngưỡng ${fmt(Math.round(b.nguong))}).`;
+    ? `■ Dừng ở <code>${esc(b.cha)}</code> (${fmt(Math.round(thang.diem))} &lt; ${fmt(Math.round(b.nguong))})`
+    : `↓ <code>${esc(thang.nhan)}</code> (${fmt(Math.round(thang.diem))} ≥ ${fmt(Math.round(b.nguong))})`;
   return `<div class="bac"><div class="note" style="margin:0">Bậc ${i + 1}</div>
     ${hang('cha', b.cha + ' (cha)', b.diem_cha, 'điểm của khối cha')}${con}
-    ${b.con_lai ? `<div class="note">… và ${b.con_lai} khối con điểm thấp hơn</div>` : ''}
+    ${b.con_lai ? `<div class="note">+${b.con_lai} khối khác</div>` : ''}
     <div class="ket">${ket}</div></div>`;
 }
 
@@ -1411,7 +1384,7 @@ async function veDayChuyen() {
   try { d = await (await fetch('/api/extract/overview')).json(); } catch (e) { return; }
   const o = d.documents || {}, ok = d.pages !== undefined;
   const so = {
-    templates: ok && `<b>${fmt(d.templates)}</b> site có bảng khuôn, <b>${fmt(d.templates_active)}</b> đủ mẫu (≥ 20 trang)`,
+    templates: ok && `<b>${fmt(d.templates)}</b> site · <b>${fmt(d.templates_active)}</b> đủ mẫu`,
     extract: ok && `<b>${fmt(d.pages)}</b> trang · <b>${fmt(d.links)}</b> cạnh nội dung · <b>${fmt(d.nav_links)}</b> cạnh khuôn · <b>${fmt(d.images)}</b> ảnh`,
     files: ok && (Object.keys(o).length ? Object.entries(o).map(([k, n]) => `${esc(k)} <b>${fmt(n)}</b>`).join(' · ') : ''),
     'files-extract': ok && (d.documents_text ? `<b>${fmt(d.documents_text)}</b> tệp đã có chữ` : ''),

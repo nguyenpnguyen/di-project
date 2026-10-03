@@ -12,6 +12,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <lucene.version>9.11.1</lucene.version>
+    <tika.version>4.1.0</tika.version>
   </properties>
 
   <dependencies>
@@ -49,6 +50,18 @@
       <groupId>org.jsoup</groupId>
       <artifactId>jsoup</artifactId>
       <version>1.23.2</version>
+    </dependency>
+    <!-- Bóc chữ pdf/docx/xlsx/pptx và doc/xls/ppt cũ (POI). Không OCR: image không có tesseract. -->
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-core</artifactId>
+      <version>${tika.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-parsers-standard-package</artifactId>
+      <version>${tika.version}</version>
+      <type>pom</type>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>

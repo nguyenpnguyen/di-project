@@ -445,6 +445,11 @@ svg.g .n{cursor:pointer}svg.g .n:hover rect{stroke-width:2.5}
       <h2>Index</h2>
       <div class="row" style="margin-bottom:12px">
         <span class="meta" id="istat" style="margin:0">—</span>
+        <select id="isrc" aria-label="Nguồn dữ liệu để index" title="Nguồn dữ liệu để index">
+          <option value="auto">Nguồn: tự chọn (Mongo nếu có)</option>
+          <option value="mongo">Nguồn: MongoDB (đã bóc tách)</option>
+          <option value="raw">Nguồn: kho thô (bóc lại HTML)</option>
+        </select>
         <button class="btn ghost" id="irun">Index thêm vào kho</button>
         <button class="btn ghost" id="ireset">Dựng lại từ đầu</button>
       </div>
@@ -1011,13 +1016,21 @@ $('#cstop').onclick = async () => {
   setTimeout(refresh, 1000);
 };
 
+const TEN_NGUON = { mongo: 'MongoDB (kết quả bóc tách)', raw: 'kho thô (bóc lại HTML, không qua Mongo)' };
 async function runIndex(reset) {
-  $('#ilog').textContent = 'Đang index, kho lớn thì mất vài phút…';
-  const r = await fetch('/api/index/run', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ reset, batch: 200 }) });
-  const d = await r.json();
-  $('#ilog').textContent = JSON.stringify(d, null, 2);
+  const chon = $('#isrc').value;
+  $('#ilog').textContent = 'Đang index từ ' + (TEN_NGUON[chon] || 'nguồn tự chọn') + ', kho lớn thì mất vài phút…';
+  try {
+    const r = await fetch('/api/index/run', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reset, batch: 200, source: chon }) });
+    const d = await r.json();
+    if (!r.ok) { $('#ilog').textContent = `Lỗi ${r.status}: ${d.detail || JSON.stringify(d)}`; return; }
+    let dong = `Đã index ${fmt(d.indexed)} tài liệu từ ${TEN_NGUON[d.source] || d.source}.`;
+    if (chon === 'auto' && d.source === 'raw')
+      dong += '\nLưu ý: Mongo chưa có trang nào nên đã bóc lại từ kho thô — chạy "Bóc tách kho → Mongo" trước nếu muốn dùng kết quả bóc tách (và có tệp tài liệu).';
+    $('#ilog').textContent = dong + '\n\n' + JSON.stringify(d, null, 2);
+  } catch (e) { $('#ilog').textContent = 'Không gọi được API: ' + e; }
   refresh();
 }
 $('#mclose').onclick = () => $('#modal').classList.remove('on');

@@ -1,0 +1,11 @@
+# Mở cổng MongoDB ra máy host để xem bằng MongoDB Compass / mongosh.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.compass.yml up -d mongo
+#   Compass → New connection → mongodb://localhost:27017
+#
+# Chỉ gắn vào 127.0.0.1 (máy bạn), không ra mạng LAN: Mongo của stack KHÔNG có xác thực.
+# Cổng 27017 bị chiếm (đã có mongod trên máy)? Đổi vế trái, ví dụ "127.0.0.1:27018:27017",
+# rồi nối tới mongodb://localhost:27018.
+services:
+  mongo:
+    ports: ["127.0.0.1:27017:27017"]

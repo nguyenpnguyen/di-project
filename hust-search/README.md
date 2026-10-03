@@ -551,6 +551,24 @@ Chưa chạy trên kho thật.
 
 ---
 
+## 7c. Xem MongoDB bằng MongoDB Compass
+
+Mặc định Mongo **không mở cổng** ra ngoài (stack không có xác thực). Muốn xem dữ liệu bằng Compass:
+
+```bash
+cd hust-search
+docker compose -f docker-compose.yml -f docker-compose.compass.yml up -d mongo   # chỉ gắn 127.0.0.1:27017
+# Compass → New connection → URI: mongodb://localhost:27017 → Connect
+```
+
+Database `hust`, các collection: `pages`, `links`, `nav_links`, `images`, `documents`, `templates`
+(mô tả ở `SCHEMA.md`). Chúng chỉ xuất hiện sau khi bấm "Bóc tách kho → Mongo" lần đầu — trước đó
+`api` mới chỉ tạo lược đồ rỗng. Cổng 27017 bị chiếm thì đổi vế trái trong `docker-compose.compass.yml`.
+Không có Compass thì dùng `docker compose exec mongo mongosh hust` (không cần mở cổng).
+Tắt mở cổng: chạy lại `docker compose up -d` không kèm `-f docker-compose.compass.yml`.
+
+---
+
 ## 8. Những chỗ từng hỏng — đọc trước khi sửa
 
 ### 8.1. Site chặn ~20-25 request/phút

@@ -16,17 +16,19 @@ OneDrive_*/       tài liệu tải về, để untracked
 
 ```bash
 cd hust-search && docker compose up -d --build   # http://localhost:8000
-./tests/integration.sh                           # 16 kiểm tra đường đi thật
+./tests/integration.sh                           # 33 kiểm tra đường đi thật
 ```
 
 Ba dịch vụ: `lucene` (Java 21 + Lucene 9.11, cổng 8081), `api` (FastAPI +
 giao diện, cổng 8000) và `mongo` (không mở cổng). Python bóc tách HTML
 (`api/boc_tach/`: khối nội dung, trường, đồ thị liên kết, tệp) rồi ghi vào Mongo;
 `/api/index/run` đọc từ Mongo đẩy sang Java; Java chỉ lo index và tìm kiếm.
-Kế hoạch và quyết định: `hust-search/KE-HOACH-BOC-TACH.md`, lược đồ: `hust-search/SCHEMA.md`. Kho `hust-crawler/data` được mount vào container ở `/crawler`
+Kế hoạch và quyết định: `hust-search/KE-HOACH-BOC-TACH.md`, lược đồ: `hust-search/SCHEMA.md`.
+Sơ đồ luồng dữ liệu và từng thuật toán (Mermaid): `BAO-CAO-KY-THUAT.md`. Giao diện có tab
+"Bóc tách khối" (`/api/extract/explain`) vẽ lại thuật toán chọn khối cho từng trang. Kho `hust-crawler/data` được mount vào container ở `/crawler`
 nên **sửa `crawl_all.py` không cần build lại image**.
 
-Test: 32 (pytest engine) + 59 (pytest api) + 30 (JUnit Lucene). Tích hợp: `integration.sh`
+Test: 32 (pytest engine) + 64 (pytest api) + 30 (JUnit Lucene). Tích hợp: `integration.sh`
 (tìm kiếm) và `integration_bt.sh` (bóc tách/Mongo) — cần stack docker; phần bóc tách
 chưa từng chạy trên MongoDB thật và kho thật.
 
@@ -99,7 +101,7 @@ file `*links*` không đuôi trong `data/raw` mà ghi đè, đừng đẻ file m
 `data/` gitignore nên code và kho đi hai đường. Đóng/mở gói bằng
 `hust-crawler/hustdata` (`export` / `import` / `info` / `check`), hướng dẫn đầy
 đủ ở `hust-crawler/CHIA-DU-LIEU.md`. Gói ra `GOI-DU-LIEU/` ở gốc repo — cũng gitignore.
-Index Lucene không đi kèm gói — dựng lại từ kho mất khoảng hai phút.
+Index Lucene, MongoDB và `data/files/` không đi kèm gói — dựng lại từ kho (index khoảng hai phút).
 
 Không trộn được hai kho crawl song song trên cùng một host: hai `state.json`
 khác nhau ghép lại thì hàng đợi hết khớp. Chia việc theo site thì được, vì mỗi

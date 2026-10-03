@@ -43,6 +43,27 @@ class KhoiTest(unittest.TestCase):
         self.assertIn(gold["content"][-1], text)
         self.assertNotIn("Sơ đồ trang", text)
 
+    def test_vet_khong_doi_ket_qua_va_ghi_du_bac(self):
+        html, _ = fixture("nukeviet.test", 0)
+        k1 = khoi.tim_khoi(BeautifulSoup(html, "lxml"))
+        vet = {}
+        k2 = khoi.tim_khoi(BeautifulSoup(html, "lxml"), vet=vet)
+        self.assertEqual(k1.path, k2.path)
+        # mỗi bậc đi xuống đúng một con thắng; nút cuối cùng là khối được chọn
+        self.assertTrue(all(sum(u["thang"] for u in b["ung_vien"]) == 1 for b in vet["bac"]))
+        di_xuong = [b for b in vet["bac"] if not b["dung"]]
+        self.assertTrue(k2.path.endswith(next(u["nhan"] for u in di_xuong[-1]["ung_vien"] if u["thang"])))
+
+    def test_giai_thich_pheu_giam_dan_va_chia_canh(self):
+        from boc_tach import giai_thich
+        html, _ = fixture("wordpress.test", 0)
+        d = giai_thich(html, "https://abc.hust.edu.vn/vi/x.html")
+        chu = [b["chu"] for b in d["pheu"]]
+        self.assertEqual(chu, sorted(chu, reverse=True))
+        self.assertLess(chu[1], chu[0])                 # dọn cây bỏ được nav/footer
+        self.assertEqual(d["block"]["path"], khoi.tim_khoi(BeautifulSoup(html, "lxml")).path)
+        self.assertGreater(d["canh"]["khuon"], 0)
+
     def test_trang_rong_hoac_chi_menu_thi_fallback_body(self):
         k = khoi.tim_khoi(BeautifulSoup("<html><body><div></div></body></html>", "lxml"))
         self.assertEqual(k.method, "fallback")

@@ -15,7 +15,9 @@ from fastapi.responses import StreamingResponse
 import db as _db
 import tep_job
 import trich
+from boc_tach import giai_thich
 from boc_tach.html_sach import norm
+from boc_tach.khuon import TOI_THIEU_TRANG
 
 router = APIRouter()
 _job = {"running": False, "what": "", "done": 0, "started": 0.0, "result": None, "error": None}
@@ -75,6 +77,45 @@ def extract_status():
 @router.get("/api/extract/coverage")
 def extract_coverage():
     return trich.coverage(mdb())
+
+
+@router.get("/api/extract/explain")
+def extract_explain(url: str):
+    """Chạy lại bước chọn khối trên HTML thô trong kho và trả về từng bước (phễu số
+    chữ, các bậc đi xuống cây, cạnh trong/ngoài khối) để giao diện vẽ. Không cần Mongo;
+    có Mongo thì dùng thêm bảng khuôn của host và bí danh của trang."""
+    import main
+    if urllib.parse.urlsplit(url).scheme not in ("http", "https"):
+        raise HTTPException(422, "url phải là HTTP hoặc HTTPS đầy đủ")
+    urls, khuon_host, co_mongo = {url}, set(), True
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    try:
+        d = mdb()
+        urls.update(_canon(d, url)[1])
+        khuon_host = trich._khuon_theo_host(d).get(host, set())
+    except HTTPException:
+        co_mongo = False
+    rec = main.tim_ban_ghi(urls)
+    html = trich._giai_ma(rec) if rec else None
+    if not html:
+        raise HTTPException(404, "không có HTML của url này trong kho (chưa crawl hoặc là tệp)")
+    out = giai_thich(html, rec["url"], khuon_host)
+    return {**out, "co_mongo": co_mongo, "khuon_host": len(khuon_host)}
+
+
+@router.get("/api/extract/overview")
+def extract_overview():
+    """Số liệu từng bước của dây chuyền khuôn -> bóc tách -> đồ thị -> tệp."""
+    d = mdb()
+    tpl = list(d.templates.find({}, {"n_pages": 1}))
+    return {"templates": len(tpl),
+            "templates_active": sum(1 for t in tpl if t.get("n_pages", 0) >= TOI_THIEU_TRANG),
+            "pages": d.pages.count_documents({}), "links": d.links.count_documents({}),
+            "nav_links": d.nav_links.count_documents({}), "images": d.images.count_documents({}),
+            "documents": {r["_id"]: r["n"] for r in d.documents.aggregate(
+                [{"$group": {"_id": "$status", "n": {"$sum": 1}}}])},
+            "documents_text": d.documents.count_documents({"text": {"$nin": [None, ""]}}),
+            "job": {k: _job[k] for k in ("running", "what", "done")}}
 
 
 FILES_DIR = str(pathlib.Path(os.getenv("DATA_DIR", "/crawler/data")) / "files")

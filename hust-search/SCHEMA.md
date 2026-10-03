@@ -1,13 +1,82 @@
 # Lược đồ MongoDB (phần "tự xây dựng lược đồ + mô tả" của đề)
 
-Ràng buộc `$jsonSchema` nằm ở `api/db.py` (`SCHEMAS`), được tạo lúc `api` khởi
-động. Đây là những gì **đã làm**; phần tệp tài liệu (`documents`) mới có lược đồ,
-chưa có mã tải/bóc chữ. Chưa kiểm chứng validator trên MongoDB thật (test dùng
-mongomock, không thực thi `$jsonSchema`).
+Ràng buộc `$jsonSchema` nằm ở `api/db.py` (`SCHEMAS`), cùng các index (`INDEXES`),
+được tạo lúc `api` khởi động. **Chưa kiểm chứng validator trên MongoDB thật**:
+test dùng mongomock, không thực thi `$jsonSchema`.
 
-Luồng: `kho thô → boc_tach → Mongo`. Chạy lại `POST /api/extract/run` không nhân
-đôi bản ghi (`pages` ghi theo `_id`; `links` xoá theo `src` rồi ghi lại;
-`nav_links`, `images` dựng lại từ đầu).
+Luồng ghi (chi tiết và sơ đồ thuật toán ở `../BAO-CAO-KY-THUAT.md` mục 3-5):
+
+```mermaid
+flowchart LR
+    K[("kho thô<br/>data/raw*/")] -->|"POST /api/extract/templates"| T[("templates")]
+    T -.->|"khử khuôn theo host"| X
+    K -->|"POST /api/extract/run<br/>boc_tach()"| X["một trang"]
+    X --> P[("pages")]
+    X -->|"cạnh trong khối"| L[("links")]
+    X -->|"cạnh ngoài khối,<br/>gộp theo host"| N[("nav_links")]
+    X -->|"img, og:image"| I[("images")]
+    L -->|"POST /api/files/fetch<br/>dst_kind = document"| D[("documents")]
+    D -->|"POST /api/files/extract"| D
+    P & D -->|"POST /api/index/run"| LU["Lucene"]
+```
+
+Chạy lại `POST /api/extract/run` không nhân đôi bản ghi: `pages` ghi theo `_id`;
+`links` xoá theo `src` rồi ghi lại; `nav_links` và `images` dựng lại từ đầu.
+
+## Quan hệ giữa các collection
+
+```mermaid
+erDiagram
+    pages ||--o{ links : "src"
+    links }o--o| pages : "dst khi dst_kind=page"
+    links }o--o| documents : "dst khi dst_kind=document"
+    links }o--o| images : "dst khi dst_kind=image"
+    nav_links }o--o| pages : "dst"
+    templates ||--o{ pages : "cùng host"
+
+    pages {
+        string _id "url chính"
+        array aliases
+        string host
+        string title
+        string published_at
+        string author
+        object content
+    }
+    links {
+        string _id "sha1(src|dst|type|text)"
+        string src
+        string dst
+        string type
+        string text
+        string dst_kind
+    }
+    nav_links {
+        string _id "sha1(host|dst|type|text)"
+        string host
+        string dst
+        string text
+        int n_pages
+    }
+    images {
+        string _id "url ảnh"
+        array alts
+        bool is_template
+    }
+    documents {
+        string _id "url tệp"
+        string status
+        string text
+    }
+    templates {
+        string _id "host"
+        int n_pages
+        object blocks
+    }
+```
+
+`dst` của `links` / `nav_links` là url thô đã qua `norm()`, không phải khoá ngoại
+cứng: một cạnh có thể trỏ tới trang chưa crawl, tệp chưa tải hay site ngoài.
 
 ## pages — một bài / trang
 | Trường | Ý nghĩa |
@@ -19,6 +88,7 @@ Luồng: `kho thô → boc_tach → Mongo`. Chạy lại `POST /api/extract/run`
 | `published_at`, `published_at_src` | `YYYY-MM-DD` hoặc rỗng; nguồn: `datePublished`, `article:published_time`, `json-ld`, `time`, `regex` |
 | `author`, `author_src` | `microdata`, `meta`, `json-ld`, `text-line` (dòng "Tác giả:" cuối bài); bỏ giá trị chung như `admin` |
 | `cited_source` | dòng "Nguồn: …" / "Theo …" cuối bài (trường phụ) |
+| `section` | `meta[property=article:section]` |
 | `content.text/html/word_count` | văn bản khối nội dung, HTML rút gọn (≤ 40 KB), số từ |
 | `content.block` | `path` (đường CSS), `score`, `method` = `selector` / `heuristic` / `fallback` |
 | `raw.sha1/fetched_at` | truy ngược về bản ghi kho thô |
@@ -33,20 +103,45 @@ Cạnh nằm **trong** khối nội dung: người viết chủ động giới t
 ## nav_links — cạnh khuôn, gộp theo host
 Cạnh **ngoài** khối nội dung (menu, footer, sidebar) và ảnh logo/icon (đường dẫn
 `/themes/`, `/templates/`, `/assets/` hoặc rộng/cao ≤ 16 px). Mỗi `(host, dst, type,
-text)` một bản ghi với `n_pages` (số trang có cạnh này) và `sample_src` (≤ 3 trang ví dụ).
+text)` một bản ghi với `dst_kind`, `n_pages` (số trang có cạnh này) và `sample_src`
+(≤ 3 trang ví dụ).
 
 ## images — danh mục ảnh
-`_id` = url ảnh, `alts` = chữ mô tả từng gặp trong bài, `is_template` = true nếu
-chỉ xuất hiện ở cạnh khuôn. Ảnh không được tải.
+`_id` = url ảnh, `host`, `alts` = chữ mô tả từng gặp trong bài, `is_template` = true
+nếu chỉ xuất hiện ở cạnh khuôn. Ảnh không được tải.
 
 ## templates — bảng khối lặp theo host (lớp 2 của thuật toán khối)
 `{_id: host, n_pages, blocks: {vân tay: số trang}}`. Chỉ giữ khối có mặt trên
 ≥ max(3, 5% số trang) để document không vượt 16 MB. Host < 20 trang thì
-không dùng để khử khuôn.
+không dùng để khử khuôn; khối có mặt trên > 30% số trang là khuôn.
 
-## documents — tệp tài liệu (CHƯA có mã)
-`_id` url, `ext`, `mime`, `size`, `sha1`, `status`, `text`, `n_pages`,
-`needs_ocr`, `encoding_suspect`, `error`, `fetched_at`, `extractor_version`.
+## documents — tệp tài liệu
+| Trường | Ý nghĩa |
+|---|---|
+| `_id`, `host`, `ext`, `mime` | url tệp (chỉ host `*.hust.edu.vn`), đuôi, content-type |
+| `status` | `pending` · `ok` · `unsupported` · `skipped_too_large` · `error` |
+| `size`, `sha1`, `fetched_at` | có sau khi tải; byte lưu ở `data/files/<sha1>.<ext>` |
+| `text`, `n_pages` | chữ bóc được (≤ 500.000 ký tự); số trang PDF / sheet / slide (docx ghi 0) |
+| `needs_ocr` | PDF dưới 20 ký tự/trang (thường là bản scan) — `text` để rỗng, không OCR |
+| `encoding_suspect` | chữ nghi sai bảng mã cũ (TCVN3/VNI) |
+| `error`, `extractor_version` | lý do lỗi; phiên bản bộ bóc |
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: danh_muc()<br/>cạnh nội dung trỏ tới tệp
+    [*] --> unsupported: đuôi doc/xls/ppt cũ
+    pending --> error: robots cấm / HTTP ≥ 400 / lỗi mạng
+    pending --> skipped_too_large: tệp lớn hơn 50 MB
+    pending --> unsupported: định dạng không hỗ trợ
+    pending --> da_tai: tai()<br/>ghi data/files/sha1.ext
+    da_tai --> ok: boc_chu()
+    da_tai --> error: lỗi bóc / mất tệp
+    ok --> [*]: có chữ → index kind=document
+```
+
+(`da_tai` là `status = pending` đã có `sha1`; trong Mongo không có trạng thái riêng.)
+
+Tệp `ok` có chữ được index vào Lucene với `kind = "document"`.
 
 ## Truy vấn "nguồn giới thiệu"
 ```js
@@ -54,6 +149,8 @@ db.links.find({dst: "<url>"}, {src: 1, text: 1})                        // trong
 db.nav_links.find({dst: "<url>"}, {host: 1, text: 1, n_pages: 1})       // menu / footer
 ```
 API: `GET /api/referrers?url=` (tự đổi bí danh về trang chính), `/api/graph/out`,
-`/api/graph/stats`, `/api/graph/edges.csv`, `/api/extract/coverage`.
+`/api/graph/stats`, `/api/graph/edges.csv`, `/api/extract/coverage`,
+`/api/extract/overview`.
 
-Index: `links{dst}`, `links{src}`, `nav_links{dst}`, `pages{host,published_at}`, `pages{aliases}`.
+Index: `links{dst}`, `links{src}`, `nav_links{dst}`, `pages{host,published_at}`,
+`pages{aliases}`, `documents{host}`.

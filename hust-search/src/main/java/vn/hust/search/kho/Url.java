@@ -98,6 +98,26 @@ public final class Url {
         return p.endsWith("/") ? "listing" : "other";
     }
 
+    /** {@code urlsplit(url).hostname} viết thường; rỗng nếu không có (Python trả None). */
+    public static String hostname(String url) {
+        String netloc;
+        try {
+            netloc = urlsplit(url, "").netloc;
+        } catch (IllegalArgumentException e) {
+            return "";
+        }
+        String info = netloc.substring(netloc.lastIndexOf('@') + 1);
+        int b = info.indexOf('[');
+        String h = b >= 0 ? info.substring(b + 1).split("]", 2)[0] : info.split(":", 2)[0];
+        return h.toLowerCase(Locale.ROOT);
+    }
+
+    /** {@code urlsplit(url).path} (không tách ;params) và {@code .query}. */
+    public static String[] pathQuery(String url) {
+        Parts p = urlsplit(url, "");
+        return new String[]{p.path, p.query};
+    }
+
     /** Đường dẫn của url, như {@code urlparse(url).path} (đã tách ;params). */
     public static String pathOf(String url) {
         return urlparse(url).path;
@@ -117,7 +137,7 @@ public final class Url {
     record Parts(String scheme, String netloc, String path, String params, String query, String fragment) {}
 
     /** str.strip() của Python: bỏ mọi khoảng trắng Unicode ở hai đầu. */
-    private static String pyStrip(String s) {
+    public static String pyStrip(String s) {
         int a = 0, b = s.length();
         while (a < b && isPySpace(s.charAt(a))) a++;
         while (b > a && isPySpace(s.charAt(b - 1))) b--;

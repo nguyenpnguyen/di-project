@@ -1,6 +1,6 @@
 services:
   lucene:
-    build: ./lucene
+    build: .
     volumes:
       - lucene-index:/index          # index nằm ở volume, xoá container không mất
     ports: ["8081:8081"]
@@ -15,7 +15,7 @@ services:
   # Index nằm ở volume riêng, không đụng index chính ở cổng 8081.
   lucene-cu: &lucene-so-sanh
     profiles: ["compare"]
-    build: ./lucene
+    build: .
     volumes: ["lucene-cu:/index"]
     ports: ["8091:8081"]
     healthcheck:

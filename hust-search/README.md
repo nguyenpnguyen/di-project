@@ -74,6 +74,7 @@ DI/
     ├── docker-compose.yml         3 dịch vụ: lucene (Java) + api (Python) + mongo
     ├── SCHEMA.md                  lược đồ MongoDB (pages, links, nav_links, images, documents, templates)
     ├── KE-HOACH-BOC-TACH.md       kế hoạch bóc tách / đồ thị / Mongo và các quyết định đã chốt
+    ├── THUAT-TOAN-BOC-TACH.md     giải thích thuật toán chọn khối, khử khuôn, bóc trường, đồ thị (có sơ đồ Mermaid)
     ├── lucene/                    DỊCH VỤ TÌM KIẾM — Java 21 + Lucene 9.11
     │   ├── pom.xml
     │   ├── Dockerfile             build đa tầng: maven → JRE

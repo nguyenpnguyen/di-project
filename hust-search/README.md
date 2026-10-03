@@ -239,6 +239,7 @@ Tất cả dưới `http://localhost:8000`.
 | POST | `/api/extract/run?limit=` | kho thô → boc_tach → Mongo (chạy nền, idempotent) |
 | GET | `/api/extract/status`, `/api/extract/coverage` | tiến độ; % trường đầy đủ và cách chọn khối theo host |
 | GET | `/api/extract/explain?url=` | chạy lại bước chọn khối trên HTML thô trong kho, trả từng bước để vẽ (không cần Mongo) |
+| POST | `/api/extract/url` | **url bất kỳ** `{url, tai_lai, luu, index}`: lấy HTML trong kho, chưa có thì tải từ web (nhịp ≥ 3 s), chọn khối + bóc trường + chia cạnh, ghi Mongo (`pages`, `links`, ảnh, danh mục tệp) và Lucene; trả kèm từng bước để vẽ. Url là pdf/docx/xlsx/pptx thì bóc chữ vào `documents` |
 | GET | `/api/extract/overview` | số liệu từng bước khuôn → bóc tách → tệp → bóc chữ |
 | GET | `/api/referrers?url=` | nguồn giới thiệu: cạnh trong bài + cạnh menu/footer trỏ vào url |
 | GET | `/api/graph/out?url=`, `/api/graph/stats`, `/api/graph/edges.csv` | cạnh đi ra; thống kê; xuất `source,target,text` |
@@ -477,7 +478,7 @@ trực quan; các bộ còn lại chưa chạy lại kể từ đó (không đ�
 # engine (32 test)
 cd hust-crawler && .venv/bin/python -m pytest tests -q
 
-# Python phía api (64 test: parser, boc_tach, Mongo bằng mongomock, tệp; không gọi mạng thật)
+# Python phía api (81 test: parser, boc_tach, Mongo bằng mongomock, tệp; không gọi mạng thật)
 cd hust-search && docker run --rm -v "$PWD":/workspace -v "$PWD/../hust-crawler":/crawler \
     -w /workspace hust-search-api:latest python -m pytest tests -q
 
@@ -659,6 +660,12 @@ container ở `/crawler`.
 * **Thuật toán khối nội dung chưa được đo trên trang thật**: bộ đánh giá hiện là trang tổng hợp,
   các hằng số ở `khoi.py` là khởi điểm chưa dò. Xem `/api/extract/coverage` sau khi bóc tách kho thật,
   và soi từng trang ở tab **Bóc tách khối**.
+* **`/api/extract/url` với trang lẻ không ghi `nav_links`** (bảng đó đếm số trang theo host, ghi lẻ rồi
+  ghi lại sẽ đếm đôi). Trang lẻ nằm trong `raw-adhoc` nên lần "Bóc tách kho → Mongo" sau sẽ gom đủ.
+  Trang ở host ngoài họ hust.edu.vn: mọi liên kết của nó là `external`, nên tệp/ảnh của site đó không vào
+  danh mục (theo quyết định "không tải tệp host ngoài"). Url lưu qua `norm()` nên luôn hiện `https://`,
+  kể cả site chỉ có http; khi tải thì dùng url gốc và tự thử lại `http://` nếu `https://` lỗi kết nối.
+  Route này tải url bất kỳ từ máy chủ — chỉ chạy stack ở máy cá nhân/mạng nội bộ (stack không có xác thực).
 * **`/api/extract/explain` quét kho thô** để tìm HTML của url (lọc thô bằng chuỗi trước khi giải mã);
   chưa đo tốc độ trên kho ~200 MB. Giao diện trực quan mới thử trên dữ liệu giả.
 * **`nav_links` có thể phình** vì gồm cả liên kết ngoài khối nội dung nhưng riêng cho từng trang

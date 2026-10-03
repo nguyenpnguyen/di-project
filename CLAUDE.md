@@ -25,10 +25,11 @@ giao diện, cổng 8000) và `mongo` (không mở cổng). Python bóc tách HT
 `/api/index/run` đọc từ Mongo đẩy sang Java; Java chỉ lo index và tìm kiếm.
 Kế hoạch và quyết định: `hust-search/KE-HOACH-BOC-TACH.md`, lược đồ: `hust-search/SCHEMA.md`.
 Sơ đồ luồng dữ liệu và từng thuật toán (Mermaid): `BAO-CAO-KY-THUAT.md`. Giao diện có tab
-"Bóc tách khối" (`/api/extract/explain`) vẽ lại thuật toán chọn khối cho từng trang. Kho `hust-crawler/data` được mount vào container ở `/crawler`
+"Bóc tách khối" (`POST /api/extract/url`) nhận url bất kỳ: lấy trong kho hoặc tải từ web, bóc tách,
+lưu Mongo + Lucene, rồi vẽ lại thuật toán chọn khối; tab "Đồ thị liên kết" có nút "Tải & bóc tách". Kho `hust-crawler/data` được mount vào container ở `/crawler`
 nên **sửa `crawl_all.py` không cần build lại image**.
 
-Test: 32 (pytest engine) + 64 (pytest api) + 30 (JUnit Lucene). Tích hợp: `integration.sh`
+Test: 32 (pytest engine) + 81 (pytest api) + 30 (JUnit Lucene). Tích hợp: `integration.sh`
 (tìm kiếm) và `integration_bt.sh` (bóc tách/Mongo) — cần stack docker; phần bóc tách
 chưa từng chạy trên MongoDB thật và kho thật.
 

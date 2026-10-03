@@ -101,6 +101,42 @@ def ghi_mot_trang(db, url: str, d: dict, rec: dict, html: str) -> None:
         db.links.insert_many(links, ordered=False)
 
 
+def ghi_phu_mot_trang(db, d: dict) -> dict:
+    """Phần phụ khi ghi một trang lẻ: danh mục ảnh và danh mục tệp tài liệu mà trang trỏ tới.
+
+    Chỉ upsert, không xoá: `images` vẫn được dựng lại đầy đủ ở lần extract/run kế tiếp
+    (trang lẻ nằm trong raw-adhoc nên lần đó cũng gom được). `nav_links` cố ý KHÔNG ghi ở
+    đây — nó đếm số trang theo host, ghi lẻ rồi ghi lại thì đếm đôi.
+    """
+    from boc_tach import lien_ket, tep
+    n_anh = n_tep = 0
+    for e in d["links"]:
+        if e["dst_kind"] == "image":
+            upd = {"$set": {"is_template": False},
+                   "$setOnInsert": {"host": (urllib.parse.urlsplit(e["dst"]).hostname or "").lower()}}
+            if e["text"]:
+                upd["$addToSet"] = {"alts": e["text"]}
+            else:
+                upd["$setOnInsert"]["alts"] = []
+            db.images.update_one({"_id": e["dst"]}, upd, upsert=True)
+            n_anh += 1
+        elif e["dst_kind"] == "document":
+            host = (urllib.parse.urlsplit(e["dst"]).hostname or "").lower()
+            if not lien_ket.trong_ho_hust(host):
+                continue
+            ext = tep.duoi_tu_url(e["dst"])
+            r = db.documents.update_one({"_id": e["dst"]}, {"$setOnInsert": {
+                "host": host, "ext": ext, "mime": "", "extractor_version": VERSION,
+                "status": "unsupported" if ext in tep.CU else "pending"}}, upsert=True)
+            n_tep += 1 if r.upserted_id is not None else 0
+    for e in d["nav_links"]:
+        if e["dst_kind"] == "image":
+            db.images.update_one({"_id": e["dst"]}, {"$setOnInsert": {
+                "host": (urllib.parse.urlsplit(e["dst"]).hostname or "").lower(),
+                "alts": [], "is_template": True}}, upsert=True)
+    return {"images": n_anh, "new_documents": n_tep}
+
+
 def lucene_tu_mongo(db) -> Iterable[dict]:
     """Tài liệu để index, đọc từ Mongo: mọi trang, và tệp đã bóc được chữ."""
     for p in db.pages.find({}):

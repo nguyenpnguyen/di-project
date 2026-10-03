@@ -1,7 +1,9 @@
 """Các route bóc tách và đồ thị liên kết (MongoDB). Gắn vào app trong main.py."""
 from __future__ import annotations
 
+import base64
 import csv
+import hashlib
 import os
 import pathlib
 import io
@@ -11,11 +13,12 @@ import urllib.parse
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 import db as _db
 import tep_job
 import trich
-from boc_tach import giai_thich
+from boc_tach import boc_tach, giai_thich, tep
 from boc_tach.html_sach import norm
 from boc_tach.khuon import TOI_THIEU_TRANG
 
@@ -101,6 +104,153 @@ def extract_explain(url: str):
         raise HTTPException(404, "không có HTML của url này trong kho (chưa crawl hoặc là tệp)")
     out = giai_thich(html, rec["url"], khuon_host)
     return {**out, "co_mongo": co_mongo, "khuon_host": len(khuon_host)}
+
+
+class UrlReq(BaseModel):
+    url: str
+    tai_lai: bool = False      # True: tải lại từ web dù kho đã có
+    luu: bool = True           # ghi vào MongoDB
+    index: bool = True         # đẩy vào Lucene để tìm được ngay
+
+
+def _loai_noi_dung(ctype: str, url: str) -> str:
+    """html | document | image | other, theo content-type rồi tới đuôi url."""
+    ct = (ctype or "").split(";")[0].strip().lower()
+    if "html" in ct:
+        return "html"
+    if ct in tep.MIME_SANG_DUOI or tep.duoi_tu_url(url) in tep.HO_TRO | tep.CU:
+        return "document"
+    if ct.startswith("image/"):
+        return "image"
+    return "other" if ct else "html"
+
+
+def _index_lucene(doc: dict) -> str:
+    """Đẩy một tài liệu sang Lucene; trả chuỗi lỗi, rỗng nếu thành công."""
+    import httpx
+    import main
+    try:
+        with httpx.Client(base_url=main.LUCENE, timeout=60) as cli:
+            cli.post("/bulk", json=[doc]).raise_for_status()
+        return ""
+    except httpx.HTTPError as e:
+        return f"Lucene không sẵn sàng: {e}"
+
+
+@router.post("/api/extract/url")
+def extract_url(req: UrlReq):
+    """Bóc tách MỘT url bất kỳ: lấy HTML trong kho nếu có (hoặc tải mới từ web), chạy
+    thuật toán chọn khối + bóc trường + chia cạnh, ghi Mongo và index Lucene.
+
+    Trả về đủ dữ liệu để vẽ lại từng bước như /api/extract/explain, cộng kết quả bóc
+    trường và trạng thái lưu. Url là tệp tài liệu thì bóc chữ tệp và ghi `documents`.
+    """
+    import main
+    url = (req.url or "").strip()
+    sp = urllib.parse.urlsplit(url)
+    if sp.scheme.lower() not in ("http", "https") or not sp.netloc:
+        raise HTTPException(422, "url phải là HTTP hoặc HTTPS đầy đủ")
+    url_tai = url                    # tải bằng url gốc: norm() ép https, site chỉ có http sẽ hỏng
+    url = norm(url) or url           # còn khoá lưu thì luôn qua norm()
+
+    d = None
+    try:
+        d = mdb()
+    except HTTPException:
+        pass
+    khuon_host: set[str] = set()
+    urls = {url}
+    if d is not None:
+        urls.update(_canon(d, url)[1])
+        khuon_host = trich._khuon_theo_host(d).get(sp.hostname.lower(), set())
+
+    # 1. lấy nội dung: kho trước, web sau
+    rec, nguon, data = None, "kho", b""
+    if not req.tai_lai:
+        rec = main.tim_ban_ghi(urls)
+        if rec is not None and not rec.get("html_b64"):
+            rec = None                       # kho chỉ ghi nhận tệp, không có byte: tải mới
+    if rec is None:
+        try:
+            r = main.tai_ve(url_tai)
+        except HTTPException as e:
+            # url lấy từ đồ thị đã bị norm() ép https; site chỉ có http thì lỗi ngay ở bắt tay
+            # TLS/kết nối (không phải HTTP 4xx/5xx) — thử lại một lần bằng http.
+            if not (e.status_code == 502 and str(e.detail).startswith("không tải được")
+                    and url_tai.lower().startswith("https://")):
+                raise
+            r = main.tai_ve("http://" + url_tai[len("https://"):])
+        nguon, data = "web", r.content
+        ctype = r.headers.get("content-type", "")
+        loai = _loai_noi_dung(ctype, str(r.url))
+        rec = {"url": norm(str(r.url)) or str(r.url), "status": r.status_code, "content_type": ctype,
+               "encoding": r.encoding or "utf-8", "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+               "size": len(data), "sha1": hashlib.sha1(data).hexdigest(), "kind": "adhoc",
+               "html_b64": base64.b64encode(data).decode("ascii") if loai == "html" else None}
+        if loai in ("html", "document"):
+            main._ghi_kho(rec)               # vào raw-adhoc: lần bóc tách cả kho sau cũng gom được
+        if loai == "document":
+            return _boc_tep_url(d, rec, data, req)
+        if loai != "html":
+            raise HTTPException(415, f"url trả về {ctype or 'không rõ loại'} — không phải trang HTML "
+                                     "hay tệp tài liệu; ảnh chỉ có nguồn giới thiệu, xem ở tab Đồ thị")
+
+    html = trich._giai_ma(rec)
+    if not html:
+        raise HTTPException(422, "trang trả lỗi hoặc không có HTML")
+    page_url = norm(rec["url"]) or rec["url"]
+    out = giai_thich(html, page_url, khuon_host)
+    kq = boc_tach(html, page_url, khuon_host)
+    if not kq:
+        raise HTTPException(422, "tải được nhưng không bóc ra chữ nào — trang rỗng hoặc dựng bằng JS")
+
+    # 2. lưu
+    luu = {"mongo": False, "loi_mongo": "", "index": False, "loi_index": ""}
+    if req.luu:
+        if d is None:
+            luu["loi_mongo"] = "MongoDB không sẵn sàng"
+        else:
+            trich.ghi_mot_trang(d, page_url, kq, rec, html)
+            luu.update(trich.ghi_phu_mot_trang(d, kq), mongo=True)
+    if req.index:
+        luu["loi_index"] = _index_lucene({**main.lucene_document(kq), "author": kq["author"], "kind": "page"})
+        luu["index"] = not luu["loi_index"]
+    return {**out, "loai": "page", "nguon": nguon, "fetched_at": rec.get("fetched_at", ""),
+            "co_mongo": d is not None, "khuon_host": len(khuon_host), "luu": luu,
+            "truong": {k: kq[k] for k in ("title", "title_src", "date", "date_src", "author",
+                                          "author_src", "cited_source", "section")},
+            "so_tu": len(kq["text"].split())}
+
+
+def _boc_tep_url(d, rec: dict, data: bytes, req: UrlReq) -> dict:
+    """Nhánh tệp tài liệu của /api/extract/url: bóc chữ, ghi documents + byte, index kind=document."""
+    url = rec["url"]
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    mime = (rec.get("content_type") or "").split(";")[0].strip().lower()
+    ext = tep.duoi_tu_url(url) or tep.MIME_SANG_DUOI.get(mime, "")
+    kq = tep.bong_chu(data, ext)
+    luu = {"mongo": False, "loi_mongo": "", "index": False, "loi_index": ""}
+    if req.luu:
+        if d is None:
+            luu["loi_mongo"] = "MongoDB không sẵn sàng"
+        else:
+            p = pathlib.Path(FILES_DIR)
+            p.mkdir(parents=True, exist_ok=True)
+            (p / f"{rec['sha1']}.{ext or 'bin'}").write_bytes(data)
+            d.documents.update_one({"_id": url}, {"$set": {
+                "host": host, "ext": ext, "mime": mime, "size": len(data), "sha1": rec["sha1"],
+                "fetched_at": rec["fetched_at"], "extractor_version": trich.VERSION, **kq}}, upsert=True)
+            luu["mongo"] = True
+    if req.index and kq["status"] == "ok" and kq["text"]:
+        ten = urllib.parse.unquote(url.rsplit("/", 1)[-1].split("?")[0]) or url
+        luu["loi_index"] = _index_lucene({"url": url, "title": ten, "text": kq["text"], "host": host,
+                                          "section": "", "date": "", "author": "", "kind": "document"})
+        luu["index"] = not luu["loi_index"]
+    ref = d.links.count_documents({"dst": url}) if d is not None else 0
+    return {"loai": "document", "url": url, "host": host, "nguon": "web", "ext": ext, "size": len(data),
+            "co_mongo": d is not None, "luu": luu, "referrers": ref,
+            "tep": {k: kq[k] for k in ("status", "n_pages", "needs_ocr", "encoding_suspect", "error")},
+            "trich": kq["text"][:600], "so_ky_tu": len(kq["text"])}
 
 
 @router.get("/api/extract/overview")
@@ -204,8 +354,8 @@ def graph_out(url: str, limit: int = 200):
     canon, _ = _canon(d, url)
     edges = list(d.links.find({"src": canon}, {"dst": 1, "text": 1, "type": 1, "dst_kind": 1,
                                                 "count": 1}).limit(limit))
-    return {"url": canon, "edges": [{k: e[k] for k in ("dst", "text", "type", "dst_kind", "count")}
-                                    for e in edges]}
+    return {"url": canon, "co_trang": d.pages.count_documents({"_id": canon}, limit=1) > 0,
+            "edges": [{k: e[k] for k in ("dst", "text", "type", "dst_kind", "count")} for e in edges]}
 
 
 @router.get("/api/graph/stats")

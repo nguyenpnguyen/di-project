@@ -549,6 +549,34 @@ def _ghi_mongo(doc: dict, rec: dict) -> None:
         print(f"[mongo] không ghi được trang tải lẻ: {e}", flush=True)
 
 
+UA_TRINH_DUYET = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+
+
+def tai_ve(url: str) -> httpx.Response:
+    """Tải một url theo nhịp chung của mọi lần tải lẻ (/api/fetch, /api/extract/url).
+
+    Chặn nhịp ở phía máy chủ chứ không tin vào giao diện: bấm nhanh tay hay mở
+    hai tab là thành bắn liên tiếp, đúng kiểu ăn 429.
+    """
+    with _tai_lock:
+        cho = NHIP_TOI_THIEU - (time.time() - _lan_tai["luc"])
+        if cho > 0:
+            time.sleep(cho)
+        _lan_tai["luc"] = time.time()
+    try:
+        with httpx.Client(timeout=30, follow_redirects=True,
+                          headers={"User-Agent": UA_TRINH_DUYET}) as cli:
+            r = cli.get(url)
+    except Exception as e:
+        raise HTTPException(502, f"không tải được: {e}")
+    if r.status_code == 429:
+        raise HTTPException(429, "site đang chặn nhịp, đợi rồi thử lại")
+    if r.status_code >= 400:
+        raise HTTPException(502, f"site trả HTTP {r.status_code}")
+    return r
+
+
 @app.post("/api/fetch")
 def fetch_one(req: LayReq):
     """Tải đúng một url, lưu kho, bóc chữ rồi đẩy thẳng vào Lucene.
@@ -561,27 +589,7 @@ def fetch_one(req: LayReq):
     if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
         raise HTTPException(422, "url phải là HTTP hoặc HTTPS đầy đủ")
 
-    # Chặn nhịp ở phía máy chủ chứ không tin vào giao diện: bấm nhanh tay hay mở
-    # hai tab là thành bắn liên tiếp, đúng kiểu ăn 429.
-    with _tai_lock:
-        cho = NHIP_TOI_THIEU - (time.time() - _lan_tai["luc"])
-        if cho > 0:
-            time.sleep(cho)
-        _lan_tai["luc"] = time.time()
-
-    ua = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-          "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
-    try:
-        with httpx.Client(timeout=30, follow_redirects=True,
-                          headers={"User-Agent": ua}) as cli:
-            r = cli.get(url)
-    except Exception as e:
-        raise HTTPException(502, f"không tải được: {e}")
-
-    if r.status_code == 429:
-        raise HTTPException(429, "site đang chặn nhịp, đợi rồi thử lại")
-    if r.status_code >= 400:
-        raise HTTPException(502, f"site trả HTTP {r.status_code}")
+    r = tai_ve(url)
 
     rec = {
         "url": str(r.url),

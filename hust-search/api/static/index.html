@@ -174,22 +174,16 @@ pre{background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:1
 .content{white-space:pre-wrap;max-height:360px;overflow:auto;background:#f6f4f0;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13.5px}
 .links{overflow:auto}.links td:first-child{word-break:break-all;min-width:45%}
 /* ---- vẽ bóc tách khối, đồ thị, dây chuyền ---- */
-.pheu{display:flex;flex-direction:column;gap:2px}
-.pheu .r{display:grid;grid-template-columns:130px 1fr 80px;gap:10px;align-items:center;font-size:13px}
-.pheu .r b{font-weight:500}.pheu .r .n{text-align:right;font-variant-numeric:tabular-nums}
-.pheu .bar{height:22px;border-radius:7px;background:var(--sky);min-width:3px}
-.pheu .r.chon .bar{background:var(--mint-deep)}
-.pheu .bo{font-size:11.5px;color:var(--blush-deep);padding-left:140px;min-height:16px}
-.bac{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px}
-.bac .uv{display:grid;grid-template-columns:minmax(90px,170px) 1fr 64px;gap:8px;align-items:center;font-size:12.5px;margin-top:4px}
-.bac .uv code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bac .uv .n{text-align:right;font-variant-numeric:tabular-nums}
-.bac .track{position:relative;height:16px;background:#f3f1ec;border-radius:6px}
-.bac .fill{height:100%;border-radius:6px;background:#c9ccd4;min-width:2px}
-.bac .uv.cha .fill{background:var(--sky)}
-.bac .uv.thang .fill{background:var(--mint-deep)}
-.bac .nguong{position:absolute;top:-4px;bottom:-4px;border-left:2px dashed var(--blush-deep)}
-.bac .ket{font-size:12.5px;margin-top:6px}
+.kq h3{font-family:Lora,Georgia,serif;font-size:21px;line-height:1.3;margin:4px 0 6px}
+.kq .meta2{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);margin-bottom:14px}
+.kq .meta2 b{color:var(--ink);font-weight:500}
+.kq .dau{display:flex;align-items:center;gap:10px;margin:16px 0 8px}
+.kq .dau h4{margin:0;font-size:14px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-left:auto}
+.seg button{border:0;background:#fff;padding:4px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed=true]{background:var(--mint);color:var(--ink)}
+.kq iframe{width:100%;height:420px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.kq .content{max-height:520px}
 .path{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px;margin:6px 0}
 .path span{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-family:ui-monospace,monospace}
 .path span.on{background:var(--mint);border-color:var(--mint-deep)}
@@ -1208,7 +1202,8 @@ async function xemKhoi() {
       body: JSON.stringify({ url: u, luu: $('#kluu').checked, index: $('#kidx').checked, tai_lai: $('#ktai').checked }) });
     const d = await r.json();
     if (!r.ok) { $('#kout').innerHTML = `<div class="err">${esc(d.detail || 'lỗi')}</div>`; return; }
-    $('#kout').innerHTML = d.loai === 'document' ? veKetQuaTep(d) : veKetQuaTrang(d) + veKhoi(d);
+    $('#kout').innerHTML = d.loai === 'document' ? veKetQuaTep(d) : veKetQuaTrang(d);
+    if (d.loai !== 'document') xemNoiDung('trinh-bay');
   } catch (e) { $('#kout').innerHTML = `<div class="err">${esc(String(e))}</div>`; }
   finally { $('#kgo').disabled = false; }
 }
@@ -1227,111 +1222,81 @@ const TEN_SRC = { headline: 'microdata headline', 'og:title': 'thẻ og:title', 
   'article:published_time': 'thẻ article:published_time', time: 'thẻ &lt;time&gt;', regex: 'dòng ngày dd/mm/yyyy trong trang',
   microdata: 'microdata author', meta: 'thẻ meta author', 'text-line': 'dòng "Tác giả:" cuối bài' };
 
+let kqHienTai = null;   // kết quả bóc tách đang hiện, để chuyển qua lại Trình bày / Văn bản
+
 function veKetQuaTrang(d) {
-  const t = d.truong, o = (v, src) => v
-    ? `<span title="Lấy từ ${TEN_SRC[src] || esc(src)}">${esc(v)}</span>` : '<span class="note" style="margin:0">—</span>';
-  return `<div class="card" style="box-shadow:none">
-    <h2>Kết quả bóc tách</h2>${veLuu(d)}
-    <div class="links"><table><tbody>
-      <tr><th style="width:150px">Url</th><td><a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.url)}</a></td></tr>
-      <tr><th>Tiêu đề</th><td>${o(t.title, t.title_src)}</td></tr>
-      <tr><th>Ngày đăng</th><td>${o(t.date, t.date_src)}</td></tr>
-      <tr><th>Tác giả</th><td>${o(t.author, t.author_src)}</td></tr>
-      <tr><th>Nguồn trích dẫn</th><td>${o(t.cited_source, 'dòng "Nguồn:" cuối bài')}</td></tr>
-      <tr><th>Nội dung</th><td>${fmt(d.so_tu)} từ</td></tr>
-      <tr><th>Nguồn giới thiệu</th><td><a href="#" onclick="moDoThi(this.dataset.u);return false" data-u="${esc(d.url)}">Xem đồ thị →</a></td></tr>
-    </tbody></table></div></div>`;
+  kqHienTai = d;
+  const t = d.truong, nd = d.noi_dung;
+  const muc = (nhan, v, src) => v ? `<span title="Lấy từ ${TEN_SRC[src] || esc(src)}">${nhan} <b>${esc(v)}</b></span>` : '';
+  const lk = d.lien_ket.map(e => `<tr>
+      <td>${esc(e.text) || '<span class="note" style="margin:0">—</span>'}</td>
+      <td class="url"><a href="${esc(e.dst)}" target="_blank" rel="noopener noreferrer">${esc(e.dst)}</a></td>
+      <td>${esc((LOAI[e.dst_kind] || {}).ten || e.dst_kind)}${e.type === 'embed' ? ' (nhúng)' : ''}</td></tr>`).join('');
+  return `<div class="card kq" style="box-shadow:none">
+    ${veLuu(d)}
+    <h3><span title="Lấy từ ${TEN_SRC[t.title_src] || esc(t.title_src)}">${esc(t.title) || '(không có tiêu đề)'}</span></h3>
+    <div class="meta2">
+      ${muc('Ngày', t.date, t.date_src)}${muc('Tác giả', t.author, t.author_src)}
+      ${muc('Nguồn', t.cited_source, 'dòng "Nguồn:" cuối bài')}${t.section ? `<span>Chuyên mục <b>${esc(t.section)}</b></span>` : ''}
+      <span title="Khối nội dung: ${esc(d.block.path)}">${fmt(d.so_tu)} từ</span>
+      <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">Trang gốc ↗</a>
+    </div>
+
+    <div class="dau"><h4>Nội dung</h4>
+      <span class="seg"><button data-che="trinh-bay" onclick="xemNoiDung('trinh-bay')" title="HTML của khối nội dung, đã bỏ script và định dạng gốc">Trình bày</button><button data-che="van-ban" onclick="xemNoiDung('van-ban')" title="Đúng phần chữ được đưa vào chỉ mục Lucene">Văn bản</button></span></div>
+    <div id="knd"></div>
+
+    <div class="dau"><h4>Liên kết trong bài (${fmt(d.lien_ket.length)})</h4>
+      <span class="note" style="margin:0 0 0 auto">+${fmt(d.so_canh_khuon)} liên kết menu/footer ·
+        <a href="#" onclick="moDoThi(this.dataset.u);return false" data-u="${esc(d.url)}">Xem đồ thị →</a></span></div>
+    ${lk ? `<div class="links"><table><thead><tr><th style="width:30%">Chữ mô tả</th><th>Đích</th><th style="width:110px">Loại</th></tr></thead>
+      <tbody>${lk}</tbody></table></div>` : '<p class="note">Không có.</p>'}
+  </div>`;
+}
+
+/** Nội dung đã bóc: "Trình bày" = HTML đã dọn trong khung cách ly, "Văn bản" = chữ đưa vào chỉ mục. */
+function xemNoiDung(che) {
+  const d = kqHienTai, o = $('#knd');
+  if (!d || !o) return;
+  document.querySelectorAll('.kq .seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.che === che));
+  if (che === 'van-ban') {
+    o.innerHTML = `<div class="content">${esc(d.noi_dung.text)}${d.noi_dung.bi_cat ? '\n…' : ''}</div>`;
+    return;
+  }
+  o.innerHTML = '';
+  const f = document.createElement('iframe');
+  // allow-same-origin KHÔNG kèm allow-scripts: trong khung vẫn không chạy được script nào,
+  // chỉ để trang cha đọc được chiều cao nội dung mà co khung lại cho vừa.
+  f.setAttribute('sandbox', 'allow-same-origin');
+  f.onload = () => {
+    try { f.style.height = Math.min(Math.max(f.contentDocument.body.scrollHeight + 4, 140), 720) + 'px'; }
+    catch (e) { /* không đọc được thì giữ chiều cao mặc định */ }
+  };
+  o.appendChild(f);
+  // doctype: thiếu nó trang chạy chế độ quirks, scrollHeight luôn bằng cả khung nên không co được
+  nap(f, '<!doctype html>' + KHUNG_CSS + (d.noi_dung.html || '<p>Không có nội dung.</p>'));
 }
 
 function veKetQuaTep(d) {
   const f = d.tep, tt = f.status === 'ok' ? (f.needs_ocr ? 'PDF scan, không có lớp chữ' : `${fmt(d.so_ky_tu)} ký tự`)
     : f.status === 'unsupported' ? 'Định dạng không hỗ trợ' : 'Lỗi: ' + esc(f.error);
-  return `<div class="card" style="box-shadow:none">
-    <h2>Tệp tài liệu (.${esc(d.ext || '?')}, ${fmt(Math.round(d.size / 1024))} KB)</h2>${veLuu(d)}
-    <p>${tt}${f.n_pages ? ` · ${fmt(f.n_pages)} trang` : ''}${f.encoding_suspect ? ' · nghi sai bảng mã (TCVN3/VNI)' : ''}</p>
-    <p>${fmt(d.referrers)} trang trong kho dẫn tới tệp này ·
-      <a href="#" onclick="moDoThi(this.dataset.u);return false" data-u="${esc(d.url)}">xem nguồn giới thiệu →</a></p>
-    ${d.trich ? `<div class="content">${esc(d.trich)}${d.so_ky_tu > 600 ? '…' : ''}</div>` : ''}</div>`;
+  const ten = decodeURIComponent(d.url.split('/').pop().split('?')[0]) || d.url;
+  return `<div class="card kq" style="box-shadow:none">
+    ${veLuu(d)}
+    <h3>${esc(ten)}</h3>
+    <div class="meta2">
+      <span><b>.${esc(d.ext || '?')}</b> · ${d.size < 1024 ? fmt(d.size) + ' B' : fmt(Math.round(d.size / 1024)) + ' KB'}</span>
+      ${f.n_pages ? `<span><b>${fmt(f.n_pages)}</b> trang</span>` : ''}<span>${tt}</span>
+      ${f.encoding_suspect ? '<span style="color:var(--blush-deep)">nghi sai bảng mã</span>' : ''}
+      <span><a href="#" onclick="moDoThi(this.dataset.u);return false" data-u="${esc(d.url)}">${fmt(d.referrers)} trang giới thiệu →</a></span>
+      <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">Tệp gốc ↗</a>
+    </div>
+    ${d.noi_dung.text ? `<div class="dau"><h4>Nội dung</h4></div>
+      <div class="content">${esc(d.noi_dung.text)}${d.noi_dung.bi_cat ? '\n…' : ''}</div>` : ''}
+  </div>`;
 }
 $('#kgo').onclick = xemKhoi;
 $('#kurl').onkeydown = e => { if (e.key === 'Enter') xemKhoi(); };
-
-const LY_DO_BO = ['', 'script, nav, footer, form, phần ẩn', 'khối lặp trong site', 'ngoài khối được chọn'];
-
-function veKhoi(d) {
-  // 1. phễu: còn bao nhiêu chữ sau mỗi lớp
-  const max = Math.max(...d.pheu.map(b => b.chu), 1);
-  const pheu = d.pheu.map((b, i) => {
-    const bo = i ? d.pheu[i - 1].chu - b.chu : 0;
-    let ghiChu = bo > 0 ? `− ${fmt(bo)} · ${LY_DO_BO[i]}` : (i ? '—' : '');
-    if (i === 2 && !d.khuon_host) ghiChu = d.co_mongo ? 'bỏ qua (chưa đủ mẫu)' : 'bỏ qua (không có Mongo)';
-    else if (i === 2 && d.khoi_khuon_bo) ghiChu += ` (${fmt(d.khoi_khuon_bo)} khối)`;
-    return `${i && ghiChu !== '—' ? `<div class="bo">↓ ${ghiChu}</div>` : ''}
-      <div class="r ${i === d.pheu.length - 1 ? 'chon' : ''}"><b>${esc(b.buoc)}</b>
-        <div><div class="bar" style="width:${(b.chu / max * 100).toFixed(1)}%"></div></div>
-        <span class="n">${fmt(b.chu)}</span></div>`;
-  }).join('');
-
-  // 2. đường đi trong cây
-  const nut = d.block.path ? d.block.path.split(' > ') : [];
-  const duong = nut.map((x, i) => `<span class="${i === nut.length - 1 ? 'on' : ''}">${esc(x)}</span>`).join('<span style="border:0;background:none;padding:0">›</span>');
-  let cachChon;
-  if (d.block.method === 'selector') {
-    cachChon = `<p class="note">Selector <code>${esc(d.block.selector)}</code></p>`;
-  } else if (d.block.method === 'fallback') {
-    cachChon = '<p class="note">Không tìm được khối — dùng cả &lt;body&gt;</p>';
-  } else {
-    cachChon = d.bac.map(veBac).join('');
-  }
-
-  // 3. cạnh: trong khối -> đồ thị nội dung, ngoài khối -> khuôn
-  const c = d.canh, tong = c.noi_dung + c.khuon || 1;
-  const chia = `<div class="split">
-      <div style="flex:${c.noi_dung || 0.001};background:var(--mint-deep)" title="Trong khối">${c.noi_dung / tong > .12 ? `Trong khối: ${fmt(c.noi_dung)}` : ''}</div>
-      <div style="flex:${c.khuon || 0.001};background:#9aa0aa" title="Ngoài khối">${c.khuon / tong > .12 ? `Ngoài khối: ${fmt(c.khuon)}` : ''}</div></div>
-    <div class="cols2" style="gap:8px;font-size:13px">
-      <div><b style="color:var(--mint-deep)">${fmt(c.noi_dung)} cạnh nội dung</b> <code>links</code>
-        <span class="note" style="margin:0">${Object.entries(c.noi_dung_theo_loai).map(([k, n]) => `${fmt(n)} ${(LOAI[k] || {}).ten || k}`.toLowerCase()).join(', ')}</span></div>
-      <div><b style="color:#6f7180">${fmt(c.khuon)} cạnh khuôn</b> <code>nav_links</code></div>
-    </div>`;
-
-  return `
-    <div class="card" style="box-shadow:none">
-      <h2>① Số chữ qua từng lớp</h2>
-      <div class="pheu">${pheu}</div>
-    </div>
-    <div class="card" style="box-shadow:none">
-      <h2>② Chọn khối</h2>
-      <div class="path">${duong}</div>
-      ${cachChon}
-    </div>
-    <div class="card" style="box-shadow:none">
-      <h2>③ Cạnh liên kết</h2>
-      ${chia}
-      <p class="note"><a href="#" onclick="moDoThi(this.dataset.u);return false" data-u="${esc(d.url)}">Xem đồ thị →</a></p>
-    </div>
-    <details class="card" style="box-shadow:none"><summary style="cursor:pointer"><b>Nội dung khối</b></summary>
-      <div class="content" style="margin-top:8px">${esc(d.trich)}${d.trich.length >= 600 ? '…' : ''}</div></details>`;
-}
-
-/** Một bậc: thanh điểm của cha và các con ứng viên, vạch ngưỡng 65%. */
-function veBac(b, i) {
-  const max = Math.max(b.diem_cha, ...b.ung_vien.map(u => u.diem), 1);
-  const pct = x => (x / max * 100).toFixed(1) + '%';
-  const thang = b.ung_vien.find(u => u.thang);
-  const hang = (cls, nhan, diem, tip) => `<div class="uv ${cls}" title="${esc(tip)}"><code>${esc(nhan)}</code>
-    <div class="track"><div class="fill" style="width:${pct(diem)}"></div>${cls === 'cha' ? '' : `<div class="nguong" style="left:${pct(b.nguong)}"></div>`}</div>
-    <span class="n">${fmt(Math.round(diem))}</span></div>`;
-  const con = b.ung_vien.map(u => hang(u.thang ? 'thang' : '', u.nhan, u.diem,
-    `${fmt(u.chu)} ký tự, ${fmt(u.chu_link)} trong link (${Math.round(u.chu_link / Math.max(u.chu, 1) * 100)}%), ${u.doan} đoạn văn, hệ số tên lớp ×${u.he_so}`)).join('');
-  const ket = b.dung
-    ? `■ Dừng ở <code>${esc(b.cha)}</code> (${fmt(Math.round(thang.diem))} &lt; ${fmt(Math.round(b.nguong))})`
-    : `↓ <code>${esc(thang.nhan)}</code> (${fmt(Math.round(thang.diem))} ≥ ${fmt(Math.round(b.nguong))})`;
-  return `<div class="bac"><div class="note" style="margin:0">Bậc ${i + 1}</div>
-    ${hang('cha', b.cha + ' (cha)', b.diem_cha, 'điểm của khối cha')}${con}
-    ${b.con_lai ? `<div class="note">+${b.con_lai} khối khác</div>` : ''}
-    <div class="ket">${ket}</div></div>`;
-}
 
 // ---------------- tệp & ảnh ----------------
 async function veTep() {

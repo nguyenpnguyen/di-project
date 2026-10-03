@@ -361,8 +361,8 @@ Chưa đo thời gian thật trên kho 6.000 trang; chỉ biết lượt bóc 15
    nhau theo trang) vẫn vào `nav_links` dưới dạng nhiều dòng `n_pages = 1`; chưa đo `nav_links` phình
    đến đâu trên kho thật.
 
-Cách kiểm tra từng trang: tab **Bóc tách khối** trên giao diện (`POST /api/extract/url`) vẽ lại đúng
-các bậc ở mục 2 cho một url bất kỳ; `api/so_sanh.py` so chỉ mục bóc cũ với bóc mới trên cả kho.
+Cách kiểm tra từng trang: tab **Bóc tách khối** trên giao diện (`POST /api/extract/url`) cho xem nội
+dung và liên kết đã bóc của một url bất kỳ; `GET /api/extract/explain?url=` trả số liệu từng bậc ở mục 2; `api/so_sanh.py` so chỉ mục bóc cũ với bóc mới trên cả kho.
 
 ---
 

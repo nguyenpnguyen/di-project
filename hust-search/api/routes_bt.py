@@ -106,6 +106,9 @@ def extract_explain(url: str):
     return {**out, "co_mongo": co_mongo, "khuon_host": len(khuon_host)}
 
 
+TOI_DA_VAN_BAN = 50_000       # ký tự văn bản trả về giao diện; bản lưu Mongo/Lucene không bị cắt ở đây
+
+
 class UrlReq(BaseModel):
     url: str
     tai_lai: bool = False      # True: tải lại từ web dù kho đã có
@@ -142,8 +145,9 @@ def extract_url(req: UrlReq):
     """Bóc tách MỘT url bất kỳ: lấy HTML trong kho nếu có (hoặc tải mới từ web), chạy
     thuật toán chọn khối + bóc trường + chia cạnh, ghi Mongo và index Lucene.
 
-    Trả về đủ dữ liệu để vẽ lại từng bước như /api/extract/explain, cộng kết quả bóc
-    trường và trạng thái lưu. Url là tệp tài liệu thì bóc chữ tệp và ghi `documents`.
+    Trả về các trường, nội dung đã bóc (HTML đã dọn + văn bản), liên kết trong bài và trạng
+    thái lưu. Từng bậc của thuật toán chọn khối xem ở /api/extract/explain. Url là tệp tài
+    liệu thì bóc chữ tệp và ghi `documents`.
     """
     import main
     url = (req.url or "").strip()
@@ -199,7 +203,6 @@ def extract_url(req: UrlReq):
     if not html:
         raise HTTPException(422, "trang trả lỗi hoặc không có HTML")
     page_url = norm(rec["url"]) or rec["url"]
-    out = giai_thich(html, page_url, khuon_host)
     kq = boc_tach(html, page_url, khuon_host)
     if not kq:
         raise HTTPException(422, "tải được nhưng không bóc ra chữ nào — trang rỗng hoặc dựng bằng JS")
@@ -215,11 +218,17 @@ def extract_url(req: UrlReq):
     if req.index:
         luu["loi_index"] = _index_lucene({**main.lucene_document(kq), "author": kq["author"], "kind": "page"})
         luu["index"] = not luu["loi_index"]
-    return {**out, "loai": "page", "nguon": nguon, "fetched_at": rec.get("fetched_at", ""),
-            "co_mongo": d is not None, "khuon_host": len(khuon_host), "luu": luu,
+    return {"loai": "page", "url": page_url, "host": kq["host"], "nguon": nguon,
+            "fetched_at": rec.get("fetched_at", ""), "co_mongo": d is not None,
+            "khuon_host": len(khuon_host), "luu": luu, "block": kq["block"],
             "truong": {k: kq[k] for k in ("title", "title_src", "date", "date_src", "author",
                                           "author_src", "cited_source", "section")},
-            "so_tu": len(kq["text"].split())}
+            "so_tu": len(kq["text"].split()),
+            # nội dung đã bóc: HTML đã dọn (≤ 40 KB, để trình bày) và văn bản thuần (đưa vào chỉ mục)
+            "noi_dung": {"html": kq["html"], "text": kq["text"][:TOI_DA_VAN_BAN],
+                         "bi_cat": len(kq["text"]) > TOI_DA_VAN_BAN},
+            "lien_ket": [{k: e[k] for k in ("dst", "type", "text", "dst_kind", "count")} for e in kq["links"]],
+            "so_canh_khuon": len(kq["nav_links"])}
 
 
 def _boc_tep_url(d, rec: dict, data: bytes, req: UrlReq) -> dict:
@@ -250,7 +259,8 @@ def _boc_tep_url(d, rec: dict, data: bytes, req: UrlReq) -> dict:
     return {"loai": "document", "url": url, "host": host, "nguon": "web", "ext": ext, "size": len(data),
             "co_mongo": d is not None, "luu": luu, "referrers": ref,
             "tep": {k: kq[k] for k in ("status", "n_pages", "needs_ocr", "encoding_suspect", "error")},
-            "trich": kq["text"][:600], "so_ky_tu": len(kq["text"])}
+            "noi_dung": {"text": kq["text"][:TOI_DA_VAN_BAN], "bi_cat": len(kq["text"]) > TOI_DA_VAN_BAN},
+            "so_ky_tu": len(kq["text"])}
 
 
 @router.get("/api/extract/overview")

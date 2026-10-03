@@ -240,7 +240,7 @@ Tất cả dưới `http://localhost:8000`.
 | POST | `/api/extract/run?limit=` | kho thô → boc_tach → Mongo (chạy nền, idempotent) |
 | GET | `/api/extract/status`, `/api/extract/coverage` | tiến độ; % trường đầy đủ và cách chọn khối theo host |
 | GET | `/api/extract/explain?url=` | chạy lại bước chọn khối trên HTML thô trong kho, trả từng bước để vẽ (không cần Mongo) |
-| POST | `/api/extract/url` | **url bất kỳ** `{url, tai_lai, luu, index}`: lấy HTML trong kho, chưa có thì tải từ web (nhịp ≥ 3 s), chọn khối + bóc trường + chia cạnh, ghi Mongo (`pages`, `links`, ảnh, danh mục tệp) và Lucene; trả kèm từng bước để vẽ. Url là pdf/docx/xlsx/pptx thì bóc chữ vào `documents` |
+| POST | `/api/extract/url` | **url bất kỳ** `{url, tai_lai, luu, index}`: lấy HTML trong kho, chưa có thì tải từ web (nhịp ≥ 3 s), chọn khối + bóc trường + chia cạnh, ghi Mongo (`pages`, `links`, ảnh, danh mục tệp) và Lucene; trả về trường, nội dung (HTML đã dọn + văn bản) và liên kết trong bài. Url là pdf/docx/xlsx/pptx thì bóc chữ vào `documents` |
 | GET | `/api/extract/overview` | số liệu từng bước khuôn → bóc tách → tệp → bóc chữ |
 | GET | `/api/referrers?url=` | nguồn giới thiệu: cạnh trong bài + cạnh menu/footer trỏ vào url |
 | GET | `/api/graph/out?url=`, `/api/graph/stats`, `/api/graph/edges.csv` | cạnh đi ra; thống kê; xuất `source,target,text` |
@@ -326,10 +326,10 @@ Một file `api/static/index.html`, không framework, không bước build.
   link đi ra; nội dung thu gọn mặc định và có nút tải JSON.
 * **Duyệt tất cả** — liệt kê toàn bộ index, sắp theo ngày/url, lọc theo site.
 * **Chỉ mục ngược** — duyệt từ điển term của Lucene và danh sách posting của một term.
-* **Bóc tách khối** — nhập url một trang trong kho, vẽ lại ba bước: phễu số chữ
-  còn lại qua từng lớp (dọn cây → khử khuôn → khối chọn), các bậc đi xuống cây HTML
-  (thanh điểm của từng khối con, vạch ngưỡng 65%), và thanh chia liên kết trong khối
-  (cạnh nội dung) / ngoài khối (cạnh khuôn). Mỗi kết quả tìm kiếm có nút "Khối nội dung".
+* **Bóc tách khối** — nhập url bất kỳ (trang hoặc tệp), xem kết quả bóc tách: tiêu đề, ngày,
+  tác giả, nguồn (rê chuột để biết lấy từ đâu), nội dung ở hai chế độ "Trình bày" (HTML đã dọn,
+  khung cách ly không chạy script) và "Văn bản" (đúng phần đưa vào chỉ mục), và bảng liên kết
+  trong bài. Muốn xem từng bước chọn khối thì gọi `GET /api/extract/explain?url=`.
 * **Đồ thị liên kết** — đồ thị hình sao bằng SVG tự vẽ: trái là trang trỏ tới, giữa là
   url đang xem, phải là nơi nó trỏ đi; màu theo loại (trang / tệp / ảnh / ngoài HUST /
   menu-footer nét đứt). Bấm một ô để chuyển tâm. Dạng bảng cũ vẫn còn trong "Xem dạng bảng".

@@ -27,7 +27,7 @@ Kế hoạch và quyết định: `hust-search/KE-HOACH-BOC-TACH.md`, lược đ
 Thuật toán bóc tách + đồ thị (sơ đồ Mermaid): `hust-search/THUAT-TOAN-BOC-TACH.md`.
 Sơ đồ luồng dữ liệu và từng thuật toán (Mermaid): `BAO-CAO-KY-THUAT.md`. Giao diện có tab
 "Bóc tách khối" (`POST /api/extract/url`) nhận url bất kỳ: lấy trong kho hoặc tải từ web, bóc tách,
-lưu Mongo + Lucene, rồi vẽ lại thuật toán chọn khối; tab "Đồ thị liên kết" có nút "Tải & bóc tách". Kho `hust-crawler/data` được mount vào container ở `/crawler`
+lưu Mongo + Lucene, rồi hiện trường, nội dung và liên kết đã bóc; tab "Đồ thị liên kết" có nút "Tải & bóc tách". Kho `hust-crawler/data` được mount vào container ở `/crawler`
 nên **sửa `crawl_all.py` không cần build lại image**.
 
 Test: 32 (pytest engine) + 81 (pytest api) + 30 (JUnit Lucene). Tích hợp: `integration.sh`

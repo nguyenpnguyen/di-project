@@ -56,7 +56,13 @@ class ExtractUrlTest(unittest.TestCase):
         self.assertEqual(r["truong"]["author"], "Nguyễn Văn A")
         self.assertEqual(r["truong"]["date"], "2026-09-05")
         self.assertTrue(r["luu"]["mongo"] and r["luu"]["index"])
-        self.assertIn("pheu", r)                                      # đủ dữ liệu để vẽ từng bước
+        self.assertIn("Nhà trường thông báo học bổng", r["noi_dung"]["text"])
+        self.assertIn("<p>", r["noi_dung"]["html"])                   # HTML đã dọn để trình bày
+        self.assertNotIn("Tuyển sinh", r["noi_dung"]["text"])         # menu không lọt vào nội dung
+        self.assertEqual({(e["dst"], e["text"]) for e in r["lien_ket"]},
+                         {("https://svbk.hust.edu.vn/uploads/hb.pdf", "Tải mẫu đơn"),
+                          ("https://svbk.hust.edu.vn/uploads/anh.jpg", "Lễ trao học bổng")})
+        self.assertEqual(r["so_canh_khuon"], 1)
         p = self.db.pages.find_one({"_id": url})
         self.assertEqual(p["author"], "Nguyễn Văn A")
         self.assertEqual({e["dst"] for e in self.db.links.find({"src": url})},
@@ -136,6 +142,7 @@ class ExtractUrlTest(unittest.TestCase):
         self.assertEqual((r["loai"], r["tep"]["status"]), ("document", "ok"))
         doc = self.db.documents.find_one({"_id": "https://hust.edu.vn/uploads/hb.pdf"})
         self.assertIn("hoc bong", doc["text"])
+        self.assertIn("hoc bong", r["noi_dung"]["text"])
         self.assertEqual(len(list(self.tmp.iterdir())), 1)
         self.assertEqual(self.bulk[0]["kind"], "document")
         self.assertIsNone(self.kho[0]["html_b64"])                   # kho thô không nhét byte pdf vào html_b64

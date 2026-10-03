@@ -1202,6 +1202,13 @@ async function xemKhoi() {
       body: JSON.stringify({ url: u, luu: $('#kluu').checked, index: $('#kidx').checked, tai_lai: $('#ktai').checked }) });
     const d = await r.json();
     if (!r.ok) { $('#kout').innerHTML = `<div class="err">${esc(d.detail || 'lỗi')}</div>`; return; }
+    // API cũ (container api chưa khởi động lại sau khi cập nhật code) không trả các trường này:
+    // giao diện đọc lại từ đĩa mỗi lần mở trang, còn code Python chỉ nạp lúc khởi động.
+    if (!d.noi_dung || (d.loai !== 'document' && !d.lien_ket)) {
+      $('#kout').innerHTML = `<div class="err">API đang chạy bản cũ, chưa khớp giao diện. Chạy
+        <code>docker compose restart api</code> trong thư mục hust-search rồi tải lại trang.</div>`;
+      return;
+    }
     $('#kout').innerHTML = d.loai === 'document' ? veKetQuaTep(d) : veKetQuaTrang(d);
     if (d.loai !== 'document') xemNoiDung('trinh-bay');
   } catch (e) { $('#kout').innerHTML = `<div class="err">${esc(String(e))}</div>`; }

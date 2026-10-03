@@ -1,0 +1,140 @@
+{
+ "path": "/api/stats",
+ "status": 200,
+ "body": {
+  "sites": [
+   {
+    "host": "hust.edu.vn",
+    "done": 3347,
+    "queued": 5718,
+    "articles": 5610,
+    "shards": 33,
+    "bytes": 123708529
+   },
+   {
+    "host": "library.hust.edu.vn",
+    "done": 121,
+    "queued": 436,
+    "articles": 0,
+    "shards": 2,
+    "bytes": 2947538
+   },
+   {
+    "host": "soict.hust.edu.vn",
+    "done": 111,
+    "queued": 0,
+    "articles": 0,
+    "shards": 1,
+    "bytes": 3962736
+   },
+   {
+    "host": "svbk.hust.edu.vn",
+    "done": 68,
+    "queued": 242,
+    "articles": 224,
+    "shards": 2,
+    "bytes": 958837
+   },
+   {
+    "host": "sdh.hust.edu.vn",
+    "done": 15,
+    "queued": 146,
+    "articles": 0,
+    "shards": 2,
+    "bytes": 171598
+   },
+   {
+    "host": "jst.hust.edu.vn",
+    "done": 2,
+    "queued": 0,
+    "articles": 0,
+    "shards": 1,
+    "bytes": 11288
+   },
+   {
+    "host": "bulletin.hust.edu.vn",
+    "done": 1,
+    "queued": 0,
+    "articles": 0,
+    "shards": 1,
+    "bytes": 974
+   },
+   {
+    "host": "ctsv.hust.edu.vn",
+    "done": 1,
+    "queued": 0,
+    "articles": 0,
+    "shards": 1,
+    "bytes": 6998
+   },
+   {
+    "host": "nhaphoc.hust.edu.vn",
+    "done": 1,
+    "queued": 0,
+    "articles": 0,
+    "shards": 1,
+    "bytes": 6624
+   },
+   {
+    "host": "qldt.hust.edu.vn",
+    "done": 1,
+    "queued": 0,
+    "articles": 0,
+    "shards": 1,
+    "bytes": 6891
+   },
+   {
+    "host": "research.hust.edu.vn",
+    "done": 1,
+    "queued": 0,
+    "articles": 0,
+    "shards": 1,
+    "bytes": 205583
+   },
+   {
+    "host": "work.hust.edu.vn",
+    "done": 1,
+    "queued": 0,
+    "articles": 0,
+    "shards": 1,
+    "bytes": 4657
+   },
+   {
+    "host": "adhoc",
+    "done": 0,
+    "queued": 0,
+    "articles": 0,
+    "shards": 1,
+    "bytes": 5130837
+   },
+   {
+    "host": "dlib.hust.edu.vn",
+    "done": 0,
+    "queued": 0,
+    "articles": 0,
+    "shards": 0,
+    "bytes": 0
+   },
+   {
+    "host": "ts.hust.edu.vn",
+    "done": 0,
+    "queued": 0,
+    "articles": 0,
+    "shards": 0,
+    "bytes": 0
+   },
+   {
+    "host": "tuyendung.hust.edu.vn",
+    "done": 0,
+    "queued": 0,
+    "articles": 0,
+    "shards": 0,
+    "bytes": 0
+   }
+  ],
+  "total_pages": 3670,
+  "total_bytes": 137123090,
+  "links_file": null,
+  "links": 0
+ }
+}

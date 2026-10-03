@@ -1,0 +1,237 @@
+{
+ "path": "/api/extract/coverage",
+ "status": 200,
+ "body": {
+  "hust.edu.vn": {
+   "pages": 3049,
+   "title": 3049,
+   "published_at": 2480,
+   "author": 3048,
+   "methods": {
+    "heuristic": 1584,
+    "fallback": 5,
+    "selector": 1460
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 81.3,
+   "author_pct": 100.0
+  },
+  "library.hust.edu.vn": {
+   "pages": 123,
+   "title": 123,
+   "published_at": 86,
+   "author": 2,
+   "methods": {
+    "heuristic": 123
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 69.9,
+   "author_pct": 1.6
+  },
+  "ts.hust.edu.vn": {
+   "pages": 1,
+   "title": 1,
+   "published_at": 1,
+   "author": 0,
+   "methods": {
+    "heuristic": 1
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 100.0,
+   "author_pct": 0.0
+  },
+  "qldt.hust.edu.vn": {
+   "pages": 1,
+   "title": 1,
+   "published_at": 0,
+   "author": 0,
+   "methods": {
+    "fallback": 1
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 0.0,
+   "author_pct": 0.0
+  },
+  "jst.hust.edu.vn": {
+   "pages": 2,
+   "title": 2,
+   "published_at": 0,
+   "author": 0,
+   "methods": {
+    "heuristic": 2
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 0.0,
+   "author_pct": 0.0
+  },
+  "svbk.hust.edu.vn": {
+   "pages": 68,
+   "title": 68,
+   "published_at": 43,
+   "author": 68,
+   "methods": {
+    "heuristic": 67,
+    "fallback": 1
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 63.2,
+   "author_pct": 100.0
+  },
+  "bulletin.hust.edu.vn": {
+   "pages": 1,
+   "title": 1,
+   "published_at": 0,
+   "author": 0,
+   "methods": {
+    "heuristic": 1
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 0.0,
+   "author_pct": 0.0
+  },
+  "research.hust.edu.vn": {
+   "pages": 1,
+   "title": 0,
+   "published_at": 1,
+   "author": 0,
+   "methods": {
+    "heuristic": 1
+   },
+   "title_pct": 0.0,
+   "published_at_pct": 100.0,
+   "author_pct": 0.0
+  },
+  "tuyendung.hust.edu.vn": {
+   "pages": 1,
+   "title": 1,
+   "published_at": 0,
+   "author": 0,
+   "methods": {
+    "fallback": 1
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 0.0,
+   "author_pct": 0.0
+  },
+  "work.hust.edu.vn": {
+   "pages": 1,
+   "title": 1,
+   "published_at": 0,
+   "author": 0,
+   "methods": {
+    "fallback": 1
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 0.0,
+   "author_pct": 0.0
+  },
+  "ctt.hust.edu.vn": {
+   "pages": 2,
+   "title": 1,
+   "published_at": 1,
+   "author": 0,
+   "methods": {
+    "heuristic": 2
+   },
+   "title_pct": 50.0,
+   "published_at_pct": 50.0,
+   "author_pct": 0.0
+  },
+  "sv-ctt.hust.edu.vn": {
+   "pages": 1,
+   "title": 1,
+   "published_at": 0,
+   "author": 0,
+   "methods": {
+    "fallback": 1
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 0.0,
+   "author_pct": 0.0
+  },
+  "d2l.aivivn.com": {
+   "pages": 1,
+   "title": 1,
+   "published_at": 0,
+   "author": 0,
+   "methods": {
+    "heuristic": 1
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 0.0,
+   "author_pct": 0.0
+  },
+  "soict.hust.edu.vn": {
+   "pages": 112,
+   "title": 112,
+   "published_at": 105,
+   "author": 0,
+   "methods": {
+    "heuristic": 112
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 93.8,
+   "author_pct": 0.0
+  },
+  "hoanghamobile.com": {
+   "pages": 1,
+   "title": 1,
+   "published_at": 1,
+   "author": 0,
+   "methods": {
+    "heuristic": 1
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 100.0,
+   "author_pct": 0.0
+  },
+  "sdh.hust.edu.vn": {
+   "pages": 18,
+   "title": 18,
+   "published_at": 0,
+   "author": 0,
+   "methods": {
+    "fallback": 18
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 0.0,
+   "author_pct": 0.0
+  },
+  "ctsv.hust.edu.vn": {
+   "pages": 1,
+   "title": 1,
+   "published_at": 0,
+   "author": 0,
+   "methods": {
+    "fallback": 1
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 0.0,
+   "author_pct": 0.0
+  },
+  "nhaphoc.hust.edu.vn": {
+   "pages": 1,
+   "title": 1,
+   "published_at": 0,
+   "author": 0,
+   "methods": {
+    "fallback": 1
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 0.0,
+   "author_pct": 0.0
+  },
+  "vnexpress.net": {
+   "pages": 3,
+   "title": 3,
+   "published_at": 3,
+   "author": 3,
+   "methods": {
+    "heuristic": 3
+   },
+   "title_pct": 100.0,
+   "published_at_pct": 100.0,
+   "author_pct": 100.0
+  }
+ }
+}

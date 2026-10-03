@@ -1,0 +1,139 @@
+{
+ "path": "/api/referrers?url=https%3A//hust.edu.vn/&limit=20",
+ "status": 200,
+ "body": {
+  "url": "https://hust.edu.vn/",
+  "content": [
+   {
+    "src": "https://hust.edu.vn/vi/tai-nguyen-so/tai-nguyen-so/",
+    "text": "Banner PC",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/tai-nguyen-so/tai-nguyen-so/",
+    "text": "Banner Mobile",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/lich-lam-viec/",
+    "text": "Banner PC",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/lich-lam-viec/",
+    "text": "Banner Mobile",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/nghien-cuu/",
+    "text": "Banner PC",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/nghien-cuu/",
+    "text": "Banner Mobile",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/su-kien-noi-bat/cau-chuyen-bach-khoa/",
+    "text": "Banner PC",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/su-kien-noi-bat/cau-chuyen-bach-khoa/",
+    "text": "Banner Mobile",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/videoclips/",
+    "text": "Banner PC",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/videoclips/",
+    "text": "Banner Mobile",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/dao-tao/ky-su-chuyen-sau-dac-thu/",
+    "text": "Banner PC",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/dao-tao/ky-su-chuyen-sau-dac-thu/",
+    "text": "Banner Mobile",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/en/quality-assurance/2019/cea-list-of-evidence-in-vietnamese-382195.html",
+    "text": "Download",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/hop-tac-doi-ngoai/hoat-dong-hop-tac/dhbkhn-lot-vao-top-801-1000-trong-bang-xep-hang-times-higher-education-2020-492280.html",
+    "text": "Trường ĐHBK Hà Nội",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/lich-lam-viec/Truong-dai-hoc-BKHN/Xem-theo-tuan/Tuan-41/",
+    "text": "Banner PC",
+    "type": "href",
+    "count": 1
+   },
+   {
+    "src": "https://hust.edu.vn/vi/lich-lam-viec/Truong-dai-hoc-BKHN/Xem-theo-tuan/Tuan-41/",
+    "text": "Banner Mobile",
+    "type": "href",
+    "count": 1
+   }
+  ],
+  "nav": [
+   {
+    "host": "hust.edu.vn",
+    "text": "Banner PC",
+    "n_pages": 2257,
+    "sample_src": [
+     "https://hust.edu.vn/vi/van-bang-so-huu-tri-tue/",
+     "https://hust.edu.vn/vi/san-pham-khoa-hoc-cong-nghe/",
+     "https://hust.edu.vn/vi/tai-nguyen-so/"
+    ]
+   },
+   {
+    "host": "hust.edu.vn",
+    "text": "Banner Mobile",
+    "n_pages": 2257,
+    "sample_src": [
+     "https://hust.edu.vn/vi/van-bang-so-huu-tri-tue/",
+     "https://hust.edu.vn/vi/san-pham-khoa-hoc-cong-nghe/",
+     "https://hust.edu.vn/vi/tai-nguyen-so/"
+    ]
+   },
+   {
+    "host": "library.hust.edu.vn",
+    "text": "Đại học Bách Khoa Hà Nội",
+    "n_pages": 123,
+    "sample_src": [
+     "https://library.hust.edu.vn/vi/index",
+     "https://library.hust.edu.vn/vi/index?page=2",
+     "https://library.hust.edu.vn/"
+    ]
+   }
+  ],
+  "total_content": 16,
+  "total_nav": 3
+ }
+}

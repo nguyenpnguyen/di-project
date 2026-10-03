@@ -1,0 +1,116 @@
+{
+ "path": "/api/files?limit=10",
+ "status": 200,
+ "body": {
+  "total": 2262,
+  "by_status": {
+   "error": 84,
+   "pending": 2141,
+   "unsupported": 33,
+   "skipped_too_large": 2,
+   "ok": 2
+  },
+  "items": [
+   {
+    "ext": "pdf",
+    "extractor_version": "1",
+    "host": "ctt-daotao.hust.edu.vn",
+    "mime": "",
+    "status": "error",
+    "error": "HTTP 404",
+    "url": "https://ctt-daotao.hust.edu.vn/Upload/SDH/files/ChuongTrinhDaoTaoThacSi/2020/CTDT/AIST2020_CTDT_khoa%20hoc%20va%20cong%20nghe%20nano.pdf",
+    "referrers": 1
+   },
+   {
+    "ext": "pdf",
+    "extractor_version": "1",
+    "host": "ctt-daotao.hust.edu.vn",
+    "mime": "",
+    "status": "error",
+    "error": "HTTP 404",
+    "url": "https://ctt-daotao.hust.edu.vn/Upload/SDH/files/ChuongTrinhDaoTaoThacSi/2020/CTDT/CKDL2020_CTDT_CN_ThS_KT%20OTO.pdf",
+    "referrers": 1
+   },
+   {
+    "ext": "pdf",
+    "extractor_version": "1",
+    "host": "ctt-daotao.hust.edu.vn",
+    "mime": "",
+    "status": "error",
+    "error": "HTTP 404",
+    "url": "https://ctt-daotao.hust.edu.vn/Upload/SDH/files/ChuongTrinhDaoTaoThacSi/2020/CTDT/CKDL2020_CTDT_CN_ThS_Ky%20thuat%20co%20khi%20dong%20luc.pdf",
+    "referrers": 1
+   },
+   {
+    "ext": "pdf",
+    "extractor_version": "1",
+    "host": "ctt-daotao.hust.edu.vn",
+    "mime": "",
+    "status": "error",
+    "error": "HTTP 404",
+    "url": "https://ctt-daotao.hust.edu.vn/Upload/SDH/files/ChuongTrinhDaoTaoThacSi/2020/CTDT/CKDL2020_CTDT_CN_Ths_Ky%20thuat%20hang%20khong.pdf",
+    "referrers": 1
+   },
+   {
+    "ext": "pdf",
+    "extractor_version": "1",
+    "host": "ctt-daotao.hust.edu.vn",
+    "mime": "",
+    "status": "error",
+    "error": "HTTP 404",
+    "url": "https://ctt-daotao.hust.edu.vn/Upload/SDH/files/ChuongTrinhDaoTaoThacSi/2020/CTDT/CNSH_CNTP2020_CTDT_CN_ThS_CNSH.pdf",
+    "referrers": 1
+   },
+   {
+    "ext": "pdf",
+    "extractor_version": "1",
+    "host": "ctt-daotao.hust.edu.vn",
+    "mime": "",
+    "status": "error",
+    "error": "HTTP 404",
+    "url": "https://ctt-daotao.hust.edu.vn/Upload/SDH/files/ChuongTrinhDaoTaoThacSi/2020/CTDT/CNSH_CNTP2020_CTDT_CN_ThS_CNTP.pdf",
+    "referrers": 1
+   },
+   {
+    "ext": "pdf",
+    "extractor_version": "1",
+    "host": "ctt-daotao.hust.edu.vn",
+    "mime": "",
+    "status": "error",
+    "error": "HTTP 404",
+    "url": "https://ctt-daotao.hust.edu.vn/Upload/SDH/files/ChuongTrinhDaoTaoThacSi/2020/CTDT/CNTT%20_CT%C4%90T_CN_ThS_KHDL.pdf",
+    "referrers": 1
+   },
+   {
+    "ext": "pdf",
+    "extractor_version": "1",
+    "host": "ctt-daotao.hust.edu.vn",
+    "mime": "",
+    "status": "error",
+    "error": "HTTP 404",
+    "url": "https://ctt-daotao.hust.edu.vn/Upload/SDH/files/ChuongTrinhDaoTaoThacSi/2020/CTDT/CNTT2020_CTDT_CN_ThS_KHMT.pdf",
+    "referrers": 1
+   },
+   {
+    "ext": "pdf",
+    "extractor_version": "1",
+    "host": "ctt-daotao.hust.edu.vn",
+    "mime": "",
+    "status": "error",
+    "error": "HTTP 404",
+    "url": "https://ctt-daotao.hust.edu.vn/Upload/SDH/files/ChuongTrinhDaoTaoThacSi/2020/CTDT/CNTT2020_CTDT_CN_ThS_KTMT.pdf",
+    "referrers": 1
+   },
+   {
+    "ext": "pdf",
+    "extractor_version": "1",
+    "host": "ctt-daotao.hust.edu.vn",
+    "mime": "",
+    "status": "error",
+    "error": "HTTP 404",
+    "url": "https://ctt-daotao.hust.edu.vn/Upload/SDH/files/ChuongTrinhDaoTaoThacSi/2020/CTDT/DETMAY2020_CTDT_CN_ThS_CongNgheMay.pdf",
+    "referrers": 1
+   }
+  ]
+ }
+}

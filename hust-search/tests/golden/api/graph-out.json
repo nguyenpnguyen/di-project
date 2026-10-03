@@ -1,0 +1,38 @@
+{
+ "path": "/api/graph/out?url=https%3A//hust.edu.vn/&limit=20",
+ "status": 200,
+ "body": {
+  "url": "https://hust.edu.vn/",
+  "co_trang": true,
+  "edges": [
+   {
+    "dst": "https://hust.edu.vn/vi/sinh-vien",
+    "text": "Thông tin dành cho tất cả sinh viên đang học tập các hệ tại Đại học Bách khoa Hà Nội",
+    "type": "href",
+    "dst_kind": "page",
+    "count": 1
+   },
+   {
+    "dst": "https://csv.hust.edu.vn/",
+    "text": "Kết nối các thế hệ cựu sinh viên Bách Khoa Hà Nội. Mang đến cơ hội hợp tác, chia sẻ...",
+    "type": "href",
+    "dst_kind": "page",
+    "count": 1
+   },
+   {
+    "dst": "https://hust.edu.vn/uploads/sys/486448263_1017780100475840_3176265381988708628_n-1.jpg",
+    "text": "",
+    "type": "embed",
+    "dst_kind": "image",
+    "count": 1
+   },
+   {
+    "dst": "https://hust.edu.vn/uploads/sys/cuu-sinh-vien-home-2.jpg",
+    "text": "",
+    "type": "embed",
+    "dst_kind": "image",
+    "count": 1
+   }
+  ]
+ }
+}

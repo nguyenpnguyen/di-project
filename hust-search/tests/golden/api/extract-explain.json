@@ -1,0 +1,262 @@
+{
+ "path": "/api/extract/explain?url=https%3A//hust.edu.vn/",
+ "status": 200,
+ "body": {
+  "url": "https://hust.edu.vn/",
+  "host": "hust.edu.vn",
+  "block": {
+   "path": "html > body > div.section-body.home-body > div.container > section > div#body > div.wraper > div.row",
+   "score": 175.0,
+   "method": "heuristic",
+   "selector": ".bodytext"
+  },
+  "pheu": [
+   {
+    "buoc": "Toàn trang",
+    "chu": 8095
+   },
+   {
+    "buoc": "Sau dọn cây",
+    "chu": 5395
+   },
+   {
+    "buoc": "Sau khử khuôn",
+    "chu": 2435
+   },
+   {
+    "buoc": "Khối được chọn",
+    "chu": 170
+   }
+  ],
+  "khoi_khuon_bo": 164,
+  "bac": [
+   {
+    "cha": "body",
+    "diem_cha": 148.8,
+    "nguong": 96.8,
+    "ung_vien": [
+     {
+      "nhan": "div.section-body",
+      "chu": 2435,
+      "chu_link": 1735,
+      "doan": 2,
+      "he_so": 1.0,
+      "diem": 148.8,
+      "thang": true
+     },
+     {
+      "nhan": "div.main-header",
+      "chu": 0,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.3,
+      "diem": 0.0,
+      "thang": false
+     },
+     {
+      "nhan": "div#sitemodal",
+      "chu": 0,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 0.3,
+      "diem": 0.0,
+      "thang": false
+     },
+     {
+      "nhan": "div.fix_banner_left",
+      "chu": 0,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 0.3,
+      "diem": 0.0,
+      "thang": false
+     },
+     {
+      "nhan": "div.fix_banner_right",
+      "chu": 0,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 0.3,
+      "diem": 0.0,
+      "thang": false
+     },
+     {
+      "nhan": "div#openidBt",
+      "chu": 0,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.0,
+      "diem": 0.0,
+      "thang": false
+     }
+    ],
+    "con_lai": 1,
+    "dung": false
+   },
+   {
+    "cha": "div.section-body",
+    "diem_cha": 148.8,
+    "nguong": 96.8,
+    "ung_vien": [
+     {
+      "nhan": "div.container",
+      "chu": 170,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.0,
+      "diem": 175.0,
+      "thang": true
+     },
+     {
+      "nhan": "div.container",
+      "chu": 2265,
+      "chu_link": 1735,
+      "doan": 2,
+      "he_so": 1.0,
+      "diem": 115.0,
+      "thang": false
+     }
+    ],
+    "con_lai": 0,
+    "dung": false
+   },
+   {
+    "cha": "div.container",
+    "diem_cha": 175.0,
+    "nguong": 113.8,
+    "ung_vien": [
+     {
+      "nhan": "section",
+      "chu": 170,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.0,
+      "diem": 175.0,
+      "thang": true
+     }
+    ],
+    "con_lai": 0,
+    "dung": false
+   },
+   {
+    "cha": "section",
+    "diem_cha": 175.0,
+    "nguong": 113.8,
+    "ung_vien": [
+     {
+      "nhan": "div#body",
+      "chu": 170,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.0,
+      "diem": 175.0,
+      "thang": true
+     }
+    ],
+    "con_lai": 0,
+    "dung": false
+   },
+   {
+    "cha": "div#body",
+    "diem_cha": 175.0,
+    "nguong": 113.8,
+    "ung_vien": [
+     {
+      "nhan": "div.wraper",
+      "chu": 170,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.0,
+      "diem": 175.0,
+      "thang": true
+     }
+    ],
+    "con_lai": 0,
+    "dung": false
+   },
+   {
+    "cha": "div.wraper",
+    "diem_cha": 175.0,
+    "nguong": 113.8,
+    "ung_vien": [
+     {
+      "nhan": "div.row",
+      "chu": 170,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.0,
+      "diem": 175.0,
+      "thang": true
+     },
+     {
+      "nhan": "div.row",
+      "chu": 0,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.0,
+      "diem": 0.0,
+      "thang": false
+     },
+     {
+      "nhan": "div.row",
+      "chu": 0,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.0,
+      "diem": 0.0,
+      "thang": false
+     },
+     {
+      "nhan": "div.row",
+      "chu": 0,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.0,
+      "diem": 0.0,
+      "thang": false
+     }
+    ],
+    "con_lai": 0,
+    "dung": false
+   },
+   {
+    "cha": "div.row",
+    "diem_cha": 175.0,
+    "nguong": 113.8,
+    "ung_vien": [
+     {
+      "nhan": "div.col-md-12",
+      "chu": 86,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.0,
+      "diem": 91.0,
+      "thang": true
+     },
+     {
+      "nhan": "div.col-md-12",
+      "chu": 84,
+      "chu_link": 0,
+      "doan": 0,
+      "he_so": 1.0,
+      "diem": 84.0,
+      "thang": false
+     }
+    ],
+    "con_lai": 0,
+    "dung": true
+   }
+  ],
+  "trich": "Thông tin dành cho tất cả sinh viên đang học tập các hệ tại Đại học Bách khoa Hà Nội Kết nối các thế hệ cựu sinh viên Bách Khoa Hà Nội. Mang đến cơ hội hợp tác, chia sẻ...",
+  "canh": {
+   "noi_dung": 4,
+   "khuon": 212,
+   "noi_dung_theo_loai": {
+    "page": 2,
+    "image": 2
+   }
+  },
+  "co_mongo": true,
+  "khuon_host": 134
+ }
+}

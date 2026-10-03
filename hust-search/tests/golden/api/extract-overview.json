@@ -1,0 +1,25 @@
+{
+ "path": "/api/extract/overview",
+ "status": 200,
+ "body": {
+  "templates": 19,
+  "templates_active": 4,
+  "pages": 3388,
+  "links": 35641,
+  "nav_links": 22164,
+  "images": 8935,
+  "documents": {
+   "error": 84,
+   "unsupported": 33,
+   "ok": 2,
+   "skipped_too_large": 2,
+   "pending": 2141
+  },
+  "documents_text": 2,
+  "job": {
+   "running": false,
+   "what": "",
+   "done": 0
+  }
+ }
+}

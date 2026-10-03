@@ -1,0 +1,12 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /composer.json
+Disallow: /data/
+Disallow: /includes/
+Disallow: /install/
+Disallow: /modules/
+Disallow: /robots.php
+Disallow: /web.config
+Disallow: /users/
+Disallow: /statistics/
+Sitemap: https://hust.edu.vn/sitemap.xml

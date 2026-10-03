@@ -1,0 +1,7 @@
+{
+ "path": "/api/search?q=a&ranking=xyz",
+ "status": 400,
+ "body": {
+  "detail": "ranking phải là tfidf hoặc enhanced"
+ }
+}

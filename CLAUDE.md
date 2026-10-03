@@ -30,7 +30,7 @@ Sơ đồ luồng dữ liệu và từng thuật toán (Mermaid): `BAO-CAO-KY-TH
 lưu Mongo + Lucene, rồi hiện trường, nội dung và liên kết đã bóc; tab "Đồ thị liên kết" có nút "Tải & bóc tách". Kho `hust-crawler/data` được mount vào container ở `/crawler`
 nên **sửa `crawl_all.py` không cần build lại image**.
 
-Test: 32 (pytest engine) + 81 (pytest api) + 30 (JUnit Lucene). Tích hợp: `integration.sh`
+Test: 32 (pytest engine) + 81 (pytest api) + 31 (JUnit Lucene). Tích hợp: `integration.sh`
 (tìm kiếm) và `integration_bt.sh` (bóc tách/Mongo) — cần stack docker; phần bóc tách
 chưa từng chạy trên MongoDB thật và kho thật.
 

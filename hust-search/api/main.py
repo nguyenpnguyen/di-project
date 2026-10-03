@@ -464,14 +464,16 @@ def index_stats():
 @app.get("/api/search")
 def search(q: str, from_: int = 0, size: int = 10, host: str | None = None,
            date_from: str | None = None, date_to: str | None = None,
-           sort: str = "score", ranking: str = "tfidf", kind: str | None = None):
+           sort: str = "score", ranking: str = "tfidf", kind: str | None = None,
+           ftype: str | None = None):
     """Chuyển thẳng sang Lucene. Tầng này không tự lọc gì: lọc ở Lucene thì bộ
     đếm tổng và việc chia trang mới khớp nhau."""
     ranking = ranking.strip().lower()
     if ranking not in {"tfidf", "enhanced"}:
         raise HTTPException(400, "ranking phải là tfidf hoặc enhanced")
     params: dict = {"q": q, "from": from_, "size": size, "ranking": ranking}
-    for k, v in (("host", host), ("date_from", date_from), ("date_to", date_to), ("kind", kind)):
+    for k, v in (("host", host), ("date_from", date_from), ("date_to", date_to), ("kind", kind),
+                 ("ftype", ftype)):
         if v:
             params[k] = v
     if sort == "date":

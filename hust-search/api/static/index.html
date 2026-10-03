@@ -244,10 +244,13 @@ svg.g .n{cursor:pointer}svg.g .n:hover rect{stroke-width:2.5}
     <div class="searchbar" id="sb2" style="margin-top:8px">
       <label class="lb">Từ ngày</label><input type="date" id="d1">
       <label class="lb">Đến</label><input type="date" id="d2">
-      <select id="kind" aria-label="Loại">
-        <option value="">Trang và tệp</option>
-        <option value="page">Chỉ trang</option>
-        <option value="document">Chỉ tệp tài liệu</option>
+      <select id="ftype" aria-label="Loại tệp">
+        <option value="">Mọi loại</option>
+        <option value="html">Trang HTML</option>
+        <option value="pdf">PDF</option>
+        <option value="doc,docx">Word</option>
+        <option value="xls,xlsx">Excel</option>
+        <option value="ppt,pptx">PowerPoint</option>
       </select>
       <select id="sort">
         <option value="score">Xếp theo độ khớp</option>
@@ -534,7 +537,7 @@ function thamSo() {
   if ($('#d1').value) p.set('date_from', $('#d1').value);
   if ($('#d2').value) p.set('date_to', $('#d2').value);
   if ($('#sort').value === 'date') p.set('sort', 'date');
-  if ($('#kind').value) p.set('kind', $('#kind').value);
+  if ($('#ftype').value) p.set('ftype', $('#ftype').value);
   return p;
 }
 
@@ -618,8 +621,9 @@ async function doSearch(giuTrang) {
 }
 
 /** Nhãn "Tệp" cho kind=document và tên tác giả nếu có. */
+const TEN_LOAI_TEP = { pdf: 'PDF', doc: 'Word', docx: 'Word', xls: 'Excel', xlsx: 'Excel', ppt: 'PowerPoint', pptx: 'PowerPoint' };
 function chipTepTacGia(h) {
-  return (h.kind === 'document' ? '<span class="chip b">Tệp</span>' : '') +
+  return (h.kind === 'document' ? `<span class="chip b">${esc(TEN_LOAI_TEP[h.ftype] || (h.ftype || 'tệp').toUpperCase())}</span>` : '') +
          (h.author ? `<span class="chip">✍ ${esc(h.author)}</span>` : '');
 }
 function nutDoThi(url) {
@@ -850,9 +854,9 @@ $('#dprefix').addEventListener('keydown', e => { if (e.key === 'Enter') docBrows
 
 $('#go').onclick = () => doSearch(false);
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(false); });
-['#host', '#d1', '#d2', '#sort', '#ranking'].forEach(k => $(k).onchange = () => { if (truyVanCu) doSearch(false); });
+['#host', '#d1', '#d2', '#sort', '#ranking', '#ftype'].forEach(k => $(k).onchange = () => { if (truyVanCu) doSearch(false); });
 $('#clr').onclick = () => {
-  $('#d1').value = $('#d2').value = ''; $('#sort').value = 'score'; $('#host').value = ''; $('#ranking').value = 'tfidf';
+  $('#d1').value = $('#d2').value = ''; $('#sort').value = 'score'; $('#host').value = ''; $('#ranking').value = 'tfidf'; $('#ftype').value = '';
   if (truyVanCu) doSearch(false);
 };
 

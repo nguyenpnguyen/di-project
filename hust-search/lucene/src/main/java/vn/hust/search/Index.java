@@ -47,6 +47,8 @@ public class Index implements AutoCloseable {
     public static final String F_AUTHOR = "author";
     /** page | document — lọc được, để tách bài viết khỏi tệp đính kèm. */
     public static final String F_KIND = "kind";
+    /** Loại tệp để lọc: html | pdf | docx | xlsx | pptx | … — client không gửi thì tự suy ra. */
+    public static final String F_FTYPE = "ftype";
     /** Bản bỏ dấu, chỉ để tìm chứ không lưu — đoạn trích vẫn lấy từ bản gốc. */
     public static final String F_TITLE_KD = "title_kd";
     public static final String F_TEXT_KD = "text_kd";
@@ -116,6 +118,7 @@ public class Index implements AutoCloseable {
         String kind = d.getOrDefault(F_KIND, "");
         if (kind.isBlank()) kind = "page";           // tài liệu cũ không có kind coi là trang
         doc.add(new StringField(F_KIND, kind, Field.Store.YES));
+        doc.add(new StringField(F_FTYPE, loaiTep(d.getOrDefault(F_FTYPE, ""), kind, url), Field.Store.YES));
         long ns = ngaySo(ngay);
         doc.add(new LongPoint(F_NGAY_SO, ns));                  // để lọc khoảng
         doc.add(new NumericDocValuesField(F_NGAY_SO, ns));      // để sắp xếp
@@ -123,6 +126,16 @@ public class Index implements AutoCloseable {
         String html = d.getOrDefault(F_HTML, "");
         if (!html.isEmpty()) doc.add(new StoredField(F_HTML, html));
         writer.updateDocument(new Term(F_URL, url), doc);
+    }
+
+    /** Loại tệp: lấy giá trị client gửi; không có thì trang là "html", tệp lấy đuôi đường dẫn url. */
+    static String loaiTep(String goc, String kind, String url) {
+        if (goc != null && !goc.isBlank()) return goc.trim().toLowerCase(Locale.ROOT);
+        if (!"document".equals(kind)) return "html";
+        String p = url.replaceFirst("[?#].*$", "");
+        p = p.substring(p.lastIndexOf('/') + 1);
+        int i = p.lastIndexOf('.');
+        return i >= 0 && i < p.length() - 1 ? p.substring(i + 1).toLowerCase(Locale.ROOT) : "khac";
     }
 
     /** "2026-08-09" -> 20260809. Rỗng hoặc rác -> 0, nghĩa là không rõ ngày. */
@@ -184,7 +197,7 @@ public class Index implements AutoCloseable {
 
     public record Hit(String url, String title, String host, String section, String date,
                       float score, List<String> fragments, List<String> duplicates,
-                      String author, String kind) { }
+                      String author, String kind, String ftype) { }
 
     public record ListItem(String url, String title, String host, String section, String date,
                           String author, String kind) { }
@@ -361,7 +374,7 @@ public class Index implements AutoCloseable {
     /** Tham số của một lượt tìm. Gom thành record cho khỏi truyền nhiều đối số rời. */
     public record Truy(String q, int from, int size, String host,
                        String tuNgay, String denNgay, boolean sapTheoNgay,
-                       String ranking, String kind) {
+                       String ranking, String kind, String ftype) {
         public Truy {
             ranking = ranking == null || ranking.isBlank()
                     ? "tfidf" : ranking.toLowerCase(Locale.ROOT);
@@ -370,18 +383,23 @@ public class Index implements AutoCloseable {
             }
         }
 
+        public Truy(String q, int from, int size, String host, String tuNgay, String denNgay,
+                    boolean sapTheoNgay, String ranking, String kind) {
+            this(q, from, size, host, tuNgay, denNgay, sapTheoNgay, ranking, kind, null);
+        }
+
         public Truy(String q, int from, int size, String host,
                     String tuNgay, String denNgay, boolean sapTheoNgay, String ranking) {
-            this(q, from, size, host, tuNgay, denNgay, sapTheoNgay, ranking, null);
+            this(q, from, size, host, tuNgay, denNgay, sapTheoNgay, ranking, null, null);
         }
 
         public Truy(String q, int from, int size, String host,
                     String tuNgay, String denNgay, boolean sapTheoNgay) {
-            this(q, from, size, host, tuNgay, denNgay, sapTheoNgay, "tfidf", null);
+            this(q, from, size, host, tuNgay, denNgay, sapTheoNgay, "tfidf", null, null);
         }
 
         public Truy(String q, int from, int size, String host) {
-            this(q, from, size, host, null, null, false, "tfidf", null);
+            this(q, from, size, host, null, null, false, "tfidf", null, null);
         }
     }
 
@@ -530,7 +548,7 @@ public class Index implements AutoCloseable {
      */
     private Query loc(Query q, Truy t) {
         boolean coNgay = kho(t.tuNgay()) || kho(t.denNgay());
-        if ((t.host() == null || t.host().isBlank()) && !coNgay && !kho(t.kind())) return q;
+        if ((t.host() == null || t.host().isBlank()) && !coNgay && !kho(t.kind()) && !kho(t.ftype())) return q;
 
         BooleanQuery.Builder b = new BooleanQuery.Builder();
         b.add(q, BooleanClause.Occur.MUST);
@@ -539,6 +557,14 @@ public class Index implements AutoCloseable {
         }
         if (kho(t.kind())) {
             b.add(new TermQuery(new Term(F_KIND, t.kind())), BooleanClause.Occur.FILTER);
+        }
+        if (kho(t.ftype())) {
+            // nhiều loại cách nhau dấu phẩy ("docx,doc"): khớp một trong số đó
+            BooleanQuery.Builder loai = new BooleanQuery.Builder();
+            for (String x : t.ftype().toLowerCase(Locale.ROOT).split(",")) {
+                if (!x.isBlank()) loai.add(new TermQuery(new Term(F_FTYPE, x.trim())), BooleanClause.Occur.SHOULD);
+            }
+            b.add(loai.build(), BooleanClause.Occur.FILTER);
         }
         if (coNgay) {
             // Cận dưới bắt đầu từ 1 chứ không phải 0: 0 là "không rõ ngày", lọc
@@ -622,7 +648,7 @@ public class Index implements AutoCloseable {
                 hits.add(new Hit(d.get(F_URL), d.get(F_TITLE), d.get(F_HOST),
                         d.get(F_SECTION), d.get(F_DATE),
                         ((Double) gon.get(i)[1]).floatValue(), doanTrich(hl, d), trung,
-                        d.get(F_AUTHOR), d.get(F_KIND)));
+                        d.get(F_AUTHOR), d.get(F_KIND), d.get(F_FTYPE)));
             }
             // Tổng đã trừ đi số bản trùng nhìn thấy được trong cửa sổ. Ngoài cửa
             // sổ thì không biết, nên con số này là chặn trên chứ không phải đếm
@@ -785,7 +811,7 @@ public class Index implements AutoCloseable {
             if (top.scoreDocs.length == 0) return null;
             Document d = s.storedFields().document(top.scoreDocs[0].doc);
             Map<String, String> out = new LinkedHashMap<>();
-            for (String f : new String[]{F_URL, F_TITLE, F_HOST, F_SECTION, F_DATE, F_AUTHOR, F_KIND, F_HTML}) {
+            for (String f : new String[]{F_URL, F_TITLE, F_HOST, F_SECTION, F_DATE, F_AUTHOR, F_KIND, F_FTYPE, F_HTML}) {
                 String v = d.get(f);
                 out.put(f, v == null ? "" : v);
             }

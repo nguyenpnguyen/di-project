@@ -417,4 +417,23 @@ class IndexTest {
         assertEquals("Trần Thị B", ds.items().get(0).author());
         assertEquals("Trần Thị B", idx.layTaiLieu("https://hust.edu.vn/t-1.html").get("author"));
     }
+
+    @Test void locTheoLoaiTepSuyRaTuUrlKhiClientKhongGui() throws Exception {
+        idx.put(Map.of("url", "https://hust.edu.vn/a-1.html", "title", "Trang học bổng", "text", "học bổng"));
+        idx.put(Map.of("url", "https://hust.edu.vn/uploads/hb.PDF?v=2", "title", "hb", "text", "học bổng",
+                "kind", "document"));
+        idx.put(Map.of("url", "https://hust.edu.vn/tai?id=7", "title", "mẫu đơn", "text", "học bổng",
+                "kind", "document", "ftype", "docx"));
+        idx.commit();
+
+        assertEquals(3, idx.search("học bổng", 0, 10, null).total());
+        Index.Result pdf = idx.search(new Index.Truy("học bổng", 0, 10, null, null, null, false, "tfidf", null, "pdf"));
+        assertEquals(1, pdf.total());
+        assertEquals("pdf", pdf.hits().get(0).ftype(), "đuôi lấy từ url, bỏ query, đưa về chữ thường");
+        Index.Result html = idx.search(new Index.Truy("học bổng", 0, 10, null, null, null, false, "tfidf", null, "html"));
+        assertEquals("https://hust.edu.vn/a-1.html", html.hits().get(0).url());
+        Index.Result word = idx.search(new Index.Truy("học bổng", 0, 10, null, null, null, false, "tfidf", null, "doc,docx"));
+        assertEquals("https://hust.edu.vn/tai?id=7", word.hits().get(0).url(), "client gửi ftype thì dùng giá trị đó");
+        assertEquals("pdf", idx.layTaiLieu("https://hust.edu.vn/uploads/hb.PDF?v=2").get("ftype"));
+    }
 }

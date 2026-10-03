@@ -18,8 +18,8 @@ import java.util.concurrent.Executors;
  * HTTP mỏng bọc quanh Lucene. Dùng com.sun.net.httpserver có sẵn trong JDK nên
  * không kéo thêm framework nào — cả dịch vụ chỉ còn Lucene và Jackson.
  *
- *   POST /bulk    [{url,title,text,host,section,date,author,kind}, …]   thêm/ghi đè, trả số đã nhận
- *   GET  /search?q=&from=&size=&host=&kind=&date_from=&date_to=&sort=&ranking=
+ *   POST /bulk    [{url,title,text,host,section,date,author,kind,ftype}, …]   thêm/ghi đè, trả số đã nhận
+ *   GET  /search?q=&from=&size=&host=&kind=&ftype=&date_from=&date_to=&sort=&ranking=
  *                                                          kết quả kèm đoạn tô sáng
  *   GET  /list?from=&size=&host=&kind=&sort=                  liệt kê toàn bộ, không cần q
  *   GET  /dict?field=&after=&limit=                        duyệt từ điển (term dictionary)
@@ -97,7 +97,7 @@ public class SearchServer {
         boolean theoNgay = "date".equalsIgnoreCase(p.get("sort"));
         try {
             Index.Result r = index.search(new Index.Truy(q, from, size, p.get("host"),
-                    p.get("date_from"), p.get("date_to"), theoNgay, ranking, p.get("kind")));
+                    p.get("date_from"), p.get("date_to"), theoNgay, ranking, p.get("kind"), p.get("ftype")));
             List<Map<String, Object>> hits = new ArrayList<>();
             for (Index.Hit h : r.hits()) {
                 Map<String, Object> m = new LinkedHashMap<>();
@@ -108,6 +108,7 @@ public class SearchServer {
                 m.put("date", nz(h.date()));
                 m.put("author", nz(h.author()));
                 m.put("kind", nz(h.kind()));
+                m.put("ftype", nz(h.ftype()));
                 m.put("score", h.score());
                 m.put("fragments", h.fragments());
                 m.put("duplicates", h.duplicates());

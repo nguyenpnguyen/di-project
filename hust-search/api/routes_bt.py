@@ -253,7 +253,8 @@ def _boc_tep_url(d, rec: dict, data: bytes, req: UrlReq) -> dict:
     if req.index and kq["status"] == "ok" and kq["text"]:
         ten = urllib.parse.unquote(url.rsplit("/", 1)[-1].split("?")[0]) or url
         luu["loi_index"] = _index_lucene({"url": url, "title": ten, "text": kq["text"], "host": host,
-                                          "section": "", "date": "", "author": "", "kind": "document"})
+                                          "section": "", "date": "", "author": "", "kind": "document",
+                                          "ftype": ext})
         luu["index"] = not luu["loi_index"]
     ref = d.links.count_documents({"dst": url}) if d is not None else 0
     return {"loai": "document", "url": url, "host": host, "nguon": "web", "ext": ext, "size": len(data),

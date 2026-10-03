@@ -152,7 +152,8 @@ def tep_tu_mongo(db) -> Iterable[dict]:
     for f in db.documents.find({"status": "ok", "text": {"$nin": [None, ""]}}):
         ten = urllib.parse.unquote(f["_id"].rsplit("/", 1)[-1])
         yield {"url": f["_id"], "title": f.get("title") or ten, "text": f["text"], "host": f["host"],
-               "section": "", "date": "", "html": "", "author": "", "kind": "document"}
+               "section": "", "date": "", "html": "", "author": "", "kind": "document",
+               "ftype": f.get("ext") or ""}
 
 
 def chay_extract(db, records: Iterable[dict], limit: int = 0,

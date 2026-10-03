@@ -248,7 +248,7 @@ Tất cả dưới `http://localhost:8000`.
 | GET | `/api/files`, `/api/images` | danh mục tệp / ảnh kèm số trang giới thiệu |
 | POST | `/api/index/documents` | nhận corpus JSON theo schema public |
 | GET | `/api/index/stats` | số tài liệu, dung lượng index, theo host |
-| GET | `/api/search?q=&size=&host=&kind=&ranking=` | kết quả kèm đoạn đã tô `<mark>` |
+| GET | `/api/search?q=&size=&host=&kind=&ftype=&ranking=` (`ftype`: html, pdf, docx…; nhiều loại cách nhau dấu phẩy) | kết quả kèm đoạn đã tô `<mark>` |
 | POST | `/api/fetch` | tải một URL, trả document và index ngay |
 
 ```bash

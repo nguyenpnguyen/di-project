@@ -100,6 +100,7 @@ class IndexTuMongoTest(unittest.TestCase):
         self.assertEqual((trang["kind"], trang["author"]), ("page", "Lê Văn C"))
         tep = docs["https://hust.edu.vn/uploads/thong-bao%20hoc-bong.pdf"]
         self.assertEqual((tep["kind"], tep["title"]), ("document", "thong-bao hoc-bong.pdf"))
+        self.assertEqual(tep["ftype"], "pdf")              # loại tệp theo ext đã lưu trong Mongo
 
     def _index(self, source):
         sent = []

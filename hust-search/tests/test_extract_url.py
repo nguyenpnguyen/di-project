@@ -145,6 +145,7 @@ class ExtractUrlTest(unittest.TestCase):
         self.assertIn("hoc bong", r["noi_dung"]["text"])
         self.assertEqual(len(list(self.tmp.iterdir())), 1)
         self.assertEqual(self.bulk[0]["kind"], "document")
+        self.assertEqual(self.bulk[0]["ftype"], "pdf")
         self.assertIsNone(self.kho[0]["html_b64"])                   # kho thô không nhét byte pdf vào html_b64
 
     def test_anh_va_url_sai_bi_tu_choi(self):

@@ -1,0 +1,7 @@
+{
+ "path": "/api/index/posting?field=text",
+ "status": 400,
+ "body": {
+  "detail": "thiếu tham số term"
+ }
+}

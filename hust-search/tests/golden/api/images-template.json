@@ -1,0 +1,79 @@
+{
+ "path": "/api/images?template=true&limit=10",
+ "status": 200,
+ "body": {
+  "total": 4619,
+  "items": [
+   {
+    "url": "https://ctt.hust.edu.vn/Images/logo.png",
+    "host": "ctt.hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/Images/mask.svg",
+    "host": "ctt.hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   },
+   {
+    "url": "https://hust.edu.vn/assets/sys/academics/2016/11/126854.jpg",
+    "host": "hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   },
+   {
+    "url": "https://hust.edu.vn/assets/sys/academics/2016/11/144512.png",
+    "host": "hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   },
+   {
+    "url": "https://hust.edu.vn/assets/sys/academics/2016/11/144517.png",
+    "host": "hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   },
+   {
+    "url": "https://hust.edu.vn/assets/sys/academics/2016/11/144541.png",
+    "host": "hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   },
+   {
+    "url": "https://hust.edu.vn/assets/sys/academics/dai-hoc.jpg",
+    "host": "hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   },
+   {
+    "url": "https://hust.edu.vn/assets/sys/academics/ky-su-chuyen-mon.jpg",
+    "host": "hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   },
+   {
+    "url": "https://hust.edu.vn/assets/sys/academics/tai-xuong.png",
+    "host": "hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   },
+   {
+    "url": "https://hust.edu.vn/assets/sys/admissions/chm-dao-tao.jpg",
+    "host": "hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   }
+  ]
+ }
+}

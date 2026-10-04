@@ -1,0 +1,60 @@
+{
+ "path": "/api/index/dict?field=text&limit=10",
+ "status": 200,
+ "body": {
+  "field": "text",
+  "terms": [
+   {
+    "term": "0",
+    "doc_freq": 49,
+    "total_term_freq": 586
+   },
+   {
+    "term": "0,0",
+    "doc_freq": 2,
+    "total_term_freq": 2
+   },
+   {
+    "term": "0,00",
+    "doc_freq": 1,
+    "total_term_freq": 1
+   },
+   {
+    "term": "0,01",
+    "doc_freq": 1,
+    "total_term_freq": 1
+   },
+   {
+    "term": "0,04",
+    "doc_freq": 1,
+    "total_term_freq": 3
+   },
+   {
+    "term": "0,1",
+    "doc_freq": 5,
+    "total_term_freq": 5
+   },
+   {
+    "term": "0,15",
+    "doc_freq": 1,
+    "total_term_freq": 1
+   },
+   {
+    "term": "0,26",
+    "doc_freq": 1,
+    "total_term_freq": 1
+   },
+   {
+    "term": "0,3",
+    "doc_freq": 2,
+    "total_term_freq": 2
+   },
+   {
+    "term": "0,34",
+    "doc_freq": 1,
+    "total_term_freq": 1
+   }
+  ],
+  "next": "0,38"
+ }
+}

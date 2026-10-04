@@ -1,13 +1,13 @@
 # Thuật toán bóc tách khối nội dung và xây dựng đồ thị liên kết
 
-Tài liệu giải thích cách `hust-search/api/boc_tach/` biến **một trang HTML** thành (1) khối nội
+Tài liệu giải thích cách `hust-search/src/main/java/vn/hust/search/extract/` (bản port Java của `boc_tach/` Python, khớp 100% trên 3.438 trang kho thật) biến **một trang HTML** thành (1) khối nội
 dung chính, (2) các trường tiêu đề / ngày / tác giả và (3) các cạnh `nguồn → đích : văn bản mô tả`.
 Mọi con số trong ví dụ ở mục 6 lấy từ một lần chạy thật của chính code này trên một trang mẫu
 nhỏ; mọi biểu đồ là Mermaid, GitHub tự vẽ.
 
 > **Phạm vi trung thực.** Đây là các heuristic tự cài, không dùng học máy. Các hằng số (α, β, γ, δ,
 > ngưỡng 30 %, 20 trang…) là **giá trị khởi điểm chưa được dò trên dữ liệu thật**. Số F1 0,96–0,98
-> trong README chỉ đo trên trang tổng hợp do chúng tôi dựng (`tests/sinh_mau.py`), nên chỉ chứng minh
+> trong README chỉ đo trên trang tổng hợp do chúng tôi dựng (bộ mẫu tổng hợp trong `BlockEvaluationTest`), nên chỉ chứng minh
 > thuật toán xử lý được các bố cục đó, không nói gì về độ chính xác trên hust.edu.vn.
 
 Mục lục: [1. Bức tranh chung](#1-bức-tranh-chung) ·
@@ -125,7 +125,7 @@ ngưỡng δ không đạt.
 
 ## 3. Khử khuôn theo site
 
-Module `khuon.py`. Ý tưởng: menu, footer, banner **lặp gần nguyên xi trên mọi trang** của cùng một site,
+Lớp `Template.java`. Ý tưởng: menu, footer, banner **lặp gần nguyên xi trên mọi trang** của cùng một site,
 còn thân bài thì khác nhau. Có cả kho trang của host nên đếm được khối nào lặp.
 
 ```mermaid
@@ -157,7 +157,7 @@ giới hạn 16 MB; ngưỡng 30 % luôn cao hơn nên kết quả khử khuôn 
 
 ## 4. Bóc các trường
 
-Module `truong.py`. Mỗi trường là một **chuỗi nguồn theo thứ tự ưu tiên** và trả kèm tên nguồn đã
+Lớp `Fields.java`. Mỗi trường là một **chuỗi nguồn theo thứ tự ưu tiên** và trả kèm tên nguồn đã
 dùng (`*_src`), để đo trường nào đang lấy được từ đâu.
 
 ```mermaid
@@ -194,7 +194,7 @@ Chi tiết đáng nhớ:
 
 ## 5. Đồ thị liên kết
 
-Module `lien_ket.py`. Mỗi cạnh là `nguồn → đích : văn bản mô tả`. Với ba loại đối tượng của đề bài:
+Lớp `Links.java`. Mỗi cạnh là `nguồn → đích : văn bản mô tả`. Với ba loại đối tượng của đề bài:
 
 | Đối tượng | Cạnh | Văn bản mô tả |
 |---|---|---|
@@ -356,13 +356,13 @@ Chưa đo thời gian thật trên kho 6.000 trang; chỉ biết lượt bóc 15
 4. **Vân tay bỏ qua con số** nên coi hai khối chỉ khác con số là một.
 5. **Điểm cha không nhân `h`, điểm con có nhân** (xem ghi chú ở mục 2.3).
 6. **Trang dựng bằng JavaScript** không có chữ trong HTML tải về; phải render bằng trình duyệt ở tầng
-   crawl (`render.py`).
+   crawl (`render.py`, chỉ chạy trên máy host: image docker đã bỏ Playwright).
 7. **Cạnh khuôn riêng cho từng trang** (ví dụ khối "tin liên quan" nằm ngoài khối nội dung nhưng khác
    nhau theo trang) vẫn vào `nav_links` dưới dạng nhiều dòng `n_pages = 1`; chưa đo `nav_links` phình
    đến đâu trên kho thật.
 
 Cách kiểm tra từng trang: tab **Bóc tách khối** trên giao diện (`POST /api/extract/url`) cho xem nội
-dung và liên kết đã bóc của một url bất kỳ; `GET /api/extract/explain?url=` trả số liệu từng bậc ở mục 2; `api/so_sanh.py` so chỉ mục bóc cũ với bóc mới trên cả kho.
+dung và liên kết đã bóc của một url bất kỳ; `GET /api/extract/explain?url=` trả số liệu từng bậc ở mục 2. Công cụ so chỉ mục bóc cũ với bóc mới (`so_sanh.py`) đã bỏ cùng bản Python.
 
 ---
 
@@ -385,12 +385,12 @@ tưởng; đề bài yêu cầu tự cài thuật toán nên chúng được dù
 
 | Việc | File |
 |---|---|
-| Chọn khối nội dung | `api/boc_tach/khoi.py` |
-| Khử khuôn theo host | `api/boc_tach/khuon.py` |
-| Bóc trường | `api/boc_tach/truong.py` |
-| Đồ thị, chia cạnh | `api/boc_tach/lien_ket.py` |
-| Điều phối một trang | `api/boc_tach/__init__.py` (`boc_tach`, `giai_thich`) |
-| Lưu Mongo, chạy cả kho | `api/trich.py`, `api/routes_bt.py` |
-| Lược đồ Mongo | `SCHEMA.md`, `api/db.py` |
+| Chọn khối nội dung | `extract/ContentBlock.java` |
+| Khử khuôn theo host | `extract/Template.java` |
+| Bóc trường | `extract/Fields.java` |
+| Đồ thị, chia cạnh | `extract/Links.java` |
+| Điều phối một trang | `extract/Extractor.java` (`extract`, `explain`), `HtmlUtil.java` |
+| Lưu Mongo, chạy cả kho | `mongo/Pipeline.java`, `web/ApiExtract.java` |
+| Lược đồ Mongo | `SCHEMA.md`, `mongo/Db.java`, `mongo-schema.json` |
 | Kế hoạch và quyết định | `KE-HOACH-BOC-TACH.md` |
-| Đo và so sánh | `tests/danh_gia_khoi.py`, `api/so_sanh.py` |
+| Đo và so sánh | `BlockEvaluationTest.java`, `PythonParityTest.java` (so với bản Python) |

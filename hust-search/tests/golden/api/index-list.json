@@ -1,0 +1,58 @@
+{
+ "path": "/api/index/list?size=5&sort=url",
+ "status": 200,
+ "body": {
+  "total": 3389,
+  "from": 0,
+  "size": 5,
+  "host": "",
+  "sort": "url",
+  "items": [
+   {
+    "url": "https://bulletin.hust.edu.vn/",
+    "title": "Account Suspended",
+    "host": "bulletin.hust.edu.vn",
+    "section": "",
+    "date": "",
+    "author": "",
+    "kind": "page"
+   },
+   {
+    "url": "https://ctsv.hust.edu.vn/",
+    "title": "HUST",
+    "host": "ctsv.hust.edu.vn",
+    "section": "",
+    "date": "",
+    "author": "",
+    "kind": "page"
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/DisplayWeb/DisplayBaiViet?baiviet=51636",
+    "title": "CTT ĐHBKHN",
+    "host": "ctt.hust.edu.vn",
+    "section": "",
+    "date": "2026-10-09",
+    "author": "",
+    "kind": "page"
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/Upload/Nguy%E1%BB%85n%20Qu%E1%BB%91c%20%C4%90%E1%BA%A1t/files/DTDH_QDQC/Hoctap/QCDT_2025_5445_QD-DHBK.pdf",
+    "title": "QCDT_2025_5445_QD-DHBK.pdf",
+    "host": "ctt.hust.edu.vn",
+    "section": "",
+    "date": "",
+    "author": "",
+    "kind": "document"
+   },
+   {
+    "url": "https://d2l.aivivn.com/intro_vn.html",
+    "title": "Giới thiệu từ nhóm dịch ¶",
+    "host": "d2l.aivivn.com",
+    "section": "",
+    "date": "",
+    "author": "",
+    "kind": "page"
+   }
+  ]
+ }
+}

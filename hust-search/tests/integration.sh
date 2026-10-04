@@ -2,7 +2,7 @@
 # Test tích hợp: chạy trên stack docker compose đang bật.
 # Kiểm cả đường đi thật — crawl từ file link, index, tìm kiếm, tô sáng.
 #
-#   docker compose up -d && ./tests/integration.sh
+#   (cd .. && docker compose up -d --build) && ./tests/integration.sh
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 API=${API:-http://localhost:8000}

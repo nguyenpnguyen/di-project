@@ -1,0 +1,59 @@
+{
+ "path": "/api/index/posting?field=text&term=tuy%E1%BB%83n&limit=5",
+ "status": 200,
+ "body": {
+  "field": "text",
+  "term": "tuyển",
+  "doc_freq": 686,
+  "total_term_freq": 2966,
+  "rows": [
+   {
+    "url": "https://hust.edu.vn/vi/nghien-cuu/tin-tuc-moi/chuong-trinh-ho-tro-nghien-cuu-sinh-xuat-sac-giai-doan-2026-2030-650375.html",
+    "title": "Chương trình hỗ trợ Nghiên cứu sinh xuất sắc giai đoạn 2026–2030",
+    "tf": 2,
+    "positions": [
+     141,
+     159
+    ]
+   },
+   {
+    "url": "https://hust.edu.vn/vi/hop-tac-doi-ngoai/hoat-dong-hop-tac/thong-bao-chuong-trinh-ho-tro-nghien-cuu-vien-researcher-mobility-support-du-an-aun-seed-net-tai-tro-653454.html",
+    "title": "THÔNG BÁO: CHƯƠNG TRÌNH HỖ TRỢ NGHIÊN CỨU VIÊN (RESEARCHER MOBILITY SUPPORT) – DỰ ÁN AUN/SEED-Net TÀI TRỢ",
+    "tf": 1,
+    "positions": [
+     294
+    ]
+   },
+   {
+    "url": "https://hust.edu.vn/vi/hop-tac-doi-ngoai/tin-tuc-hoc-bong/thong-bao-tuyen-sinh-lop-tieng-han-mien-phi-danh-cho-sinh-vien-dai-hoc-bach-khoa-nam-2026-ky-ii-653450.html",
+    "title": "THÔNG BÁO TUYỂN SINH LỚP TIẾNG HÀN MIỄN PHÍ DÀNH CHO SINH VIÊN ĐẠI HỌC BÁCH KHOA NĂM 2026 KỲ II",
+    "tf": 2,
+    "positions": [
+     19,
+     61
+    ]
+   },
+   {
+    "url": "https://hust.edu.vn/vi/hop-tac-doi-ngoai/tin-tuc-hoc-bong/thong-bao-hoc-bong-sau-dai-hoc-653449.html",
+    "title": "THÔNG BÁO HỌC BỔNG SAU ĐẠI HỌC TẠI ĐẠI HỌC QUỐC GIA ĐÀI LOAN",
+    "tf": 1,
+    "positions": [
+     227
+    ]
+   },
+   {
+    "url": "https://hust.edu.vn/vi/hop-tac-doi-ngoai/tin-tuc-hoc-bong/chuong-trinh-tro-giang-ngoai-ngu-flta-fulbright-nam-hoc-2027-2028-653444.html",
+    "title": "THÔNG BÁO HỌC BỔNG CHƯƠNG TRÌNH TRỢ GIẢNG NGOẠI NGỮ (FLTA) FULBRIGHT NĂM HỌC 2027-2028",
+    "tf": 6,
+    "positions": [
+     378,
+     399,
+     495,
+     498,
+     1064,
+     1099
+    ]
+   }
+  ]
+ }
+}

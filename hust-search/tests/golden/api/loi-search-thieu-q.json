@@ -1,0 +1,17 @@
+{
+ "path": "/api/search",
+ "status": 422,
+ "body": {
+  "detail": [
+   {
+    "type": "missing",
+    "loc": [
+     "query",
+     "q"
+    ],
+    "msg": "Field required",
+    "input": null
+   }
+  ]
+ }
+}

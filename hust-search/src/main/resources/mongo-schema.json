@@ -1,0 +1,371 @@
+{
+ "schemas": {
+  "pages": {
+   "required": [
+    "_id",
+    "host",
+    "title",
+    "content",
+    "extractor_version"
+   ],
+   "properties": {
+    "_id": {
+     "bsonType": "string"
+    },
+    "aliases": {
+     "bsonType": "array",
+     "items": {
+      "bsonType": "string"
+     }
+    },
+    "host": {
+     "bsonType": "string"
+    },
+    "lang": {
+     "enum": [
+      "vi",
+      "en"
+     ]
+    },
+    "kind": {
+     "bsonType": "string"
+    },
+    "title": {
+     "bsonType": "string"
+    },
+    "title_src": {
+     "bsonType": "string"
+    },
+    "published_at": {
+     "bsonType": "string",
+     "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$"
+    },
+    "published_at_src": {
+     "bsonType": "string"
+    },
+    "author": {
+     "bsonType": "string"
+    },
+    "author_src": {
+     "bsonType": "string"
+    },
+    "cited_source": {
+     "bsonType": "string"
+    },
+    "section": {
+     "bsonType": "string"
+    },
+    "content": {
+     "bsonType": "object",
+     "required": [
+      "text",
+      "word_count",
+      "block"
+     ],
+     "properties": {
+      "text": {
+       "bsonType": "string"
+      },
+      "html": {
+       "bsonType": "string"
+      },
+      "word_count": {
+       "bsonType": [
+        "int",
+        "long"
+       ],
+       "minimum": 0
+      },
+      "block": {
+       "bsonType": "object",
+       "required": [
+        "path",
+        "method"
+       ],
+       "properties": {
+        "path": {
+         "bsonType": "string"
+        },
+        "score": {
+         "bsonType": [
+          "double",
+          "int"
+         ]
+        },
+        "method": {
+         "enum": [
+          "selector",
+          "heuristic",
+          "fallback"
+         ]
+        }
+       }
+      }
+     }
+    },
+    "raw": {
+     "bsonType": "object",
+     "properties": {
+      "sha1": {
+       "bsonType": "string"
+      },
+      "fetched_at": {
+       "bsonType": "string"
+      }
+     }
+    },
+    "extractor_version": {
+     "bsonType": "string"
+    },
+    "extracted_at": {
+     "bsonType": "string"
+    }
+   }
+  },
+  "links": {
+   "required": [
+    "_id",
+    "src",
+    "dst",
+    "type",
+    "dst_kind",
+    "count",
+    "src_host",
+    "dst_host"
+   ],
+   "properties": {
+    "_id": {
+     "bsonType": "string"
+    },
+    "src": {
+     "bsonType": "string"
+    },
+    "dst": {
+     "bsonType": "string"
+    },
+    "type": {
+     "enum": [
+      "href",
+      "embed"
+     ]
+    },
+    "text": {
+     "bsonType": "string"
+    },
+    "dst_kind": {
+     "enum": [
+      "page",
+      "document",
+      "image",
+      "external"
+     ]
+    },
+    "count": {
+     "bsonType": [
+      "int",
+      "long"
+     ],
+     "minimum": 0
+    },
+    "src_host": {
+     "bsonType": "string"
+    },
+    "dst_host": {
+     "bsonType": "string"
+    }
+   }
+  },
+  "nav_links": {
+   "required": [
+    "_id",
+    "host",
+    "dst",
+    "type",
+    "dst_kind",
+    "n_pages"
+   ],
+   "properties": {
+    "_id": {
+     "bsonType": "string"
+    },
+    "host": {
+     "bsonType": "string"
+    },
+    "dst": {
+     "bsonType": "string"
+    },
+    "type": {
+     "enum": [
+      "href",
+      "embed"
+     ]
+    },
+    "text": {
+     "bsonType": "string"
+    },
+    "dst_kind": {
+     "enum": [
+      "page",
+      "document",
+      "image",
+      "external"
+     ]
+    },
+    "n_pages": {
+     "bsonType": [
+      "int",
+      "long"
+     ],
+     "minimum": 0
+    },
+    "sample_src": {
+     "bsonType": "array",
+     "items": {
+      "bsonType": "string"
+     }
+    }
+   }
+  },
+  "images": {
+   "required": [
+    "_id",
+    "host",
+    "is_template"
+   ],
+   "properties": {
+    "_id": {
+     "bsonType": "string"
+    },
+    "host": {
+     "bsonType": "string"
+    },
+    "alts": {
+     "bsonType": "array",
+     "items": {
+      "bsonType": "string"
+     }
+    },
+    "is_template": {
+     "bsonType": "bool"
+    }
+   }
+  },
+  "documents": {
+   "required": [
+    "_id",
+    "host",
+    "ext",
+    "status"
+   ],
+   "properties": {
+    "_id": {
+     "bsonType": "string"
+    },
+    "host": {
+     "bsonType": "string"
+    },
+    "ext": {
+     "bsonType": "string"
+    },
+    "mime": {
+     "bsonType": "string"
+    },
+    "size": {
+     "bsonType": [
+      "int",
+      "long"
+     ],
+     "minimum": 0
+    },
+    "sha1": {
+     "bsonType": "string"
+    },
+    "status": {
+     "enum": [
+      "pending",
+      "ok",
+      "unsupported",
+      "skipped_too_large",
+      "error"
+     ]
+    },
+    "text": {
+     "bsonType": "string"
+    },
+    "n_pages": {
+     "bsonType": [
+      "int",
+      "long"
+     ],
+     "minimum": 0
+    },
+    "needs_ocr": {
+     "bsonType": "bool"
+    },
+    "encoding_suspect": {
+     "bsonType": "bool"
+    },
+    "error": {
+     "bsonType": "string"
+    },
+    "fetched_at": {
+     "bsonType": "string"
+    },
+    "extractor_version": {
+     "bsonType": "string"
+    }
+   }
+  },
+  "templates": {
+   "required": [
+    "_id",
+    "n_pages",
+    "blocks"
+   ],
+   "properties": {
+    "_id": {
+     "bsonType": "string"
+    },
+    "n_pages": {
+     "bsonType": [
+      "int",
+      "long"
+     ],
+     "minimum": 0
+    },
+    "blocks": {
+     "bsonType": "object"
+    }
+   }
+  }
+ },
+ "indexes": {
+  "links": [
+   {
+    "dst": 1
+   },
+   {
+    "src": 1
+   }
+  ],
+  "nav_links": [
+   {
+    "dst": 1
+   }
+  ],
+  "pages": [
+   {
+    "host": 1,
+    "published_at": -1
+   },
+   {
+    "aliases": 1
+   }
+  ],
+  "documents": [
+   {
+    "host": 1
+   }
+  ]
+ }
+}

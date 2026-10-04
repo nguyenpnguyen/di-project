@@ -1,0 +1,30 @@
+{
+ "path": "/api/index/stats",
+ "status": 200,
+ "body": {
+  "by_host": {
+   "bulletin.hust.edu.vn": 1,
+   "ctsv.hust.edu.vn": 1,
+   "ctt.hust.edu.vn": 2,
+   "d2l.aivivn.com": 1,
+   "hoanghamobile.com": 1,
+   "hust.edu.vn": 3050,
+   "jst.hust.edu.vn": 2,
+   "library.hust.edu.vn": 123,
+   "nhaphoc.hust.edu.vn": 1,
+   "qldt.hust.edu.vn": 1,
+   "research.hust.edu.vn": 1,
+   "sdh.hust.edu.vn": 18,
+   "soict.hust.edu.vn": 112,
+   "sv-ctt.hust.edu.vn": 1,
+   "svbk.hust.edu.vn": 68,
+   "ts.hust.edu.vn": 1,
+   "tuyendung.hust.edu.vn": 1,
+   "vnexpress.net": 3,
+   "work.hust.edu.vn": 1
+  },
+  "docs": 3389,
+  "index_bytes": 19139143,
+  "index_dir": "/index"
+ }
+}

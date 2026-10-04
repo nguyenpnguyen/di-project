@@ -1,0 +1,91 @@
+{
+ "path": "/api/images?limit=10",
+ "status": 200,
+ "body": {
+  "total": 8935,
+  "items": [
+   {
+    "url": "https://cla.hust.edu.vn/xmedia/2020/12/hust-natv.jpg",
+    "host": "cla.hust.edu.vn",
+    "alts": [
+     "https://cla.hust.edu.vn/xmedia/2020/12/hust-natv.jpg"
+    ],
+    "is_template": false,
+    "referrers": 1
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/Images/logo.png",
+    "host": "ctt.hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/Images/mask.svg",
+    "host": "ctt.hust.edu.vn",
+    "alts": [],
+    "is_template": true,
+    "referrers": 0
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/Upload/Nguy%E1%BB%85n%20Vi%E1%BB%87t%20Ti%E1%BA%BFn/images/Gemini_Generated_Image_bccec1bccec1bcce.png",
+    "host": "ctt.hust.edu.vn",
+    "alts": [
+     "Chương trình “Tuyển dụng cán bộ nguồn 2027 ” Công ty Goertek Vina"
+    ],
+    "is_template": false,
+    "referrers": 30
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/Upload/Nguy%E1%BB%85n%20Vi%E1%BB%87t%20Ti%E1%BA%BFn/images/dc6e5b910cd3848dddc2.jpg",
+    "host": "ctt.hust.edu.vn",
+    "alts": [
+     "Thông báo tuyển dụng và học bổng Goertek Việt Nam"
+    ],
+    "is_template": false,
+    "referrers": 30
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/Upload/Nguy%E1%BB%85n%20Vi%E1%BB%87t%20Ti%E1%BA%BFn/images/z7794048744582_75b3e7e70e5facdee61751acfade346d.jpg",
+    "host": "ctt.hust.edu.vn",
+    "alts": [
+     "Chương trình tham quan tuyển dụng của công ty Goertek Vina tại Bắc Ninh"
+    ],
+    "is_template": false,
+    "referrers": 32
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/Upload/Nguyen%20Viet%20Tien/images/Internship%202023_08%20(2).png",
+    "host": "ctt.hust.edu.vn",
+    "alts": [],
+    "is_template": false,
+    "referrers": 1
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/Upload/Nguyen%20Viet%20Tien/images/Oerlikon%20Recruitment%20Flyer.png",
+    "host": "ctt.hust.edu.vn",
+    "alts": [
+     "CÔNG TY TNHH OERLIKON BALZERS COATING VIỆT NAM TUYỂN DỤNG"
+    ],
+    "is_template": false,
+    "referrers": 2
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/Upload/Nguyen%20Viet%20Tien/images/Picture1.png",
+    "host": "ctt.hust.edu.vn",
+    "alts": [
+     "Hội thảo hướng nghiệp và tuyển dụng công ty DAIZO TEC"
+    ],
+    "is_template": false,
+    "referrers": 3
+   },
+   {
+    "url": "https://ctt.hust.edu.vn/Upload/Nguyen%20Viet%20Tien/images/Qu%C3%A0%20t%E1%BA%B7ng(1).jpg",
+    "host": "ctt.hust.edu.vn",
+    "alts": [],
+    "is_template": false,
+    "referrers": 1
+   }
+  ]
+ }
+}

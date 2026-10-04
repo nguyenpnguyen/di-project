@@ -1,0 +1,10 @@
+{
+ "path": "/api/health",
+ "status": 200,
+ "body": {
+  "api": true,
+  "lucene": true,
+  "crawler_dir": "/crawler",
+  "data_dir": "/crawler/data"
+ }
+}

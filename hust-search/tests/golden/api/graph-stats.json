@@ -1,0 +1,58 @@
+{
+ "path": "/api/graph/stats?top=10",
+ "status": 200,
+ "body": {
+  "pages": 3388,
+  "content_edges": 35641,
+  "nav_edges": 22164,
+  "images": 8935,
+  "content_edges_by_dst_kind": {
+   "external": 2141,
+   "page": 23310,
+   "image": 7765,
+   "document": 2425
+  },
+  "top_in_degree": [
+   {
+    "url": "https://hust.edu.vn/uploads/sys/cover.jpg",
+    "in_content_edges": 1803
+   },
+   {
+    "url": "https://hust.edu.vn/vi/news/tin-tuc-su-kien/",
+    "in_content_edges": 224
+   },
+   {
+    "url": "https://hust.edu.vn/vi/news/hoat-dong-chung/",
+    "in_content_edges": 195
+   },
+   {
+    "url": "https://hust.edu.vn/vi/news/tuyen-sinh-dao-tao-cong-tac-sinh-vien/",
+    "in_content_edges": 96
+   },
+   {
+    "url": "https://hust.edu.vn/vi/news/cong-tac-dang-va-doan-the/",
+    "in_content_edges": 78
+   },
+   {
+    "url": "https://hust.edu.vn/vi/news/hop-tac-doi-ngoai-truyen-thong/",
+    "in_content_edges": 73
+   },
+   {
+    "url": "https://hust.edu.vn/vi/news/khoa-hoc-cong-nghe-dmst/",
+    "in_content_edges": 66
+   },
+   {
+    "url": "https://hust.edu.vn/en/news/news/icpmat-icamt-2026-a-forum-connecting-research-and-innovation-in-the-field-of-advanced-materials-654165.html",
+    "in_content_edges": 65
+   },
+   {
+    "url": "https://hust.edu.vn/en/news/news/connecting-the-open-research-ecosystem-promoting-international-cooperation-to-shape-the-future-of-5g-advanced-and-6g-654163.html",
+    "in_content_edges": 65
+   },
+   {
+    "url": "https://hust.edu.vn/en/news/news/hanoi-university-of-science-and-technology-connects-with-resources-of-the-singapore-semiconductor-ecosystem-654164.html",
+    "in_content_edges": 65
+   }
+  ]
+ }
+}

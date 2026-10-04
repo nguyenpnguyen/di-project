@@ -1,0 +1,13 @@
+{
+ "path": "/api/extract/status",
+ "status": 200,
+ "body": {
+  "running": false,
+  "what": "",
+  "done": 0,
+  "started": 0.0,
+  "result": null,
+  "error": null,
+  "elapsed_sec": 0
+ }
+}

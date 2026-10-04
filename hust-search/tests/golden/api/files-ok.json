@@ -1,0 +1,48 @@
+{
+ "path": "/api/files?status=ok&limit=10",
+ "status": 200,
+ "body": {
+  "total": 2,
+  "by_status": {
+   "pending": 2141,
+   "unsupported": 33,
+   "skipped_too_large": 2,
+   "ok": 2,
+   "error": 84
+  },
+  "items": [
+   {
+    "encoding_suspect": false,
+    "error": "",
+    "ext": "pdf",
+    "extractor_version": "1",
+    "fetched_at": "2026-10-03T11:25:52",
+    "host": "ctt.hust.edu.vn",
+    "mime": "application/pdf",
+    "n_pages": 34,
+    "needs_ocr": false,
+    "sha1": "48d78ac085b82d9c9252ebf92e087d128be77dc8",
+    "size": 1604879,
+    "status": "ok",
+    "url": "https://ctt.hust.edu.vn/Upload/Nguy%E1%BB%85n%20Qu%E1%BB%91c%20%C4%90%E1%BA%A1t/files/DTDH_QDQC/Hoctap/QCDT_2025_5445_QD-DHBK.pdf",
+    "referrers": 0
+   },
+   {
+    "ext": "pdf",
+    "extractor_version": "1",
+    "host": "hust.edu.vn",
+    "mime": "application/pdf",
+    "status": "ok",
+    "fetched_at": "2026-10-03T09:29:41",
+    "sha1": "901ac9b6e43b0424c0b11ca85188220963303163",
+    "size": 37791433,
+    "encoding_suspect": false,
+    "error": "",
+    "n_pages": 24,
+    "needs_ocr": false,
+    "url": "https://hust.edu.vn/uploads/sys/about/20231110_-annual-report-2022-verfinal.pdf",
+    "referrers": 1
+   }
+  ]
+ }
+}

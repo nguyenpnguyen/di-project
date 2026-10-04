@@ -178,7 +178,7 @@ mo_goi() {
   echo "Chạy tiếp được rồi:"
   echo "   ./hustctl status          xem còn bao nhiêu url trong hàng đợi"
   echo "   ./hustctl resume          crawl tiếp"
-  echo "   cd ../hust-search && docker compose up -d && ./hustctl index"
+  echo "   cd .. && docker compose up -d --build && hust-crawler/hustctl index"
 }
 
 # ---------------------------------------------------------------- info / check

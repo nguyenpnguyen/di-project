@@ -44,8 +44,8 @@ flowchart LR
 
     subgraph ST["hust-search/ (service search — Java 21, một tiến trình, cổng 8000)"]
         direction TB
-        API["web — HTTP API + giao diện<br/>ApiTimKiem · ApiBocTach · ApiCrawl"]
-        BT["boctach (jsoup) · Tep (Tika)<br/>mongo.Trich · mongo.TepJob"]
+        API["web — HTTP API + giao diện<br/>ApiSearch · ApiExtract · ApiCrawl"]
+        BT["extract (jsoup) · DocumentText (Tika)<br/>mongo.Pipeline · mongo.DocumentJob"]
         LC["Lucene 9.11<br/>Index"]
     end
     MG[("mongo<br/>không mở cổng")]
@@ -77,8 +77,8 @@ Dữ liệu đi qua bốn tầng, mỗi tầng một dạng:
 
 ```mermaid
 flowchart LR
-    A["HTML thô<br/>(kho JSONL)"] -->|"BocTach.bocTach"| B["Bản ghi có cấu trúc<br/>(MongoDB)"]
-    B -->|"Trich.luceneTuMongo"| C["Tài liệu index<br/>(Lucene)"]
+    A["HTML thô<br/>(kho JSONL)"] -->|"Extractor.extract"| B["Bản ghi có cấu trúc<br/>(MongoDB)"]
+    B -->|"Pipeline.luceneFromMongo"| C["Tài liệu index<br/>(Lucene)"]
     C -->|"search + highlight"| D["Kết quả<br/>(JSON → giao diện)"]
     B -->|"referrers, graph"| D
 ```
@@ -172,7 +172,7 @@ flowchart LR
     A{"frontier còn và<br/>chưa đủ --max-pages?"} -- có --> B["pop()"]
     B --> C["fetch(url)<br/>chờ lượt nhịp chung (2.4)"]
     C --> D["visit()<br/>phân loại, mở rộng link,<br/>sinh page-N (2.6)"]
-    D --> E["store.add(rec)<br/>ghi 1 dòng, flush ngay (2.7)"]
+    D --> E["kho.add(rec)<br/>ghi 1 dòng, flush ngay (2.7)"]
     E --> F{"đủ --checkpoint trang?"}
     F -- có --> G["save_state()"] --> A
     F -- không --> A
@@ -357,8 +357,8 @@ crawl (gồm `tin-tuc-su-kien` 295 trang) sau một lần `--seed-file` xoá fro
 
 ## 3. Bóc tách nội dung — khối, trường, đồ thị
 
-Nằm ở `hust-search/src/main/java/vn/hust/search/boctach/`. Cửa vào duy nhất là
-`BocTach.bocTach(html, url, khuon)`; các route chỉ giải base64 (`Kho.giaiMa`) rồi gọi
+Nằm ở `hust-search/src/main/java/vn/hust/search/extract/`. Cửa vào duy nhất là
+`Extractor.extract(html, url, khuon)`; các route chỉ giải base64 (`RawStore.decodeHtml`) rồi gọi
 hàm này, nên `/api/fetch`, `/api/index/run` (nguồn kho thô) và
 `/api/extract/run` (ghi Mongo) dùng **cùng một bộ bóc tách**.
 
@@ -380,7 +380,7 @@ flowchart TD
     T -.->|"không có tiêu đề lẫn chữ"| NONE(["None — bỏ trang"])
 ```
 
-### 3.2. Thuật toán tìm khối nội dung (`Khoi.java`)
+### 3.2. Thuật toán tìm khối nội dung (`ContentBlock.java`)
 
 Ghép hai họ ý tưởng: mật độ chữ / mật độ link trên DOM (CETD — Sun, Song, Liao,
 SIGIR 2011; Boilerpipe — Kohlschütter và cs., WSDM 2010) và khử khuôn theo cả site
@@ -407,7 +407,7 @@ flowchart TD
     TH -- "không: chữ trải đều nhiều con" --> HE
 ```
 
-**Công thức điểm** (hằng số trong `Khoi.java`):
+**Công thức điểm** (hằng số trong `ContentBlock.java`):
 
 ```
 C  = số ký tự chữ của nút          LC = số ký tự nằm trong <a>
@@ -438,14 +438,14 @@ số lấy từ `/api/extract/explain`:
 
 Kết quả: còn 391/890 ký tự của trang (dọn cây bỏ 109, phần ngoài khối bỏ 390).
 
-**Đo lường:** `DanhGiaKhoiTest` đo precision/recall/F1 trên túi âm tiết, so
+**Đo lường:** `BlockEvaluationTest` đo precision/recall/F1 trên túi âm tiết, so
 với cả `body`. **Chỉ mới đo trên trang tổng hợp** (bộ mẫu trong test), chưa đo
 trên trang thật có nhãn; bản Java khớp bản Python 100% trên 3.438 trang kho thật. Các hằng số α, β, γ, δ là khởi điểm, chưa được dò.
 
 **Xem trực quan:** tab **Bóc tách khối** trên giao diện vẽ lại đúng các bước
 này cho từng trang (mục 7.2).
 
-### 3.3. Khử khuôn theo host (`Khuon.java`)
+### 3.3. Khử khuôn theo host (`Template.java`)
 
 Menu, footer, banner lặp gần như nguyên xi trên mọi trang cùng site. Khối văn
 bản xuất hiện trên quá nhiều trang của một host thì là khuôn.
@@ -466,7 +466,7 @@ Bảng dựng một lần bằng `POST /api/extract/templates`. Để document k
 16 MB, chỉ lưu khối có mặt trên ≥ max(3, 5% số trang). Ngưỡng 30% và 20 trang là
 khởi điểm, chưa dò trên kho thật.
 
-### 3.4. Bóc trường của trang (`Truong.java`)
+### 3.4. Bóc trường của trang (`Fields.java`)
 
 Mỗi trường là một chuỗi ưu tiên; nguồn lấy được ghi vào `*_src` để đo độ phủ.
 
@@ -490,7 +490,7 @@ Bỏ giá trị tác giả chung chung (`admin`, `webmaster`…). Dòng "Nguồn
 …" cuối bài thành trường phụ `cited_source`. Ngày chuẩn hoá về `YYYY-MM-DD`.
 Độ phủ theo host xem ở `GET /api/extract/coverage`.
 
-### 3.5. Đồ thị liên kết (`LienKet.java`)
+### 3.5. Đồ thị liên kết (`Links.java`)
 
 **Nút** là một url (trang, tệp, ảnh, trang ngoài). **Cạnh** `A --> B : "chữ"`
 nghĩa là trang A có `<a href=B>chữ</a>` (hoặc `<img src=B alt="chữ">`). Đọc ngược
@@ -569,7 +569,7 @@ rồi ghi lại; `nav_links` và `images` là bảng tổng hợp nên dựng l�
 
 ## 4. Tệp tài liệu và ảnh
 
-### 4.1. Tệp tài liệu (`mongo/TepJob.java`, `boctach/Tep.java`)
+### 4.1. Tệp tài liệu (`mongo/DocumentJob.java`, `extract/DocumentText.java`)
 
 Ba bước, chạy nền qua API, mỗi tệp đi qua các trạng thái:
 
@@ -580,7 +580,7 @@ stateDiagram-v2
     pending --> skipped_too_large: tệp lớn hơn 50 MB
     pending --> unsupported: tải về nhưng định dạng không hỗ trợ
     pending --> da_tai: tai()<br/>ghi data/files/sha1.ext
-    da_tai --> ok: bocChu()<br/>Apache Tika (pdf, docx, xlsx, pptx, doc, xls, ppt)
+    da_tai --> ok: extractText()<br/>Apache Tika (pdf, docx, xlsx, pptx, doc, xls, ppt)
     da_tai --> error: lỗi bóc / mất tệp
     ok --> [*]: có chữ → index kind=document
 ```
@@ -701,10 +701,10 @@ kể cả việc `$jsonSchema` từ chối bản ghi sai (bản Python dùng `mo
 ```mermaid
 flowchart TD
     A(["POST /api/index/run<br/>source = auto | mongo | raw"]) --> S{"source?"}
-    S -- mongo --> MG["Trich.luceneTuMongo()"]
+    S -- mongo --> MG["Pipeline.luceneFromMongo()"]
     S -- auto --> C{"Mongo lên và<br/>pages có dữ liệu?"}
     C -- có --> MG
-    C -- không --> RAW["bóc lại từ kho thô:<br/>BocTach.bocTach(rec)"]
+    C -- không --> RAW["bóc lại từ kho thô:<br/>Extractor.extract(rec)"]
     S -- raw --> RAW
     MG --> P["mọi pages → kind=page<br/>documents status=ok có chữ → kind=document"]
     RAW --> L
@@ -716,7 +716,7 @@ flowchart TD
 
 `POST /api/index/documents` nhận thẳng corpus JSON theo schema public (không qua
 crawler) — dùng cho demo độc lập với mạng (`tests/fixtures/corpus.json`, tối đa
-5.000 tài liệu/request, validate viết tay trong `ApiTimKiem.PublicDocument`, sai schema → 422). `POST /api/fetch` tải một url,
+5.000 tài liệu/request, validate viết tay trong `ApiSearch.PublicDocument`, sai schema → 422). `POST /api/fetch` tải một url,
 bóc, ghi kho `raw-adhoc`, ghi Mongo và index ngay; máy chủ giữ ≥ 3 giây giữa hai
 lần tải.
 
@@ -950,22 +950,22 @@ overlap@10 của 25 truy vấn × 2 ranking đạt 0,97. **Chưa đo:** độ ch
 | Lưu trữ thô | `hust-crawler/crawl_all.py` | `Store` |
 | Render JS | `hust-crawler/render.py` | `looks_blocked()` |
 | Soát kho | `hust-crawler/read_raw.py` | `--audit/--check/--fix-roots/--verify-links` |
-| Cửa vào bóc tách | `hust-search/src/main/java/vn/hust/search/boctach/BocTach.java` | `bocTach()`, `giaiThich()` |
-| Chọn khối nội dung | `boctach/Khoi.java` | `timKhoi()`, `diem()`, `ALPHA/BETA/GAMMA/DELTA` |
-| Khử khuôn | `boctach/Khuon.java` | `vanTay()`, `tapKhuon()`, `boKhuon()` |
-| Tiêu đề / ngày / tác giả | `boctach/Truong.java` | `tieuDe()`, `ngayDang()`, `tacGiaMeta()` |
-| Đồ thị liên kết | `boctach/LienKet.java` | `thuThap()`, `chia()`, `loaiDich()` |
-| Bóc chữ tệp | `boctach/Tep.java`, `mongo/TepJob.java` | `bocChu()`, `danhMuc()`, `tai()` |
-| Chuẩn hoá url (bản sao `crawl_all`) | `kho/Url.java` | `norm()`, `dedupKey()`, `kindOf()` |
-| Kho thô | `kho/Kho.java`, `kho/TaiVe.java` | `banGhi()`, `timBanGhi()`, `ghiKho()` |
-| Kho thô → Mongo, Mongo → Lucene | `mongo/Trich.java` | `chayExtract()`, `dungTemplates()`, `luceneTuMongo()` |
+| Cửa vào bóc tách | `hust-search/src/main/java/vn/hust/search/extract/Extractor.java` | `extract()`, `explain()` |
+| Chọn khối nội dung | `extract/ContentBlock.java` | `findBlock()`, `nodeScore()`, `ALPHA/BETA/GAMMA/DELTA` |
+| Khử khuôn | `extract/Template.java` | `fingerprint()`, `templateSet()`, `removeTemplate()` |
+| Tiêu đề / ngày / tác giả | `extract/Fields.java` | `title()`, `publishedDate()`, `authorMeta()` |
+| Đồ thị liên kết | `extract/Links.java` | `collect()`, `split()`, `destKind()` |
+| Bóc chữ tệp | `extract/DocumentText.java`, `mongo/DocumentJob.java` | `extractText()`, `catalog()`, `download()` |
+| Chuẩn hoá url (bản sao `crawl_all`) | `store/Url.java` | `norm()`, `dedupKey()`, `kindOf()` |
+| Kho thô | `store/RawStore.java`, `store/Download.java` | `allRecords()`, `findRecord()`, `append()` |
+| Kho thô → Mongo, Mongo → Lucene | `mongo/Pipeline.java` | `runExtract()`, `buildTemplates()`, `luceneFromMongo()` |
 | Lược đồ Mongo | `mongo/Db.java`, `mongo-schema.json`, `SCHEMA.md` | `init()` |
-| Route bóc tách/đồ thị/tệp | `web/ApiBocTach.java` | `/api/extract/*`, `/api/referrers`, `/api/graph/*`, `/api/files` |
-| Route index/tìm/tải lẻ/crawl | `web/ApiTimKiem.java`, `web/ApiCrawl.java`, `hust-crawler/crawlctl.py` | `indexRun`, `indexDocuments`, `fetch`, `search` |
+| Route bóc tách/đồ thị/tệp | `web/ApiExtract.java` | `/api/extract/*`, `/api/referrers`, `/api/graph/*`, `/api/files` |
+| Route index/tìm/tải lẻ/crawl | `web/ApiSearch.java`, `web/ApiCrawl.java`, `hust-crawler/crawlctl.py` | `indexRun`, `indexDocuments`, `fetch`, `search` |
 | Schema Lucene, xếp hạng | `hust-search/lucene/.../Index.java` | `put()`, `dungTruyVanTfidf/dungTruyVan`, `loc()`, `gopTrung()` |
 | Điểm nền | `hust-search/lucene/.../Rank.java` | `diemNen()` |
 | Bỏ dấu | `hust-search/lucene/.../Fold.java` | `bo_dau()` |
-| SimHash | `hust-search/lucene/.../Sig.java` | `vanTay()`, `lech()`, `cungMotBai()` |
+| SimHash | `hust-search/lucene/.../Sig.java` | `fingerprint()`, `distance()`, `sameArticle()` |
 | HTTP Lucene | `hust-search/lucene/.../SearchServer.java` | — |
 | Giao diện | `hust-search/api/static/index.html` | `veKhoi()`, `veDoThiSao()`, `veDayChuyen()` |
 | Đóng gói | `hust-search/docker-compose.yml`, `lucene/pom.xml` | — |

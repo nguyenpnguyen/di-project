@@ -19,13 +19,13 @@ import java.util.concurrent.Executors;
 /**
  * Router nhỏ trên {@code com.sun.net.httpserver}: bảng {@code (method, path) -> handler}, đọc query và
  * body JSON, đổi {@link HttpError} thành {@code {"detail": "..."}} như FastAPI, phục vụ {@code static/}.
- * Handler trả đối tượng bất kỳ (gửi JSON 200), {@link Status} (mã khác 200) hoặc {@link #DA_GUI}
+ * Handler trả đối tượng bất kỳ (gửi JSON 200), {@link Status} (mã khác 200) hoặc {@link #SENT}
  * (handler tự ghi phản hồi, vd. CSV chunked).
  */
 public final class Http {
     public static final ObjectMapper M = new ObjectMapper();
     /** Handler đã tự gửi phản hồi qua {@link Req#ex}. */
-    public static final Object DA_GUI = new Object();
+    public static final Object SENT = new Object();
 
     public interface Handler {
         Object handle(Req r) throws Exception;
@@ -74,26 +74,26 @@ public final class Http {
             return q.get(k);
         }
 
-        public String str(String k, String mac) {
-            return q.getOrDefault(k, mac);
+        public String str(String k, String fallback) {
+            return q.getOrDefault(k, fallback);
         }
 
         /** Tham số bắt buộc: thiếu thì 422. */
-        public String bat(String k) {
+        public String require(String k) {
             String v = q.get(k);
             if (v == null) throw new HttpError(422, "thiếu tham số " + k);
             return v;
         }
 
         /** Rỗng hoặc vắng đều thành null — như Python lọc {@code if v}. */
-        public String co(String k) {
+        public String nonEmpty(String k) {
             String v = q.get(k);
             return v == null || v.isEmpty() ? null : v;
         }
 
-        public int integer(String k, int mac) {
+        public int integer(String k, int fallback) {
             String v = q.get(k);
-            if (v == null) return mac;
+            if (v == null) return fallback;
             try {
                 return Integer.parseInt(v.strip());
             } catch (NumberFormatException e) {
@@ -130,24 +130,24 @@ public final class Http {
     }
 
     // ---- đọc trường của body JSON (kiểu sai = 422)
-    public static String bodyStr(JsonNode b, String k, String mac) {
+    public static String bodyStr(JsonNode b, String k, String fallback) {
         JsonNode v = b.get(k);
-        if (v == null || v.isNull()) return mac;
+        if (v == null || v.isNull()) return fallback;
         if (!v.isTextual()) throw new HttpError(422, k + " phải là chuỗi");
         return v.asText();
     }
 
-    public static boolean bodyBool(JsonNode b, String k, boolean mac) {
+    public static boolean bodyBool(JsonNode b, String k, boolean fallback) {
         JsonNode v = b.get(k);
-        if (v == null || v.isNull()) return mac;
+        if (v == null || v.isNull()) return fallback;
         if (v.isBoolean()) return v.asBoolean();
         if (v.isTextual()) return parseBool(k, v.asText());
         throw new HttpError(422, k + " phải là true hoặc false");
     }
 
-    public static int bodyInt(JsonNode b, String k, int mac, int min, int max) {
+    public static int bodyInt(JsonNode b, String k, int fallback, int min, int max) {
         JsonNode v = b.get(k);
-        if (v == null || v.isNull()) return mac;
+        if (v == null || v.isNull()) return fallback;
         if (!v.canConvertToInt() || v.isFloatingPointNumber() && v.asDouble() != Math.rint(v.asDouble()))
             throw new HttpError(422, k + " phải là số nguyên");
         int n = v.asInt();
@@ -164,20 +164,20 @@ public final class Http {
         ex.close();
     }
 
-    private void xuLy(HttpExchange ex) throws IOException {
+    private void dispatch(HttpExchange ex) throws IOException {
         try {
             String path = ex.getRequestURI().getPath();
             String method = ex.getRequestMethod();
             Handler h = routes.get(method + " " + path);
             if (h == null) {
                 if (method.equals("GET") && (path.equals("/") || path.startsWith("/static/"))) {
-                    tinh(ex, path.equals("/") ? "index.html" : path.substring("/static/".length()));
+                    serveStatic(ex, path.equals("/") ? "index.html" : path.substring("/static/".length()));
                     return;
                 }
                 throw new HttpError(paths.contains(path) ? 405 : 404, paths.contains(path) ? "Method Not Allowed" : "Not Found");
             }
             Object out = h.handle(new Req(ex));
-            if (out == DA_GUI) return;
+            if (out == SENT) return;
             if (out instanceof Status s) send(ex, s.code(), s.body());
             else send(ex, 200, out);
         } catch (HttpError e) {
@@ -188,7 +188,7 @@ public final class Http {
         }
     }
 
-    private void tinh(HttpExchange ex, String rel) throws IOException {
+    private void serveStatic(HttpExchange ex, String rel) throws IOException {
         Path f = staticDir.resolve(rel).normalize();
         if (!f.startsWith(staticDir.normalize()) || !Files.isRegularFile(f)) throw new HttpError(404, "Not Found");
         String n = f.getFileName().toString();
@@ -214,7 +214,7 @@ public final class Http {
     public HttpServer start(int port) throws IOException {
         HttpServer s = HttpServer.create(new InetSocketAddress(port), 0);
         s.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
-        s.createContext("/", ex -> xuLy(ex));
+        s.createContext("/", ex -> dispatch(ex));
         s.start();
         return s;
     }

@@ -20,17 +20,17 @@ class ApiTest {
     TestStack s;
 
     @BeforeEach
-    void dung() throws Exception {
+    void setUp() throws Exception {
         s = new TestStack(tmp, null);
     }
 
     @AfterEach
-    void dong() throws Exception {
+    void tearDown() throws Exception {
         s.close();
     }
 
     @Test
-    void publicDocumentHopLeVaSuyHostTuUrl() throws Exception {
+    void publicDocumentValidAndInfersHostFromUrl() throws Exception {
         var r = s.post("/api/index/documents", """
                 {"documents":[
                   {"url":"https://fixture.local/doc","content":"nội dung fixturealpha",
@@ -45,28 +45,28 @@ class ApiTest {
     }
 
     @Test
-    void publicDocumentCatDoDaiVaTuChoiSai() throws Exception {
-        String dai = "a".repeat(501), noiDung = "b".repeat(200_001);
+    void publicDocumentTruncatesLengthAndRejectsInvalid() throws Exception {
+        String longTitle = "a".repeat(501), content = "b".repeat(200_001);
         var ok = s.post("/api/index/documents", "{\"documents\":[{\"url\":\"https://fixture.local/capped\",\"title\":\""
-                + dai + "\",\"content\":\"" + noiDung + "\"}]}");
+                + longTitle + "\",\"content\":\"" + content + "\"}]}");
         assertEquals(200, ok.status());
         var l = s.get("/api/index/list?kind=page");
         assertEquals(500, l.json().get("items").get(0).get("title").asText().length());
-        for (String sai : new String[]{
+        for (String invalid : new String[]{
                 "{\"url\":\"javascript:alert(1)\",\"title\":\"x\"}",
                 "{\"url\":\"https://fixture.local/empty\"}",
                 "{\"url\":\"https://fixture.local/bad-date\",\"title\":\"x\",\"published_at\":\"not-a-date\"}",
                 "{\"url\":\"https://fixture.local/k\",\"title\":\"x\",\"kind\":\"video\"}",
                 "{\"url\":\"https://fixture.local/t\",\"title\":5}"}) {
-            var r = s.post("/api/index/documents", "{\"documents\":[" + sai + "]}");
-            assertEquals(422, r.status(), sai);
-            assertTrue(r.json().get("detail").isTextual(), sai);
+            var r = s.post("/api/index/documents", "{\"documents\":[" + invalid + "]}");
+            assertEquals(422, r.status(), invalid);
+            assertTrue(r.json().get("detail").isTextual(), invalid);
         }
         assertEquals(422, s.post("/api/index/documents", "{}").status());
     }
 
     @Test
-    void fetchTraVePublicDocumentKhongCanMang() throws Exception {
+    void fetchReturnsPublicDocumentWithoutNetwork() throws Exception {
         s.web = u -> TestStack.html(u, "<html><head><title>Bai test</title></head><body><main>"
                 + "<p>Noi dung bai.</p><a href='/next#part' title=' Mo ta next '></a></main></body></html>");
         var r = s.post("/api/fetch", "{\"url\":\"https://fixture.local/article\"}");
@@ -80,20 +80,20 @@ class ApiTest {
         assertEquals(1, r.json().get("index_docs").asInt());
         // tải lẻ ghi vào raw-adhoc, đọc lại được
         assertTrue(Files.exists(tmp.resolve("data/raw-adhoc/pages-0001.jsonl.gz")));
-        assertEquals("https://fixture.local/article", s.kho.banGhi().next().get("url").asText());
+        assertEquals("https://fixture.local/article", s.store.allRecords().next().get("url").asText());
         // và tìm được ngay, kèm html để xem trước
         assertEquals(1, s.get("/api/search?q=Noi+dung").json().get("total").asInt());
         assertTrue(s.get("/api/preview?url=https://fixture.local/article").json().has("html"));
     }
 
     @Test
-    void fetchTuChoiUrlKhongPhaiHttp() throws Exception {
+    void fetchRejectsNonHttpUrl() throws Exception {
         assertEquals(422, s.post("/api/fetch", "{\"url\":\"ftp://fixture.local/article\"}").status());
-        assertTrue(s.daTai.isEmpty());
+        assertTrue(s.fetched.isEmpty());
     }
 
     @Test
-    void fetchTrangRongLa422() throws Exception {
+    void fetchEmptyPageIs422() throws Exception {
         s.web = u -> TestStack.html(u, "<html><body></body></html>");
         var r = s.post("/api/fetch", "{\"url\":\"https://fixture.local/rong\"}");
         assertEquals(422, r.status());
@@ -101,7 +101,7 @@ class ApiTest {
     }
 
     @Test
-    void loiHttpCuaSiteThanhDetail() throws Exception {
+    void siteHttpErrorBecomesDetail() throws Exception {
         s.web = u -> { throw new HttpError(429, "site đang chặn nhịp, đợi rồi thử lại"); };
         var r = s.post("/api/fetch", "{\"url\":\"https://fixture.local/a\"}");
         assertEquals(429, r.status());
@@ -109,23 +109,23 @@ class ApiTest {
     }
 
     @Test
-    void searchValidationVaLoiLucene() throws Exception {
-        var thieu = s.get("/api/search");
-        assertEquals(422, thieu.status());
-        assertTrue(thieu.json().get("detail").isTextual());
+    void searchValidationAndLuceneError() throws Exception {
+        var missingQuery = s.get("/api/search");
+        assertEquals(422, missingQuery.status());
+        assertTrue(missingQuery.json().get("detail").isTextual());
         var rk = s.get("/api/search?q=a&ranking=xyz");
         assertEquals(400, rk.status());
         assertEquals("ranking phải là tfidf hoặc enhanced", rk.json().get("detail").asText());
         assertEquals(422, s.get("/api/search?q=a&size=abc").status());
         // lỗi của Lucene giữ khoá "error": giao diện đọc d.error
-        var cuPhap = s.get("/api/search?q=%C4%91i%E1%BB%83m%20AND%20AND");
-        assertEquals(400, cuPhap.status());
-        assertTrue(cuPhap.json().has("error"), cuPhap.text());
+        var syntaxError = s.get("/api/search?q=%C4%91i%E1%BB%83m%20AND%20AND");
+        assertEquals(400, syntaxError.status());
+        assertTrue(syntaxError.json().has("error"), syntaxError.text());
         assertEquals("thiếu tham số term", s.get("/api/index/posting?field=text").json().get("detail").asText());
     }
 
     @Test
-    void indexRunTuKhoThoKhiKhongCoMongo() throws Exception {
+    void indexRunFromRawStoreWithoutMongo() throws Exception {
         String html = "<html><head><title>Diem chuan</title></head><body><main><p>Diem chuan nam nay cong bo.</p></main></body></html>";
         s.web = u -> TestStack.html(u, html);
         assertEquals(200, s.post("/api/fetch", "{\"url\":\"https://hust.edu.vn/vi/a-1.html\"}").status());
@@ -140,7 +140,7 @@ class ApiTest {
     }
 
     @Test
-    void tuyenDuongVaTinh() throws Exception {
+    void routingAndStaticFiles() throws Exception {
         assertEquals(404, s.get("/api/khong-co").status());
         assertEquals("Not Found", s.get("/api/khong-co").json().get("detail").asText());
         assertEquals(405, s.post("/api/search", "{}").status());
@@ -152,7 +152,7 @@ class ApiTest {
     }
 
     @Test
-    void healthStatsVaCrawl() throws Exception {
+    void healthStatsAndCrawl() throws Exception {
         var h = s.get("/api/health").json();
         assertTrue(h.get("api").asBoolean() && h.get("lucene").asBoolean());
         assertFalse(h.get("mongo").asBoolean());

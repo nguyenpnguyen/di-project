@@ -8,15 +8,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import vn.hust.search.kho.Kho;
+import vn.hust.search.store.RawStore;
 
 /**
  * Chạy templates + extract cả kho thật vào MongoDB thật (có $jsonSchema), DB tạm. Cần kho thô
  * ({@code DATA_DIR}) và Mongo ({@code MONGO_URL}); thiếu một trong hai thì bỏ qua.
  */
-class KhoThatTest {
+class RealStoreTest {
     @Test
-    void dungTemplatesVaExtractCaKho() throws Exception {
+    void buildTemplatesAndExtractWholeStore() throws Exception {
         Path data = Path.of(System.getenv().getOrDefault("DATA_DIR", "../hust-crawler/data"));
         assumeTrue(Files.isDirectory(data.resolve("raw")), "không có kho thô");
         try (var d = new Db(System.getenv().getOrDefault("MONGO_URL", "mongodb://localhost:27017"), "test_" + UUID.randomUUID().toString().replace("-", ""))) {
@@ -27,13 +27,13 @@ class KhoThatTest {
             }
             try {
                 d.init();
-                var kho = new Kho(data);
+                var store = new RawStore(data);
                 long t0 = System.currentTimeMillis();
-                var tpl = Trich.dungTemplates(d.get(), kho.banGhi(), n -> { });
+                var tpl = Pipeline.buildTemplates(d.get(), store.allRecords(), n -> { });
                 long t1 = System.currentTimeMillis();
-                var r = Trich.chayExtract(d.get(), kho.banGhi(), 0, n -> { }, 200);
+                var r = Pipeline.runExtract(d.get(), store.allRecords(), 0, n -> { }, 200);
                 long t2 = System.currentTimeMillis();
-                var cov = Trich.coverage(d.get());
+                var cov = Pipeline.coverage(d.get());
                 System.out.printf("templates %d host (%d ms); extract %s (%d ms); coverage %d host; links %d, nav %d, images %d%n",
                         tpl.size(), t1 - t0, r, t2 - t1, cov.size(), d.get().getCollection("links").countDocuments(),
                         d.get().getCollection("nav_links").countDocuments(), d.get().getCollection("images").countDocuments());

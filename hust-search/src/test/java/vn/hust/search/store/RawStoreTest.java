@@ -1,4 +1,4 @@
-package vn.hust.search.kho;
+package vn.hust.search.store;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -19,7 +19,7 @@ import java.util.zip.GZIPOutputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class KhoTest {
+class RawStoreTest {
     @TempDir Path tmp;
 
     static byte[] gz(String s) throws Exception {
@@ -30,18 +30,18 @@ class KhoTest {
         return b.toByteArray();
     }
 
-    static String dong(String url) {
+    static String jsonLine(String url) {
         return "{\"url\":\"" + url + "\",\"status\":200,\"html_b64\":\"PGh0bWw+\"}\n";
     }
 
-    List<String> urls(Kho k, Path d) {
+    List<String> urls(RawStore k, Path d) {
         List<String> r = new ArrayList<>();
         k.records(d).forEachRemaining(n -> r.add(n.get("url").asText()));
         return r;
     }
 
     @Test
-    void shardCutGiuDongDaDocRoiSangShardSau() throws Exception {
+    void truncatedShardKeepsReadLinesThenMovesToNextShard() throws Exception {
         Path d = Files.createDirectories(tmp.resolve("raw-x.hust.edu.vn"));
         var rnd = new Random(1);
         StringBuilder sb = new StringBuilder();
@@ -49,57 +49,57 @@ class KhoTest {
             sb.append("{\"url\":\"https://x/a-").append(i).append(".html\",\"h\":\"").append(rnd.nextLong()).append("\"}\n");
         byte[] full = gz(sb.toString());
         Files.write(d.resolve("pages-0001.jsonl.gz"), java.util.Arrays.copyOf(full, full.length / 2));
-        Files.write(d.resolve("pages-0002.jsonl.gz"), gz(dong("https://x/last-1.html")));
-        List<String> u = urls(new Kho(tmp), d);
+        Files.write(d.resolve("pages-0002.jsonl.gz"), gz(jsonLine("https://x/last-1.html")));
+        List<String> u = urls(new RawStore(tmp), d);
         assertTrue(u.size() > 1 && u.size() < 2000, "shard cụt phải giữ một phần: " + u.size());
         assertEquals("https://x/last-1.html", u.get(u.size() - 1));
     }
 
     @Test
-    void nhieuGzipMemberVaGhiKho() throws Exception {
-        var k = new Kho(tmp);
+    void multipleGzipMembersAndStoreWrite() throws Exception {
+        var k = new RawStore(tmp);
         for (String n : List.of("a-1", "b-2", "c-3"))
-            k.ghiKho(Kho.JSON.readTree(dong("https://hust.edu.vn/" + n + ".html")));
+            k.append(RawStore.JSON.readTree(jsonLine("https://hust.edu.vn/" + n + ".html")));
         assertEquals(List.of("https://hust.edu.vn/a-1.html", "https://hust.edu.vn/b-2.html",
                 "https://hust.edu.vn/c-3.html"), urls(k, tmp.resolve("raw-adhoc")));
     }
 
     @Test
-    void dongJsonHongBoNotShardDoNhungShardSauVanDoc() throws Exception {
+    void corruptJsonLineSkipsRestOfShardButLaterShardsStillRead() throws Exception {
         Path d = Files.createDirectories(tmp.resolve("raw"));
-        Files.write(d.resolve("pages-0001.jsonl.gz"), gz(dong("https://x/1.html") + "{hong\n" + dong("https://x/2.html")));
-        Files.writeString(d.resolve("pages-0002.jsonl"), dong("https://x/3.html"));    // shard không nén
-        assertEquals(List.of("https://x/1.html", "https://x/3.html"), urls(new Kho(tmp), d));
+        Files.write(d.resolve("pages-0001.jsonl.gz"), gz(jsonLine("https://x/1.html") + "{hong\n" + jsonLine("https://x/2.html")));
+        Files.writeString(d.resolve("pages-0002.jsonl"), jsonLine("https://x/3.html"));    // shard không nén
+        assertEquals(List.of("https://x/1.html", "https://x/3.html"), urls(new RawStore(tmp), d));
     }
 
     @Test
-    void timBanGhiQuaDuongDanThoatUnicode() throws Exception {
+    void findRecordViaUnicodeEscapedPath() throws Exception {
         Path d = Files.createDirectories(tmp.resolve("raw"));
         // crawler ghi ensure_ascii: tin-tức -> tin-tức
         Files.write(d.resolve("pages-0001.jsonl.gz"), gz(
-                dong("https://hust.edu.vn/vi/tin-t\\u1ee9c/b-1.html") + dong("https://hust.edu.vn/vi/khac/c-2.html")));
-        var k = new Kho(tmp);
-        JsonNode r = k.timBanGhi(Set.of("https://hust.edu.vn/vi/tin-tức/b-1.html"));
+                jsonLine("https://hust.edu.vn/vi/tin-t\\u1ee9c/b-1.html") + jsonLine("https://hust.edu.vn/vi/khac/c-2.html")));
+        var k = new RawStore(tmp);
+        JsonNode r = k.findRecord(Set.of("https://hust.edu.vn/vi/tin-tức/b-1.html"));
         assertNotNull(r);
         assertEquals("https://hust.edu.vn/vi/tin-tức/b-1.html", r.get("url").asText());   // Jackson tự giải mã dạng thoát
-        assertNull(k.timBanGhi(Set.of("https://hust.edu.vn/khong-co-9.html")));
+        assertNull(k.findRecord(Set.of("https://hust.edu.vn/khong-co-9.html")));
         // url chưa norm (www., http, #frag) vẫn tìm ra
-        assertNotNull(k.timBanGhi(Set.of("http://www.hust.edu.vn/vi/khac/c-2.html#x")));
+        assertNotNull(k.findRecord(Set.of("http://www.hust.edu.vn/vi/khac/c-2.html#x")));
     }
 
     @Test
-    void thoatJsonGiongPython() {
-        assertEquals("/vi/tin-t\\u1ee9c/\\\"a\\\"\\n", Kho.thoatJson("/vi/tin-tức/\"a\"\n"));
-        assertEquals("\\ud83d\\ude00", Kho.thoatJson("😀"));
+    void jsonEscapeMatchesPython() {
+        assertEquals("/vi/tin-t\\u1ee9c/\\\"a\\\"\\n", RawStore.jsonEscape("/vi/tin-tức/\"a\"\n"));
+        assertEquals("\\ud83d\\ude00", RawStore.jsonEscape("😀"));
     }
 
     @Test
-    void giaiMa() throws Exception {
+    void decodeHtml() throws Exception {
         String b64 = Base64.getEncoder().encodeToString("xin chào".getBytes(StandardCharsets.UTF_8));
-        var m = Kho.JSON;
-        assertEquals("xin chào", Kho.giaiMa(m.readTree(
+        var m = RawStore.JSON;
+        assertEquals("xin chào", RawStore.decodeHtml(m.readTree(
                 "{\"status\":200,\"encoding\":\"khong-co-bang-ma\",\"html_b64\":\"" + b64 + "\"}")));
-        assertNull(Kho.giaiMa(m.readTree("{\"status\":404,\"html_b64\":\"" + b64 + "\"}")));
-        assertNull(Kho.giaiMa(m.readTree("{\"status\":200}")));
+        assertNull(RawStore.decodeHtml(m.readTree("{\"status\":404,\"html_b64\":\"" + b64 + "\"}")));
+        assertNull(RawStore.decodeHtml(m.readTree("{\"status\":200}")));
     }
 }

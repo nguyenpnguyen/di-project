@@ -26,7 +26,7 @@ class IndexTest {
                 "host", "hust.edu.vn", "section", "Tin tức", "date", "2026-08-09"));
     }
 
-    @Test void indexRoiTimThayLai() throws Exception {
+    @Test void indexThenFindAgain() throws Exception {
         doc("https://hust.edu.vn/a-1.html", "Điểm chuẩn Đại học Bách khoa Hà Nội năm 2026",
             "Chiều nay Đại học Bách khoa Hà Nội công bố điểm chuẩn xét tuyển vào 68 chương trình.");
         idx.commit();
@@ -36,7 +36,7 @@ class IndexTest {
         assertEquals("https://hust.edu.vn/a-1.html", r.hits().get(0).url());
     }
 
-    @Test void toSangPhanKhopBangTheMark() throws Exception {
+    @Test void highlightWrapsMatchInMarkTag() throws Exception {
         doc("https://hust.edu.vn/b-2.html", "Thông báo tuyển sinh",
             "Trường công bố điểm chuẩn xét tuyển sớm năm 2026 cho các ngành.");
         idx.commit();
@@ -48,7 +48,7 @@ class IndexTest {
                 "đoạn trích phải bọc <mark> quanh từ khớp, thực tế: " + frags);
     }
 
-    @Test void indexLaiCungUrlThiKhongDeTrung() throws Exception {
+    @Test void reindexingSameUrlDoesNotDuplicate() throws Exception {
         doc("https://hust.edu.vn/c-3.html", "Bản đầu", "nội dung ban đầu");
         idx.commit();
         doc("https://hust.edu.vn/c-3.html", "Bản sửa", "nội dung đã sửa");
@@ -59,7 +59,7 @@ class IndexTest {
         assertEquals("Bản sửa", r.hits().get(0).title(), "phải giữ bản mới nhất");
     }
 
-    @Test void tieuDeDuocUuTienHonNoiDung() throws Exception {
+    @Test void titleIsPreferredOverBody() throws Exception {
         doc("https://hust.edu.vn/d-4.html", "Học bổng Trần Đại Nghĩa", "chuyện khác hẳn");
         doc("https://hust.edu.vn/e-5.html", "Tin vắn", "bài này chỉ nhắc học bổng ở giữa thân bài");
         idx.commit();
@@ -70,7 +70,7 @@ class IndexTest {
                 "khớp ở tiêu đề phải xếp trên khớp ở thân bài");
     }
 
-    @Test void locTheoHost() throws Exception {
+    @Test void filterByHost() throws Exception {
         doc("https://hust.edu.vn/f-6.html", "Thư viện", "giờ mở cửa thư viện");
         idx.put(Map.of("url", "https://library.hust.edu.vn/x", "title", "Thư viện Tạ Quang Bửu",
                 "text", "giờ mở cửa thư viện", "host", "library.hust.edu.vn"));
@@ -81,7 +81,7 @@ class IndexTest {
                 "lọc host phải thu hẹp đúng một site");
     }
 
-    @Test void demTheoHost() throws Exception {
+    @Test void countByHost() throws Exception {
         doc("https://hust.edu.vn/g-7.html", "A", "x");
         doc("https://hust.edu.vn/h-8.html", "B", "y");
         idx.put(Map.of("url", "https://svbk.hust.edu.vn/z", "title", "C", "text", "z",
@@ -93,14 +93,14 @@ class IndexTest {
         assertEquals(1, byHost.get("svbk.hust.edu.vn"));
     }
 
-    @Test void truyVanSaiCuPhapThiNemLoi() throws Exception {
+    @Test void queryWithBadSyntaxThrows() throws Exception {
         doc("https://hust.edu.vn/i-9.html", "A", "x");
         idx.commit();
         assertThrows(Exception.class, () -> idx.search("điểm AND AND", 0, 10, null),
                 "cú pháp hỏng phải báo lỗi để tầng trên trả 400, không phải 500");
     }
 
-    @Test void resetXoaSach() throws Exception {
+    @Test void resetClearsEverything() throws Exception {
         doc("https://hust.edu.vn/j-10.html", "A", "x");
         idx.commit();
         assertEquals(1, idx.numDocs());
@@ -111,10 +111,10 @@ class IndexTest {
     // ------------------------------------------------ các cải tiến xếp hạng
 
     private Index.Result tfidf(String q) throws Exception {
-        return idx.search(new Index.Truy(q, 0, 10, null, null, null, false, "tfidf"));
+        return idx.search(new Index.SearchParams(q, 0, 10, null, null, null, false, "tfidf"));
     }
 
-    @Test void tfidfXepTheoDiemGiamDan() throws Exception {
+    @Test void tfidfSortsByDescendingScore() throws Exception {
         doc("https://fixture.local/doc-1", "Tuyen sinh ky thuat",
                 "tuyen sinh ky thuat tuyen sinh ky thuat");
         doc("https://fixture.local/doc-2", "Thong bao", "tuyen sinh");
@@ -127,7 +127,7 @@ class IndexTest {
                 "TF-IDF phải trả điểm giảm dần");
     }
 
-    @Test void tfidfKhongDungDiemNen() throws Exception {
+    @Test void tfidfDoesNotUseBaseScore() throws Exception {
         String title = "Tuyen sinh";
         String text = "Tuyen sinh ky thuat";
         doc("https://fixture.local/article.html", title, text);
@@ -140,18 +140,18 @@ class IndexTest {
                 "strict TF-IDF không được thưởng URL bài viết");
     }
 
-    @Test void enhancedVanUuTienBaiViet() throws Exception {
+    @Test void enhancedStillPrefersArticles() throws Exception {
         String text = "Tuyen sinh ky thuat";
         doc("https://fixture.local/article.html", "Tuyen sinh", text);
         doc("https://fixture.local/page-2/", "Tuyen sinh", text);
         idx.commit();
 
-        Index.Result r = idx.search(new Index.Truy("tuyen sinh", 0, 10, null,
+        Index.Result r = idx.search(new Index.SearchParams("tuyen sinh", 0, 10, null,
                 null, null, false, "enhanced"));
         assertEquals("https://fixture.local/article.html", r.hits().get(0).url());
     }
 
-    @Test void tfidfTimKhongDau() throws Exception {
+    @Test void tfidfFindsWithoutAccents() throws Exception {
         doc("https://fixture.local/doc-3", "Điểm chuẩn Đại học",
                 "Thông tin điểm chuẩn tuyển sinh.");
         idx.commit();
@@ -161,14 +161,14 @@ class IndexTest {
         assertTrue(String.join(" ", r.hits().get(0).fragments()).contains("điểm"));
     }
 
-    @Test void locHostVaNgayKhongGopDiemTfidf() throws Exception {
-        docNgay("https://fixture.local/old", "Tuyen sinh", "Tuyen sinh ky thuat", "2024-01-01");
+    @Test void hostAndDateFiltersDoNotAddTfidfScore() throws Exception {
+        docWithDate("https://fixture.local/old", "Tuyen sinh", "Tuyen sinh ky thuat", "2024-01-01");
         idx.put(Map.of("url", "https://other.local/new", "title", "Tuyen sinh",
                 "text", "Tuyen sinh ky thuat", "host", "other.local", "date", "2026-01-01"));
         idx.commit();
 
         Index.Result all = tfidf("tuyen sinh");
-        Index.Result filtered = idx.search(new Index.Truy("tuyen sinh", 0, 10,
+        Index.Result filtered = idx.search(new Index.SearchParams("tuyen sinh", 0, 10,
                 "other.local", "2026-01-01", "2026-12-31", false, "tfidf"));
         assertEquals(2, all.hits().size());
         assertEquals(1, filtered.hits().size());
@@ -178,7 +178,7 @@ class IndexTest {
                 "FILTER chỉ thu hẹp kết quả, không góp điểm");
     }
 
-    @Test void goKhongDauVanTimRa() throws Exception {
+    @Test void strippedAccentsStillFindResults() throws Exception {
         doc("https://hust.edu.vn/k-11.html", "Điểm chuẩn Đại học Bách khoa Hà Nội năm 2026",
             "Nhà trường công bố điểm chuẩn xét tuyển vào 68 chương trình đào tạo.");
         idx.commit();
@@ -191,7 +191,7 @@ class IndexTest {
                 "đoạn trích lấy từ bản gốc nên phải còn dấu");
     }
 
-    @Test void goDuDauXepTrenGoKhongDau() throws Exception {
+    @Test void fullAccentsRankAboveStrippedAccents() throws Exception {
         doc("https://hust.edu.vn/l-12.html", "Tuyển sinh đại học",
             "thông tin tuyển sinh đại học chính quy năm nay của nhà trường");
         doc("https://hust.edu.vn/m-13.html", "Tuyen sinh dai hoc",
@@ -204,7 +204,7 @@ class IndexTest {
                 "gõ đủ dấu thì bản có dấu phải xếp trên");
     }
 
-    @Test void amTietLienNhauXepTrenAmTietRaiRac() throws Exception {
+    @Test void adjacentSyllablesRankAboveScattered() throws Exception {
         doc("https://hust.edu.vn/n-14.html", "Ngành Kỹ thuật máy tính",
             "giới thiệu chương trình đào tạo ngành kỹ thuật máy tính của trường");
         doc("https://hust.edu.vn/o-15.html", "Tin tổng hợp",
@@ -217,7 +217,7 @@ class IndexTest {
                 "hai âm tiết đứng liền nhau phải thắng hai âm tiết rải rác");
     }
 
-    @Test void baiVietXepTrenTrangMucLuc() throws Exception {
+    @Test void articleRanksAboveListingPage() throws Exception {
         doc("https://hust.edu.vn/vi/news/hoc-bong-tran-dai-nghia-123.html",
             "Học bổng Trần Đại Nghĩa",
             "Nhà trường trao học bổng Trần Đại Nghĩa cho sinh viên vượt khó. ".repeat(30));
@@ -231,7 +231,7 @@ class IndexTest {
                 "bài viết phải vượt trang mục lục, thực tế đứng đầu: " + r.hits().get(0).url());
     }
 
-    @Test void thuaMotTuVanConVet() throws Exception {
+    @Test void extraWordStillFallsBack() throws Exception {
         doc("https://hust.edu.vn/p-16.html", "Điểm chuẩn năm 2026",
             "công bố điểm chuẩn các ngành");
         idx.commit();
@@ -241,7 +241,7 @@ class IndexTest {
         assertEquals(1, r.total(), "thừa một từ thì vét lại theo quá nửa số âm tiết, đừng trả rỗng");
     }
 
-    @Test void demTheoHostKhongDemBanDaXoa() throws Exception {
+    @Test void countByHostIgnoresDeletedVersions() throws Exception {
         doc("https://hust.edu.vn/q-17.html", "Bản đầu", "nội dung ban đầu");
         idx.commit();
         doc("https://hust.edu.vn/q-17.html", "Bản sửa", "nội dung đã sửa");
@@ -253,7 +253,7 @@ class IndexTest {
                 "tổng theo host phải khớp numDocs");
     }
 
-    @Test void tungTuDoiLienNhauDuocCong() throws Exception {
+    @Test void consecutiveWordPairsGetBonus() throws Exception {
         doc("https://hust.edu.vn/r-18.html", "Ngành Kỹ thuật máy tính",
             "chương trình đào tạo kỹ thuật máy tính");
         doc("https://hust.edu.vn/s-19.html", "Vật lý kỹ thuật và máy đo",
@@ -265,7 +265,7 @@ class IndexTest {
                 "bài có cả hai cặp 'kỹ thuật' và 'máy tính' phải xếp trên bài chỉ có một cặp");
     }
 
-    @Test void goKhongDauVanToSangDuHaiChu() throws Exception {
+    @Test void strippedAccentsStillHighlightBothWords() throws Exception {
         doc("https://hust.edu.vn/t-20.html", "Điểm chuẩn Đại học Bách khoa Hà Nội năm 2026",
             "công bố điểm chuẩn năm 2026");
         idx.commit();
@@ -276,7 +276,7 @@ class IndexTest {
                 "chữ gõ không dấu cũng phải được tô, không chỉ mỗi con số: " + frag);
     }
 
-    @Test void thuongCumKhongDuocNoiRongKetQua() throws Exception {
+    @Test void phraseBonusDoesNotWidenResults() throws Exception {
         doc("https://hust.edu.vn/u-21.html", "Ngành Kỹ thuật máy tính", "đào tạo kỹ thuật máy tính");
         doc("https://hust.edu.vn/v-22.html", "Phòng máy tính", "lịch mở phòng máy tính cho sinh viên");
         idx.commit();
@@ -289,9 +289,9 @@ class IndexTest {
 
     // ---------------------------------------- gộp trùng, lọc ngày, chia trang
 
-    private void docNgay(String url, String title, String text, String ngay) throws Exception {
+    private void docWithDate(String url, String title, String text, String date) throws Exception {
         idx.put(Map.of("url", url, "title", title, "text", text,
-                "host", "hust.edu.vn", "section", "Tin tức", "date", ngay));
+                "host", "hust.edu.vn", "section", "Tin tức", "date", date));
     }
 
     /**
@@ -302,15 +302,15 @@ class IndexTest {
      * xóm của nhau thật — bản nháp trước của test này bị gộp mất một nửa số
      * bài, và Sig gộp đúng chứ không sai.
      */
-    private static String than(String rieng) {
-        return (rieng + ". ").repeat(14);
+    private static String body(String unique) {
+        return (unique + ". ").repeat(14);
     }
 
-    @Test void haiUrlCungMotBaiThiGopLai() throws Exception {
-        String noiDung = than("Trao học bổng Trần Đại Nghĩa cho sinh viên vượt khó.");
-        doc("https://hust.edu.vn/vi/news/tin-tuc/hoc-bong-1.html", "Học bổng Trần Đại Nghĩa", noiDung);
+    @Test void twoUrlsOfSameArticleAreMerged() throws Exception {
+        String content = body("Trao học bổng Trần Đại Nghĩa cho sinh viên vượt khó.");
+        doc("https://hust.edu.vn/vi/news/tin-tuc/hoc-bong-1.html", "Học bổng Trần Đại Nghĩa", content);
         doc("https://hust.edu.vn/vi/news/savefile/tin-tuc/hoc-bong-1.html",
-            "Học bổng Trần Đại Nghĩa", noiDung + " Lượt xem: 214.");
+            "Học bổng Trần Đại Nghĩa", content + " Lượt xem: 214.");
         idx.commit();
 
         Index.Result r = idx.search("học bổng", 0, 10, null);
@@ -320,62 +320,62 @@ class IndexTest {
         assertTrue(r.hits().get(0).duplicates().get(0).contains("/savefile/"));
     }
 
-    @Test void baiKhacNhauThiKhongBiGopNham() throws Exception {
+    @Test void differentArticlesNotMergedByMistake() throws Exception {
         doc("https://hust.edu.vn/w-23.html", "Học bổng Trần Đại Nghĩa",
-            than("Trao học bổng Trần Đại Nghĩa cho sinh viên vượt khó ngành cơ khí."));
+            body("Trao học bổng Trần Đại Nghĩa cho sinh viên vượt khó ngành cơ khí."));
         doc("https://hust.edu.vn/x-24.html", "Học bổng Odon Vallet",
-            than("Quỹ Odon Vallet trao thưởng cho học sinh giỏi quốc gia môn toán và lý."));
+            body("Quỹ Odon Vallet trao thưởng cho học sinh giỏi quốc gia môn toán và lý."));
         idx.commit();
 
         Index.Result r = idx.search("học bổng", 0, 10, null);
         assertEquals(2, r.hits().size(), "hai bài khác nội dung phải giữ hai dòng riêng");
     }
 
-    @Test void locTheoKhoangNgay() throws Exception {
-        docNgay("https://hust.edu.vn/y-25.html", "Tuyển sinh 2024", than("kỳ tuyển sinh"), "2024-06-01");
-        docNgay("https://hust.edu.vn/z-26.html", "Tuyển sinh 2026", than("kỳ tuyển sinh"), "2026-06-01");
+    @Test void filterByDateRange() throws Exception {
+        docWithDate("https://hust.edu.vn/y-25.html", "Tuyển sinh 2024", body("kỳ tuyển sinh"), "2024-06-01");
+        docWithDate("https://hust.edu.vn/z-26.html", "Tuyển sinh 2026", body("kỳ tuyển sinh"), "2026-06-01");
         idx.commit();
 
-        Index.Result r = idx.search(new Index.Truy("tuyển sinh", 0, 10, null,
+        Index.Result r = idx.search(new Index.SearchParams("tuyển sinh", 0, 10, null,
                 "2026-01-01", null, false));
         assertEquals(1, r.hits().size(), "chỉ bài trong khoảng mới được ra");
         assertEquals("https://hust.edu.vn/z-26.html", r.hits().get(0).url());
     }
 
-    @Test void baiKhongRoNgayBiLoaiKhiLocNgay() throws Exception {
+    @Test void articleWithoutDateExcludedByDateFilter() throws Exception {
         // put() thẳng, không qua doc(): doc() luôn gắn sẵn một ngày
         idx.put(Map.of("url", "https://hust.edu.vn/aa-27.html", "title", "Tuyển sinh không ngày",
-                "text", than("kỳ tuyển sinh"), "host", "hust.edu.vn"));
+                "text", body("kỳ tuyển sinh"), "host", "hust.edu.vn"));
         idx.put(Map.of("url", "https://hust.edu.vn/bb-28.html", "title", "Tuyển sinh 2026",
-                "text", than("kỳ tuyển sinh"), "host", "hust.edu.vn", "date", "2026-06-01"));
+                "text", body("kỳ tuyển sinh"), "host", "hust.edu.vn", "date", "2026-06-01"));
         idx.commit();
 
-        Index.Result r = idx.search(new Index.Truy("tuyển sinh", 0, 10, null,
+        Index.Result r = idx.search(new Index.SearchParams("tuyển sinh", 0, 10, null,
                 "2020-01-01", "2030-12-31", false));
         assertEquals(1, r.hits().size(), "không rõ ngày thì đứng ngoài bộ lọc ngày");
         assertEquals("https://hust.edu.vn/bb-28.html", r.hits().get(0).url());
     }
 
-    @Test void sapTheoNgayMoiTruoc() throws Exception {
-        docNgay("https://hust.edu.vn/cc-29.html", "Tuyển sinh bản cũ",
-                than("tuyển sinh ngành kỹ thuật cơ khí động lực và ô tô"), "2019-03-05");
-        docNgay("https://hust.edu.vn/dd-30.html", "Tuyển sinh bản mới",
-                than("tuyển sinh ngành công nghệ sinh học thực phẩm và môi trường"), "2026-03-05");
+    @Test void sortByDateNewestFirst() throws Exception {
+        docWithDate("https://hust.edu.vn/cc-29.html", "Tuyển sinh bản cũ",
+                body("tuyển sinh ngành kỹ thuật cơ khí động lực và ô tô"), "2019-03-05");
+        docWithDate("https://hust.edu.vn/dd-30.html", "Tuyển sinh bản mới",
+                body("tuyển sinh ngành công nghệ sinh học thực phẩm và môi trường"), "2026-03-05");
         idx.commit();
 
-        Index.Result r = idx.search(new Index.Truy("tuyển sinh", 0, 10, null, null, null, true));
+        Index.Result r = idx.search(new Index.SearchParams("tuyển sinh", 0, 10, null, null, null, true));
         assertEquals("2026-03-05", r.hits().get(0).date(), "sắp theo ngày thì bài mới đứng đầu");
         assertEquals("2019-03-05", r.hits().get(1).date());
     }
 
-    @Test void chiaTrangKhongTraTrungDong() throws Exception {
-        String[] nganh = {"cơ khí động lực", "điện tử viễn thông", "hoá dược phẩm",
+    @Test void paginationReturnsNoDuplicateRows() throws Exception {
+        String[] majors = {"cơ khí động lực", "điện tử viễn thông", "hoá dược phẩm",
                 "dệt may thời trang", "toán tin ứng dụng", "vật lý kỹ thuật hạt nhân",
                 "công nghệ sinh học", "kỹ thuật môi trường nước", "quản trị kinh doanh",
                 "tiếng Anh khoa học", "cơ điện tử thông minh", "nhiệt lạnh công nghiệp"};
-        for (int i = 0; i < nganh.length; i++) {
-            doc("https://hust.edu.vn/tin-" + i + ".html", "Tuyển sinh ngành " + nganh[i],
-                than("chương trình tuyển sinh ngành " + nganh[i] + " tại Bách khoa Hà Nội"));
+        for (int i = 0; i < majors.length; i++) {
+            doc("https://hust.edu.vn/tin-" + i + ".html", "Tuyển sinh ngành " + majors[i],
+                body("chương trình tuyển sinh ngành " + majors[i] + " tại Bách khoa Hà Nội"));
         }
         idx.commit();
 
@@ -387,38 +387,38 @@ class IndexTest {
                 "trang 2 không được lặp lại dòng của trang 1");
     }
 
-    @Test void ngaySoDoiDungVaBoNgayRac() {
-        assertEquals(20260809L, Index.ngaySo("2026-08-09"));
-        assertEquals(0L, Index.ngaySo(""));
-        assertEquals(0L, Index.ngaySo("2026-13-40"));
-        assertEquals(0L, Index.ngaySo("hôm qua"));
+    @Test void dateNumConvertsCorrectlyAndDropsGarbage() {
+        assertEquals(20260809L, Index.dateNum("2026-08-09"));
+        assertEquals(0L, Index.dateNum(""));
+        assertEquals(0L, Index.dateNum("2026-13-40"));
+        assertEquals(0L, Index.dateNum("hôm qua"));
     }
 
-    @Test void tacGiaVaKindDuocLuuVaLocDuoc() throws Exception {
+    @Test void authorAndKindAreStoredAndFilterable() throws Exception {
         idx.put(Map.of("url", "https://hust.edu.vn/t-1.html", "title", "Bài có tác giả",
                 "text", "nội dung học bổng", "host", "hust.edu.vn", "author", "Trần Thị B"));
         idx.put(Map.of("url", "https://hust.edu.vn/uploads/f.pdf", "title", "Tệp đính kèm",
                 "text", "nội dung học bổng trong tệp", "host", "hust.edu.vn", "kind", "document"));
         idx.commit();
 
-        Index.Result tat = idx.search("học bổng", 0, 10, null);
-        assertEquals(2, tat.total());
-        Index.Hit bai = tat.hits().stream().filter(h -> h.url().endsWith("t-1.html")).findFirst().get();
-        assertEquals("Trần Thị B", bai.author());
-        assertEquals("page", bai.kind(), "không ghi kind thì mặc định là page");
+        Index.Result all = idx.search("học bổng", 0, 10, null);
+        assertEquals(2, all.total());
+        Index.Hit article = all.hits().stream().filter(h -> h.url().endsWith("t-1.html")).findFirst().get();
+        assertEquals("Trần Thị B", article.author());
+        assertEquals("page", article.kind(), "không ghi kind thì mặc định là page");
 
-        Index.Result chiTep = idx.search(new Index.Truy("học bổng", 0, 10, null, null, null,
+        Index.Result documentsOnly = idx.search(new Index.SearchParams("học bổng", 0, 10, null, null, null,
                 false, "tfidf", "document"));
-        assertEquals(1, chiTep.total());
-        assertEquals("document", chiTep.hits().get(0).kind());
+        assertEquals(1, documentsOnly.total());
+        assertEquals("document", documentsOnly.hits().get(0).kind());
 
-        Index.ListResult ds = idx.listAll(0, 10, null, true, "page");
-        assertEquals(1, ds.total());
-        assertEquals("Trần Thị B", ds.items().get(0).author());
-        assertEquals("Trần Thị B", idx.layTaiLieu("https://hust.edu.vn/t-1.html").get("author"));
+        Index.ListResult docs = idx.listAll(0, 10, null, true, "page");
+        assertEquals(1, docs.total());
+        assertEquals("Trần Thị B", docs.items().get(0).author());
+        assertEquals("Trần Thị B", idx.getDocument("https://hust.edu.vn/t-1.html").get("author"));
     }
 
-    @Test void locTheoLoaiTepSuyRaTuUrlKhiClientKhongGui() throws Exception {
+    @Test void filterByFileTypeInferredFromUrlWhenClientOmitsIt() throws Exception {
         idx.put(Map.of("url", "https://hust.edu.vn/a-1.html", "title", "Trang học bổng", "text", "học bổng"));
         idx.put(Map.of("url", "https://hust.edu.vn/uploads/hb.PDF?v=2", "title", "hb", "text", "học bổng",
                 "kind", "document"));
@@ -427,13 +427,13 @@ class IndexTest {
         idx.commit();
 
         assertEquals(3, idx.search("học bổng", 0, 10, null).total());
-        Index.Result pdf = idx.search(new Index.Truy("học bổng", 0, 10, null, null, null, false, "tfidf", null, "pdf"));
+        Index.Result pdf = idx.search(new Index.SearchParams("học bổng", 0, 10, null, null, null, false, "tfidf", null, "pdf"));
         assertEquals(1, pdf.total());
         assertEquals("pdf", pdf.hits().get(0).ftype(), "đuôi lấy từ url, bỏ query, đưa về chữ thường");
-        Index.Result html = idx.search(new Index.Truy("học bổng", 0, 10, null, null, null, false, "tfidf", null, "html"));
+        Index.Result html = idx.search(new Index.SearchParams("học bổng", 0, 10, null, null, null, false, "tfidf", null, "html"));
         assertEquals("https://hust.edu.vn/a-1.html", html.hits().get(0).url());
-        Index.Result word = idx.search(new Index.Truy("học bổng", 0, 10, null, null, null, false, "tfidf", null, "doc,docx"));
+        Index.Result word = idx.search(new Index.SearchParams("học bổng", 0, 10, null, null, null, false, "tfidf", null, "doc,docx"));
         assertEquals("https://hust.edu.vn/tai?id=7", word.hits().get(0).url(), "client gửi ftype thì dùng giá trị đó");
-        assertEquals("pdf", idx.layTaiLieu("https://hust.edu.vn/uploads/hb.PDF?v=2").get("ftype"));
+        assertEquals("pdf", idx.getDocument("https://hust.edu.vn/uploads/hb.PDF?v=2").get("ftype"));
     }
 }

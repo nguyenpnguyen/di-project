@@ -29,28 +29,28 @@ public final class Sig {
      * lên đứng yên ở 3. Trong khi hai bài khác chủ đề lệch 18 bit trở lên. Nên
      * dưới 100 cụm thì hai ngưỡng đó chồng lên nhau, gộp là gộp nhầm.
      */
-    private static final int TOI_THIEU_CUM = 100;
+    private static final int MIN_SHINGLES = 100;
 
-    public static long vanTay(String tieuDe, String than) {
-        String t = Fold.bo_dau((tieuDe == null ? "" : tieuDe) + " "
-                + (than == null ? "" : than)).toLowerCase();
-        String[] tu = t.split("[^a-z0-9]+");
-        int[] phieu = new int[64];
-        int cum = 0;
-        for (int i = 0; i + 2 < tu.length; i++) {
-            if (tu[i].isEmpty()) continue;
-            long h = bam(tu[i] + " " + tu[i + 1] + " " + tu[i + 2]);
-            cum++;
-            for (int b = 0; b < 64; b++) phieu[b] += ((h >>> b) & 1L) == 1L ? 1 : -1;
+    public static long fingerprint(String title, String body) {
+        String t = Fold.stripAccents((title == null ? "" : title) + " "
+                + (body == null ? "" : body)).toLowerCase();
+        String[] words = t.split("[^a-z0-9]+");
+        int[] votes = new int[64];
+        int shingles = 0;
+        for (int i = 0; i + 2 < words.length; i++) {
+            if (words[i].isEmpty()) continue;
+            long h = hash(words[i] + " " + words[i + 1] + " " + words[i + 2]);
+            shingles++;
+            for (int b = 0; b < 64; b++) votes[b] += ((h >>> b) & 1L) == 1L ? 1 : -1;
         }
-        if (cum < TOI_THIEU_CUM) return 0L;
+        if (shingles < MIN_SHINGLES) return 0L;
         long out = 0L;
-        for (int b = 0; b < 64; b++) if (phieu[b] > 0) out |= (1L << b);
+        for (int b = 0; b < 64; b++) if (votes[b] > 0) out |= (1L << b);
         return out;
     }
 
     /** FNV-1a 64 bit: ngắn, không cần thư viện, tán bit đủ đều cho việc này. */
-    static long bam(String s) {
+    static long hash(String s) {
         long h = 0xcbf29ce484222325L;
         for (int i = 0; i < s.length(); i++) {
             h ^= s.charAt(i);
@@ -60,13 +60,13 @@ public final class Sig {
     }
 
     /** Số bit khác nhau giữa hai vân tay. */
-    public static int lech(long a, long b) {
+    public static int distance(long a, long b) {
         return Long.bitCount(a ^ b);
     }
 
     /** Ngưỡng coi là cùng một bài: 3/64 bit, đúng mức nhiễu đo được ở trên. Hai
      *  bài khác chủ đề lệch từ 18 bit, nên khoảng cách an toàn còn rất rộng. */
-    public static boolean cungMotBai(long a, long b) {
-        return a != 0L && b != 0L && lech(a, b) <= 3;
+    public static boolean sameArticle(long a, long b) {
+        return a != 0L && b != 0L && distance(a, b) <= 3;
     }
 }

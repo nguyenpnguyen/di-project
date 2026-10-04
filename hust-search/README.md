@@ -83,12 +83,12 @@ DI/
     ├── src/main/java/vn/hust/search/
     │   ├── Main.java              mở Index + Mongo, dựng HttpServer :8000
     │   ├── Index.java Fold.java Rank.java Sig.java    Lucene: index/tìm/highlight, bỏ dấu, điểm nền, SimHash
-    │   ├── web/                   Http (router, lỗi {"detail"}) · ViecNen (một việc nền một lúc) · Mongo (503 khi chưa lên)
-    │   │                          ApiTimKiem (search, index, fetch, health, stats) · ApiBocTach (extract, files, graph)
+    │   ├── web/                   Http (router, lỗi {"detail"}) · BackgroundJob (một việc nền một lúc) · Mongo (503 khi chưa lên)
+    │   │                          ApiSearch (search, index, fetch, health, stats) · ApiExtract (extract, files, graph)
     │   │                          ApiCrawl (chuyển tiếp /api/crawl/* sang service crawler)
-    │   ├── kho/                   Url (norm, dedupKey, kindOf — bản sao crawl_all.py) · Kho (đọc/ghi kho thô) · TaiVe (tải lẻ, nhịp 3 s)
-    │   ├── boctach/               BocTach (cửa vào) · Khoi · Khuon · Truong · LienKet · HtmlSach (jsoup) · Tep (Apache Tika)
-    │   └── mongo/                 Db (lược đồ + index) · Trich (kho → Mongo → Lucene) · TepJob (tải/bóc chữ tệp) · Robots
+    │   ├── store/                 Url (norm, dedupKey, kindOf — bản sao crawl_all.py) · RawStore (đọc/ghi kho thô) · Download (tải lẻ, nhịp 3 s)
+    │   ├── extract/               Extractor (cửa vào) · ContentBlock · Template · Fields · Links · HtmlUtil (jsoup) · DocumentText (Apache Tika)
+    │   └── mongo/                 Db (lược đồ + index) · Pipeline (kho → Mongo → Lucene) · DocumentJob (tải/bóc chữ tệp) · Robots
     ├── src/main/resources/mongo-schema.json     $jsonSchema + index của 6 collection
     ├── src/test/java/…            115+ test JUnit; src/test/resources/{html,tep,golden}
     ├── tests/fixtures/corpus.json corpus mẫu theo schema public
@@ -110,7 +110,7 @@ Java đọc cùng kho thô `hust-crawler/data` (mount vào `/data`).
 flowchart TD
     WEB(["hust.edu.vn + subdomain"]) -->|"crawl_all.py<br/>nhịp tự dò, robots.txt"| KHO[("data/raw*/pages-*.jsonl.gz<br/>HTML thô base64, chưa parse")]
     KHO -->|"POST /api/extract/templates"| TPL[("Mongo templates<br/>khối lặp theo host")]
-    KHO -->|"POST /api/extract/run<br/>BocTach: khối → trường → cạnh"| MG[("MongoDB<br/>pages · links · nav_links · images")]
+    KHO -->|"POST /api/extract/run<br/>Extractor: khối → trường → cạnh"| MG[("MongoDB<br/>pages · links · nav_links · images")]
     TPL -.-> MG
     MG -->|"POST /api/files/fetch<br/>tệp *.hust.edu.vn, nhịp 2,5 s"| DOC[("documents<br/>+ data/files/")]
     DOC -->|"POST /api/files/extract"| DOC
@@ -228,7 +228,7 @@ Tất cả dưới `http://localhost:8000`.
 | GET | `/api/crawl/status` | đang chạy không, log 12 dòng cuối |
 | POST | `/api/index/run` | `source=auto\|mongo\|raw`: Mongo (hoặc kho thô) → Lucene (gọi thẳng `Index`, không qua HTTP) |
 | POST | `/api/extract/templates` | dựng bảng khối lặp theo host (chạy nền, một việc nền một lúc → 409 nếu đang bận) |
-| POST | `/api/extract/run?limit=` | kho thô → BocTach → Mongo (chạy nền, idempotent) |
+| POST | `/api/extract/run?limit=` | kho thô → Extractor → Mongo (chạy nền, idempotent) |
 | GET | `/api/extract/status`, `/api/extract/coverage` | tiến độ; % trường đầy đủ và cách chọn khối theo host |
 | GET | `/api/extract/explain?url=` | chạy lại bước chọn khối trên HTML thô trong kho, trả từng bước để vẽ (không cần Mongo) |
 | POST | `/api/extract/url` | **url bất kỳ** `{url, tai_lai, luu, index}`: lấy HTML trong kho, chưa có thì tải từ web (nhịp ≥ 3 s), chọn khối + bóc trường + chia cạnh, ghi Mongo (`pages`, `links`, ảnh, danh mục tệp) và Lucene; trả về trường, nội dung (HTML đã dọn + văn bản) và liên kết trong bài. Url là pdf/docx/xlsx/pptx/doc/xls/ppt thì bóc chữ vào `documents` |
@@ -466,7 +466,7 @@ cd hust-crawler && .venv/bin/python -m pytest tests -q
 
 # Java (115 JUnit): url/kho, bóc tách, Tika, Mongo, HTTP. Test Mongo cần MongoDB ở MONGO_URL
 # (mặc định localhost:27017; compose mở cổng bằng docker-compose.compass.yml) — không có thì tự bỏ qua.
-# SoKhopTest/TepGoldenTest so với bản Python trên kho thật nên chạy cỡ 5 phút; -Dtest=ApiTest,ExtractUrlTest cho nhanh.
+# PythonParityTest/DocumentTextGoldenTest so với bản Python trên kho thật nên chạy cỡ 5 phút; -Dtest=ApiTest,ExtractUrlTest cho nhanh.
 cd hust-search && mvn -B test
 
 # so bản Java ĐANG CHẠY với ảnh chụp bản Python (hình dạng JSON + overlap@10 của 25 truy vấn × 2 ranking)
@@ -561,7 +561,7 @@ fragmenter không bao giờ được init và `getBestFragments` ném NullPointe
 ### 8.7. `AutoDetectParser` của Tika dựng rất chậm
 
 Mỗi lần `new AutoDetectParser()` nạp cả bộ parser qua ServiceLoader (~1 s). Bản đầu dựng một cái cho mỗi
-tệp: bộ test 361 tệp mất 14 phút, `files/extract` ~1,2 s/tệp. `Tep.java` giữ một parser dùng chung (nó an toàn
+tệp: bộ test 361 tệp mất 14 phút, `files/extract` ~1,2 s/tệp. `DocumentText.java` giữ một parser dùng chung (nó an toàn
 khi nhiều luồng) — 197 s cho cả bộ, phần còn lại là thời gian parse thật.
 
 ### 8.8. Chuyên mục có thể biến mất khỏi kế hoạch crawl
@@ -584,19 +584,19 @@ không thêm link nào đi tới được.
 | Đổi luật bỏ qua url | `crawl_all.py` | `SKIP_SEG`, `SKIP_QUERY`, `ASSET` |
 | Đổi cách nhận diện bài viết | `crawl_all.py` | `ART_ID`, `dedup_key()`, `kind_of()` |
 | Đổi ngưỡng "trang cần render" | `render.py` | `looks_blocked()` |
-| Đổi cách chọn khối nội dung | `boctach/Khoi.java` | `ALPHA/BETA/GAMMA/DELTA`, `SELECTOR_THEO_HOST`, `timKhoi()` |
-| Đổi ngưỡng khử khuôn | `boctach/Khuon.java` | `NGUONG_TRANG`, `TOI_THIEU_TRANG` |
-| Đổi cách bóc tiêu đề/ngày/tác giả | `boctach/Truong.java` | `tieuDe`, `ngayDang`, `tacGiaMeta` |
-| Đổi luật cạnh nội dung / cạnh khuôn | `boctach/LienKet.java` | `chia()`, `loaiDich()` |
-| Đổi cách bóc chữ tệp | `boctach/Tep.java` | `HO_TRO`, `bocChu()` |
-| Đổi cách chuẩn hoá url | `kho/Url.java` **và** `hust-crawler/crawl_all.py` | `norm()`, `dedupKey()`, `kindOf()` — hai bản phải giống hệt; sửa xong chạy `UrlGoldenTest` |
+| Đổi cách chọn khối nội dung | `extract/ContentBlock.java` | `ALPHA/BETA/GAMMA/DELTA`, `SELECTOR_BY_HOST`, `findBlock()` |
+| Đổi ngưỡng khử khuôn | `extract/Template.java` | `PAGE_RATIO_THRESHOLD`, `MIN_PAGES` |
+| Đổi cách bóc tiêu đề/ngày/tác giả | `extract/Fields.java` | `title`, `publishedDate`, `authorMeta` |
+| Đổi luật cạnh nội dung / cạnh khuôn | `extract/Links.java` | `split()`, `destKind()` |
+| Đổi cách bóc chữ tệp | `extract/DocumentText.java` | `SUPPORTED`, `extractText()` |
+| Đổi cách chuẩn hoá url | `store/Url.java` **và** `hust-crawler/crawl_all.py` | `norm()`, `dedupKey()`, `kindOf()` — hai bản phải giống hệt; sửa xong chạy `UrlGoldenTest` |
 | Đổi lược đồ Mongo | `src/main/resources/mongo-schema.json` + `SCHEMA.md` | `schemas`, `indexes` |
 | Đổi trọng số xếp hạng | `Index.java` | `MultiFieldQueryParser`, map boost |
 | Đổi cách tô sáng | `Index.java` | `SimpleHTMLFormatter("<mark>", "</mark>")` |
 | Đổi màu, bố cục | `static/index.html` | khối `:root` ở đầu `<style>` |
 | Đổi giao diện trực quan bóc tách / đồ thị | `static/index.html` | `veKhoi()`, `veBac()`, `veDoThiSao()`, `veDayChuyen()` |
-| Đổi dữ liệu vết thuật toán | `boctach/BocTach.java`, `Khoi.java` | `giaiThich()`, `ghiBac()` |
-| Thêm endpoint | `web/ApiTimKiem.java` (index/tìm/tải lẻ) hoặc `web/ApiBocTach.java` (bóc tách/đồ thị/tệp) | thêm `h.get/post` trong `dang()` |
+| Đổi dữ liệu vết thuật toán | `extract/Extractor.java`, `ContentBlock.java` | `explain()`, `recordStep()` |
+| Thêm endpoint | `web/ApiSearch.java` (index/tìm/tải lẻ) hoặc `web/ApiExtract.java` (bóc tách/đồ thị/tệp) | thêm `h.get/post` trong `register()` |
 
 Thay đổi `ClassicSimilarity` hoặc schema field thì phải dựng lại image và index:
 
@@ -623,7 +623,7 @@ dừng rồi chạy lại mẻ mới mới nhận code mới).
 * **Tệp đính kèm**: chỉ tải host `*.hust.edu.vn` (host ngoài như Google Drive chỉ có cạnh trong đồ thị);
   không OCR — PDF scan gắn `needs_ocr`; doc/xls/ppt cũ đọc được bằng Tika (POI).
 * **Thuật toán khối nội dung chưa được đo trên trang thật**: bộ đánh giá hiện là trang tổng hợp,
-  các hằng số ở `Khoi.java` là khởi điểm chưa dò (bản Java khớp bản Python 100% trên 3.438 trang kho thật). Xem `/api/extract/coverage` sau khi bóc tách kho thật,
+  các hằng số ở `ContentBlock.java` là khởi điểm chưa dò (bản Java khớp bản Python 100% trên 3.438 trang kho thật). Xem `/api/extract/coverage` sau khi bóc tách kho thật,
   và soi từng trang ở tab **Bóc tách khối**.
 * **`/api/extract/url` với trang lẻ không ghi `nav_links`** (bảng đó đếm số trang theo host, ghi lẻ rồi
   ghi lại sẽ đếm đôi). Trang lẻ nằm trong `raw-adhoc` nên lần "Bóc tách kho → Mongo" sau sẽ gom đủ.

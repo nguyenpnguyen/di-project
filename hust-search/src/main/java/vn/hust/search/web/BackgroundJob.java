@@ -10,7 +10,7 @@ import java.util.function.IntConsumer;
  */
 public final class BackgroundJob {
     public interface Job {
-        Object chay(IntConsumer tienDo) throws Exception;
+        Object execute(IntConsumer progress) throws Exception;
     }
 
     private boolean running;
@@ -30,16 +30,16 @@ public final class BackgroundJob {
         result = null;
         error = null;
         Thread t = new Thread(() -> {
-            Object kq = null;
-            String loi = null;
+            Object value = null;
+            String failure = null;
             try {
-                kq = j.chay(n -> done = n);
+                value = j.execute(n -> done = n);
             } catch (Throwable e) {
-                loi = e.getClass().getSimpleName() + ": " + e.getMessage();
+                failure = e.getClass().getSimpleName() + ": " + e.getMessage();
             }
             synchronized (this) {
-                result = kq;
-                error = loi;
+                result = value;
+                error = failure;
                 running = false;
             }
         }, "background-job-" + name);

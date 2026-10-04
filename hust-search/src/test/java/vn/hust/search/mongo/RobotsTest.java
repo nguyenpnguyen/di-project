@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 import org.junit.jupiter.api.Test;
-import vn.hust.search.kho.Url;
+import vn.hust.search.store.Url;
 
 /** Robots phải cho kết quả giống urllib.robotparser của Python (dòng khớp đầu tiên thắng). */
 class RobotsTest {
@@ -130,30 +130,30 @@ class RobotsTest {
     };
 
     @Test
-    void khopRobotparserCuaPython() {
-        List<String> lech = new ArrayList<>();
+    void matchesPythonRobotparser() {
+        List<String> mismatches = new ArrayList<>();
         for (String[] c : CA) {
             boolean java = Robots.parse(ROBOTS.get(c[0]).lines().toList()).canFetch(Url.UA, c[1]);
-            if (java != Boolean.parseBoolean(c[2])) lech.add(c[0] + " " + c[1] + " python=" + c[2]);
+            if (java != Boolean.parseBoolean(c[2])) mismatches.add(c[0] + " " + c[1] + " python=" + c[2]);
         }
-        assertTrue(lech.isEmpty(), String.join("\n", lech));
+        assertTrue(mismatches.isEmpty(), String.join("\n", mismatches));
     }
 
     @Test
-    void robotsThatCuaCacHostHustKhopTrenMoiUrlTep() throws Exception {
+    void realRobotsOfHustHostsMatchOnEveryFileUrl() throws Exception {
         Path dir = Path.of("src/test/resources/golden/robots");
         Map<String, Robots> rp = new java.util.HashMap<>();
-        try (var br = new BufferedReader(new InputStreamReader(new GZIPInputStream(
+        try (var reader = new BufferedReader(new InputStreamReader(new GZIPInputStream(
                 Files.newInputStream(dir.resolve("ket-qua.jsonl.gz"))), StandardCharsets.UTF_8))) {
             int n = 0;
-            for (String l; (l = br.readLine()) != null; n++) {
+            for (String l; (l = reader.readLine()) != null; n++) {
                 var r = new ObjectMapper().readTree(l);
                 String url = r.get(0).asText();
                 String host = Url.hostname(url);
                 Robots robots = rp.computeIfAbsent(host, h -> {
                     try {
-                        boolean co = Files.readString(dir.resolve(h + ".status")).trim().equals("200");
-                        return Robots.parse(co ? Files.readString(dir.resolve(h + ".txt")).lines().toList() : List.of());
+                        boolean hasRobots = Files.readString(dir.resolve(h + ".status")).trim().equals("200");
+                        return Robots.parse(hasRobots ? Files.readString(dir.resolve(h + ".txt")).lines().toList() : List.of());
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }

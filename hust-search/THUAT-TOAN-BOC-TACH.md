@@ -1,13 +1,13 @@
 # Thuật toán bóc tách khối nội dung và xây dựng đồ thị liên kết
 
-Tài liệu giải thích cách `hust-search/src/main/java/vn/hust/search/boctach/` (bản port Java của `boc_tach/` Python, khớp 100% trên 3.438 trang kho thật) biến **một trang HTML** thành (1) khối nội
+Tài liệu giải thích cách `hust-search/src/main/java/vn/hust/search/extract/` (bản port Java của `boc_tach/` Python, khớp 100% trên 3.438 trang kho thật) biến **một trang HTML** thành (1) khối nội
 dung chính, (2) các trường tiêu đề / ngày / tác giả và (3) các cạnh `nguồn → đích : văn bản mô tả`.
 Mọi con số trong ví dụ ở mục 6 lấy từ một lần chạy thật của chính code này trên một trang mẫu
 nhỏ; mọi biểu đồ là Mermaid, GitHub tự vẽ.
 
 > **Phạm vi trung thực.** Đây là các heuristic tự cài, không dùng học máy. Các hằng số (α, β, γ, δ,
 > ngưỡng 30 %, 20 trang…) là **giá trị khởi điểm chưa được dò trên dữ liệu thật**. Số F1 0,96–0,98
-> trong README chỉ đo trên trang tổng hợp do chúng tôi dựng (bộ mẫu tổng hợp trong `DanhGiaKhoiTest`), nên chỉ chứng minh
+> trong README chỉ đo trên trang tổng hợp do chúng tôi dựng (bộ mẫu tổng hợp trong `BlockEvaluationTest`), nên chỉ chứng minh
 > thuật toán xử lý được các bố cục đó, không nói gì về độ chính xác trên hust.edu.vn.
 
 Mục lục: [1. Bức tranh chung](#1-bức-tranh-chung) ·
@@ -125,7 +125,7 @@ ngưỡng δ không đạt.
 
 ## 3. Khử khuôn theo site
 
-Lớp `Khuon.java`. Ý tưởng: menu, footer, banner **lặp gần nguyên xi trên mọi trang** của cùng một site,
+Lớp `Template.java`. Ý tưởng: menu, footer, banner **lặp gần nguyên xi trên mọi trang** của cùng một site,
 còn thân bài thì khác nhau. Có cả kho trang của host nên đếm được khối nào lặp.
 
 ```mermaid
@@ -157,7 +157,7 @@ giới hạn 16 MB; ngưỡng 30 % luôn cao hơn nên kết quả khử khuôn 
 
 ## 4. Bóc các trường
 
-Lớp `Truong.java`. Mỗi trường là một **chuỗi nguồn theo thứ tự ưu tiên** và trả kèm tên nguồn đã
+Lớp `Fields.java`. Mỗi trường là một **chuỗi nguồn theo thứ tự ưu tiên** và trả kèm tên nguồn đã
 dùng (`*_src`), để đo trường nào đang lấy được từ đâu.
 
 ```mermaid
@@ -194,7 +194,7 @@ Chi tiết đáng nhớ:
 
 ## 5. Đồ thị liên kết
 
-Lớp `LienKet.java`. Mỗi cạnh là `nguồn → đích : văn bản mô tả`. Với ba loại đối tượng của đề bài:
+Lớp `Links.java`. Mỗi cạnh là `nguồn → đích : văn bản mô tả`. Với ba loại đối tượng của đề bài:
 
 | Đối tượng | Cạnh | Văn bản mô tả |
 |---|---|---|
@@ -385,12 +385,12 @@ tưởng; đề bài yêu cầu tự cài thuật toán nên chúng được dù
 
 | Việc | File |
 |---|---|
-| Chọn khối nội dung | `boctach/Khoi.java` |
-| Khử khuôn theo host | `boctach/Khuon.java` |
-| Bóc trường | `boctach/Truong.java` |
-| Đồ thị, chia cạnh | `boctach/LienKet.java` |
-| Điều phối một trang | `boctach/BocTach.java` (`bocTach`, `giaiThich`), `HtmlSach.java` |
-| Lưu Mongo, chạy cả kho | `mongo/Trich.java`, `web/ApiBocTach.java` |
+| Chọn khối nội dung | `extract/ContentBlock.java` |
+| Khử khuôn theo host | `extract/Template.java` |
+| Bóc trường | `extract/Fields.java` |
+| Đồ thị, chia cạnh | `extract/Links.java` |
+| Điều phối một trang | `extract/Extractor.java` (`extract`, `explain`), `HtmlUtil.java` |
+| Lưu Mongo, chạy cả kho | `mongo/Pipeline.java`, `web/ApiExtract.java` |
 | Lược đồ Mongo | `SCHEMA.md`, `mongo/Db.java`, `mongo-schema.json` |
 | Kế hoạch và quyết định | `KE-HOACH-BOC-TACH.md` |
-| Đo và so sánh | `DanhGiaKhoiTest.java`, `SoKhopTest.java` (so với bản Python) |
+| Đo và so sánh | `BlockEvaluationTest.java`, `PythonParityTest.java` (so với bản Python) |

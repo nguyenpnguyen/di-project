@@ -26,8 +26,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import vn.hust.search.kho.Kho;
-import vn.hust.search.mongo.TepJob.Resp;
+import vn.hust.search.store.RawStore;
+import vn.hust.search.mongo.DocumentJob.Resp;
 
 /**
  * Port của tests/test_mongo.py + test_tep.py (phần Mongo), chạy trên MongoDB THẬT nên $jsonSchema
@@ -35,7 +35,7 @@ import vn.hust.search.mongo.TepJob.Resp;
  * Mỗi test dùng một database tạm tên ngẫu nhiên, xoá khi xong.
  */
 class MongoTest {
-    static final String BAI = """
+    static final String ARTICLE = """
             <html><body><nav><a href="/tuyen-sinh/">Tuyển sinh</a></nav><main>
             <p>Điểm chuẩn năm nay đã được công bố cho toàn bộ các ngành đào tạo.</p>
             <a href="/uploads/diem-chuan.pdf">Xem chi tiết tại đây</a>
@@ -46,7 +46,7 @@ class MongoTest {
     @TempDir Path tmp;
 
     @BeforeEach
-    void mo() throws Exception {
+    void openMongo() throws Exception {
         String url = System.getenv().getOrDefault("MONGO_URL", "mongodb://localhost:27017");
         d = new Db(url, "test_" + UUID.randomUUID().toString().replace("-", ""));
         try {
@@ -61,7 +61,7 @@ class MongoTest {
     }
 
     @AfterEach
-    void dong() {
+    void closeMongo() {
         if (d != null) {
             d.dropDb();
             d.close();
@@ -69,47 +69,47 @@ class MongoTest {
     }
 
     static JsonNode rec(String url, String html) throws Exception {
-        return Kho.JSON.readTree(Kho.JSON.writeValueAsString(Map.of("url", url, "status", 200, "encoding", "utf-8",
+        return RawStore.JSON.readTree(RawStore.JSON.writeValueAsString(Map.of("url", url, "status", 200, "encoding", "utf-8",
                 "fetched_at", "2026-09-01T00:00:00", "html_b64", Base64.getEncoder().encodeToString(html.getBytes(StandardCharsets.UTF_8)))));
     }
 
     List<JsonNode> recs() throws Exception {
         return List.of(
-                rec("https://hust.edu.vn/vi/tin-tuc/diem-chuan-654601.html", BAI),
-                rec("https://hust.edu.vn/vi/khac/diem-chuan-654601.html", BAI),            // cùng đoạn cuối: bản trùng
-                rec("https://hust.edu.vn/vi/tin-tuc/bai-khac-654601.html", BAI.replace("Điểm chuẩn", "Học phí")),
-                Kho.JSON.readTree("{\"url\":\"https://hust.edu.vn/x.pdf\",\"status\":200,\"html_b64\":null}"));
+                rec("https://hust.edu.vn/vi/tin-tuc/diem-chuan-654601.html", ARTICLE),
+                rec("https://hust.edu.vn/vi/khac/diem-chuan-654601.html", ARTICLE),            // cùng đoạn cuối: bản trùng
+                rec("https://hust.edu.vn/vi/tin-tuc/bai-khac-654601.html", ARTICLE.replace("Điểm chuẩn", "Học phí")),
+                RawStore.JSON.readTree("{\"url\":\"https://hust.edu.vn/x.pdf\",\"status\":200,\"html_b64\":null}"));
     }
 
-    Map<String, Integer> chay() throws Exception {
-        return Trich.chayExtract(db, recs().iterator(), 0, n -> { }, 200);
+    Map<String, Integer> runExtract() throws Exception {
+        return Pipeline.runExtract(db, recs().iterator(), 0, n -> { }, 200);
     }
 
-    long dem(String c) {
+    long count(String c) {
         return db.getCollection(c).countDocuments();
     }
 
     // ------------------------------------------------------------------ Trich
     @Test
-    void chayHaiLanKhongNhanDoiBanGhi() throws Exception {
-        chay();
-        long[] a = {dem("pages"), dem("links"), dem("nav_links"), dem("images")};
-        chay();
-        assertEquals(List.of(a[0], a[1], a[2], a[3]), List.of(dem("pages"), dem("links"), dem("nav_links"), dem("images")));
+    void runningTwiceDoesNotDuplicateRecords() throws Exception {
+        runExtract();
+        long[] a = {count("pages"), count("links"), count("nav_links"), count("images")};
+        runExtract();
+        assertEquals(List.of(a[0], a[1], a[2], a[3]), List.of(count("pages"), count("links"), count("nav_links"), count("images")));
         assertEquals(2, a[0]);
     }
 
     @Test
-    void baiTrungDedupKeyThanhBiDanhConSoGiongKhongGop() throws Exception {
-        chay();
+    void duplicateDedupKeyBecomesAliasButSameNumberNotMerged() throws Exception {
+        runExtract();
         Document p = db.getCollection("pages").find(new Document("_id", "https://hust.edu.vn/vi/tin-tuc/diem-chuan-654601.html")).first();
         assertEquals(List.of("https://hust.edu.vn/vi/khac/diem-chuan-654601.html"), p.getList("aliases", String.class));
         assertNotNull(db.getCollection("pages").find(new Document("_id", "https://hust.edu.vn/vi/tin-tuc/bai-khac-654601.html")).first());
     }
 
     @Test
-    void trangGhiDuTruongTheoLuocDo() throws Exception {
-        chay();
+    void pageWritesAllFieldsPerSchema() throws Exception {
+        runExtract();
         Document p = db.getCollection("pages").find(new Document("_id", "https://hust.edu.vn/vi/tin-tuc/diem-chuan-654601.html")).first();
         for (String f : List.of("_id", "host", "title", "content", "extractor_version")) assertTrue(p.containsKey(f), f);
         assertTrue(List.of("selector", "heuristic", "fallback").contains(p.get("content", Document.class).get("block", Document.class).getString("method")));
@@ -118,8 +118,8 @@ class MongoTest {
     }
 
     @Test
-    void navGopTheoHostVaAnhKhuonDanhDau() throws Exception {
-        chay();
+    void navMergedByHostAndTemplateImagesMarked() throws Exception {
+        runExtract();
         Document n = db.getCollection("nav_links").find(new Document("dst", "https://hust.edu.vn/tuyen-sinh/")).first();
         assertEquals(2, n.getInteger("n_pages"));
         assertEquals("hust.edu.vn", n.getString("host"));
@@ -128,32 +128,32 @@ class MongoTest {
     }
 
     @Test
-    void limitDungSom() throws Exception {
-        assertEquals(1, Trich.chayExtract(db, recs().iterator(), 1, n -> { }, 200).get("pages"));
+    void limitStopsEarly() throws Exception {
+        assertEquals(1, Pipeline.runExtract(db, recs().iterator(), 1, n -> { }, 200).get("pages"));
     }
 
     @Test
-    void bangTemplatesChiGhiKhoiLapTu3Trang() throws Exception {
+    void templatesTableOnlyStoresBlocksRepeatedOn3Pages() throws Exception {
         List<JsonNode> r = new ArrayList<>();
         for (int i = 0; i < 25; i++)
             r.add(rec("https://a.hust.edu.vn/p/" + i + ".html", "<body><ul><li>Menu chung</li></ul><p>Bài viết duy nhất "
                     + String.valueOf((char) (97 + i)).repeat(6) + "</p></body>"));
-        var out = Trich.dungTemplates(db, r.iterator(), n -> { });
+        var out = Pipeline.buildTemplates(db, r.iterator(), n -> { });
         assertEquals(25, out.get("a.hust.edu.vn").get("n_pages"));
         assertTrue((int) out.get("a.hust.edu.vn").get("template_blocks") >= 1);
-        assertEquals(1, Trich.khuonTheoHost(db).size());               // đọc lại từ Mongo được
+        assertEquals(1, Pipeline.templatesByHost(db).size());               // đọc lại từ Mongo được
     }
 
     @Test
-    void idCuaLinksLaSha1CongThucCu() {
+    void linksIdIsSha1OfLegacyFormula() {
         // vector từ Python: hashlib.sha1("src|dst|type|text".encode()).hexdigest()
         assertEquals("9cf30ef1d37b7e12bf7000f632035ddae044a26a",
-                Trich.sha1("https://hust.edu.vn/a-1.html", "https://hust.edu.vn/tệp.pdf", "href", "Xem chi tiết"));
+                Pipeline.sha1("https://hust.edu.vn/a-1.html", "https://hust.edu.vn/tệp.pdf", "href", "Xem chi tiết"));
     }
 
     @Test
-    void luceneTuMongoCoTrangVaTepCoChuKhongLayTepScan() throws Exception {
-        Trich.chayExtract(db, List.of(rec("https://hust.edu.vn/vi/a-1.html",
+    void luceneFromMongoHasPagesAndTextFilesButNotScans() throws Exception {
+        Pipeline.runExtract(db, List.of(rec("https://hust.edu.vn/vi/a-1.html",
                 "<html><head><meta name='author' content='Lê Văn C'></head><body><main>"
                         + "<p>Nội dung học bổng của trường dành cho sinh viên năm cuối.</p></main></body></html>")).iterator(), 0, n -> { }, 200);
         db.getCollection("documents").insertMany(List.of(
@@ -162,29 +162,29 @@ class MongoTest {
                 new Document("_id", "https://hust.edu.vn/uploads/scan.pdf").append("host", "hust.edu.vn").append("ext", "pdf")
                         .append("status", "ok").append("text", "").append("needs_ocr", true)));
         Map<String, Map<String, String>> docs = new HashMap<>();
-        Trich.luceneTuMongo(db, m -> docs.put(m.get("url"), m));
+        Pipeline.luceneFromMongo(db, m -> docs.put(m.get("url"), m));
         assertEquals(2, docs.size());
-        var trang = docs.get("https://hust.edu.vn/vi/a-1.html");
-        assertEquals("page", trang.get("kind"));
-        assertEquals("Lê Văn C", trang.get("author"));
-        var tep = docs.get("https://hust.edu.vn/uploads/thong-bao%20hoc-bong.pdf");
-        assertEquals("document", tep.get("kind"));
-        assertEquals("thong-bao hoc-bong.pdf", tep.get("title"));
-        assertEquals("pdf", tep.get("ftype"));
+        var page = docs.get("https://hust.edu.vn/vi/a-1.html");
+        assertEquals("page", page.get("kind"));
+        assertEquals("Lê Văn C", page.get("author"));
+        var file = docs.get("https://hust.edu.vn/uploads/thong-bao%20hoc-bong.pdf");
+        assertEquals("document", file.get("kind"));
+        assertEquals("thong-bao hoc-bong.pdf", file.get("title"));
+        assertEquals("pdf", file.get("ftype"));
     }
 
     @Test
-    void coverageTheoHost() throws Exception {
-        chay();
-        var c = Trich.coverage(db).get("hust.edu.vn");
+    void coverageByHost() throws Exception {
+        runExtract();
+        var c = Pipeline.coverage(db).get("hust.edu.vn");
         assertEquals(2, c.get("pages"));
         assertEquals(0.0, c.get("title_pct"));                          // fixture không có tiêu đề
     }
 
     // ------------------------------------------------------------------ lược đồ (lần đầu chạy trên Mongo thật)
     @Test
-    void banGhiSaiLuocDoBiTuChoi() throws Exception {
-        chay();
+    void recordViolatingSchemaRejected() throws Exception {
+        runExtract();
         var pages = db.getCollection("pages");
         var links = db.getCollection("links");
         var tpl = db.getCollection("templates");
@@ -197,10 +197,10 @@ class MongoTest {
                 .append("content", new Document("text", "t").append("word_count", 1).append("block", new Document("path", "p").append("method", "la")))
                 .append("extractor_version", "2")));
         // published_at sai mẫu YYYY-MM-DD
-        Document hop = pages.find().first();
-        hop.put("_id", "z");
-        hop.put("published_at", "05/09/2026");
-        assertThrows(MongoWriteException.class, () -> pages.insertOne(hop));
+        Document valid = pages.find().first();
+        valid.put("_id", "z");
+        valid.put("published_at", "05/09/2026");
+        assertThrows(MongoWriteException.class, () -> pages.insertOne(valid));
         // dst_kind lạ, count âm
         Document l = links.find().first();
         l.put("_id", "l1");
@@ -217,44 +217,44 @@ class MongoTest {
     }
 
     @Test
-    void initChayLaiKhongLoi() throws Exception {
+    void initRerunDoesNotFail() throws Exception {
         d.init();
         d.init();
         assertEquals(6, db.listCollectionNames().into(new ArrayList<>()).size());
     }
 
     @Test
-    void ghiMotTrangVaPhu() throws Exception {
-        var r = rec("https://hust.edu.vn/vi/tin-tuc/diem-chuan-654601.html", BAI);
-        String html = Kho.giaiMa(r);
-        var ket = vn.hust.search.boctach.BocTach.bocTach(html, r.get("url").asText(), null);
-        Trich.ghiMotTrang(db, r.get("url").asText(), ket, r, html);
-        Trich.ghiMotTrang(db, r.get("url").asText(), ket, r, html);          // ghi lại không nhân đôi
-        assertEquals(1, dem("pages"));
-        assertEquals(2, dem("links"));
-        var phu = Trich.ghiPhuMotTrang(db, ket);
-        assertEquals(1, phu.get("images"));
-        assertEquals(1, phu.get("new_documents"));
-        assertEquals(0, Trich.ghiPhuMotTrang(db, ket).get("new_documents"));
+    void writeSinglePageAndExtras() throws Exception {
+        var r = rec("https://hust.edu.vn/vi/tin-tuc/diem-chuan-654601.html", ARTICLE);
+        String html = RawStore.decodeHtml(r);
+        var extraction = vn.hust.search.extract.Extractor.extract(html, r.get("url").asText(), null);
+        Pipeline.writeSinglePage(db, r.get("url").asText(), extraction, r, html);
+        Pipeline.writeSinglePage(db, r.get("url").asText(), extraction, r, html);          // ghi lại không nhân đôi
+        assertEquals(1, count("pages"));
+        assertEquals(2, count("links"));
+        var extras = Pipeline.writeSinglePageExtras(db, extraction);
+        assertEquals(1, extras.get("images"));
+        assertEquals(1, extras.get("new_documents"));
+        assertEquals(0, Pipeline.writeSinglePageExtras(db, extraction).get("new_documents"));
         assertEquals("pending", db.getCollection("documents").find().first().getString("status"));
     }
 
     // ------------------------------------------------------------------ TepJob
-    Document linkTep(String dst, String kind) {
+    Document fileLink(String dst, String kind) {
         return new Document("_id", dst + "|1").append("src", "https://hust.edu.vn/a.html").append("dst", dst).append("type", "href")
                 .append("text", "t").append("dst_kind", kind).append("count", 1).append("src_host", "hust.edu.vn").append("dst_host", "x");
     }
 
-    void nap() {
+    void seedLinks() {
         db.getCollection("links").insertMany(List.of(
-                linkTep("https://hust.edu.vn/uploads/a.pdf", "document"), linkTep("https://svbk.hust.edu.vn/uploads/b.docx", "document"),
-                linkTep("https://hust.edu.vn/uploads/c.doc", "document"), linkTep("https://drive.google.com/x.pdf", "external"),
-                linkTep("https://hust.edu.vn/cam/d.pdf", "document"), linkTep("https://hust.edu.vn/uploads/e.pdf", "document")));
+                fileLink("https://hust.edu.vn/uploads/a.pdf", "document"), fileLink("https://svbk.hust.edu.vn/uploads/b.docx", "document"),
+                fileLink("https://hust.edu.vn/uploads/c.doc", "document"), fileLink("https://drive.google.com/x.pdf", "external"),
+                fileLink("https://hust.edu.vn/cam/d.pdf", "document"), fileLink("https://hust.edu.vn/uploads/e.pdf", "document")));
     }
 
-    static Function<String, Resp> mayChu(Map<String, Resp> routes, List<String> goi) {
+    static Function<String, Resp> server(Map<String, Resp> routes, List<String> calls) {
         return url -> {
-            goi.add(url);
+            calls.add(url);
             String path = java.net.URI.create(url).getPath();
             if (path.equals("/robots.txt")) return new Resp(200, "text/plain", "", "User-agent: *\nDisallow: /cam/\n".getBytes());
             return routes.getOrDefault(path, new Resp(404, "", "", new byte[0]));
@@ -262,54 +262,54 @@ class MongoTest {
     }
 
     @Test
-    void danhMucChiLayHostHustVaDocCuCungPending() throws Exception {
-        nap();
-        var r = TepJob.danhMuc(db, List.<JsonNode>of().iterator());
+    void catalogOnlyTakesHustHostsAndLegacyDocsPending() throws Exception {
+        seedLinks();
+        var r = DocumentJob.catalog(db, List.<JsonNode>of().iterator());
         assertEquals(5L, ((Number) r.get("total")).longValue());
         assertNull(db.getCollection("documents").find(new Document("_id", "https://drive.google.com/x.pdf")).first());
         assertEquals("pending", db.getCollection("documents").find(new Document("_id", "https://hust.edu.vn/uploads/c.doc")).first().getString("status"));
-        assertEquals(0, TepJob.danhMuc(db, List.<JsonNode>of().iterator()).get("new"));          // chạy lại không thêm
+        assertEquals(0, DocumentJob.catalog(db, List.<JsonNode>of().iterator()).get("new"));          // chạy lại không thêm
     }
 
     @Test
-    void danhMucLayCaBanGhiKhoThoKhongPhaiHtml() throws Exception {
-        var rec = Kho.JSON.readTree("{\"url\":\"https://hust.edu.vn/tai?download=1\",\"status\":200,\"content_type\":\"application/pdf\",\"html_b64\":null}");
-        TepJob.danhMuc(db, List.of(rec).iterator());
+    void catalogAlsoTakesNonHtmlRawStoreRecords() throws Exception {
+        var rec = RawStore.JSON.readTree("{\"url\":\"https://hust.edu.vn/tai?download=1\",\"status\":200,\"content_type\":\"application/pdf\",\"html_b64\":null}");
+        DocumentJob.catalog(db, List.of(rec).iterator());
         Document x = db.getCollection("documents").find(new Document("_id", "https://hust.edu.vn/tai?download=1")).first();
         assertEquals("pdf", x.getString("ext"));
         assertEquals("pending", x.getString("status"));
     }
 
     @Test
-    void chuyenDinhDangCuVePending() {
+    void migrateLegacyFormatsToPending() {
         db.getCollection("documents").insertMany(List.of(
                 new Document("_id", "https://hust.edu.vn/a.doc").append("host", "h").append("ext", "doc").append("status", "unsupported"),
                 new Document("_id", "https://hust.edu.vn/b.xyz").append("host", "h").append("ext", "xyz").append("status", "unsupported")));
-        assertEquals(1, TepJob.chuyenDinhDangCu(db));
+        assertEquals(1, DocumentJob.migrateLegacyFormats(db));
         assertEquals("unsupported", db.getCollection("documents").find(new Document("_id", "https://hust.edu.vn/b.xyz")).first().getString("status"));
     }
 
     @Test
-    void taiRoiBocChuTheoRobotsKichThuocVaLoi() throws Exception {
-        nap();
-        TepJob.danhMuc(db, List.<JsonNode>of().iterator());
-        List<String> goi = new ArrayList<>();
-        var cli = mayChu(Map.of(
+    void downloadThenExtractTextRespectingRobotsSizeAndErrors() throws Exception {
+        seedLinks();
+        DocumentJob.catalog(db, List.<JsonNode>of().iterator());
+        List<String> calls = new ArrayList<>();
+        var cli = server(Map.of(
                 "/uploads/a.pdf", new Resp(200, "application/pdf", "", Files.readAllBytes(Path.of("src/test/resources/tep/co-chu.pdf"))),
                 "/uploads/b.docx", new Resp(200, "", "", Files.readAllBytes(Path.of("src/test/resources/tep/mau.docx"))),
-                "/uploads/e.pdf", new Resp(200, "", "", new byte[200_000])), goi);
-        Path thuMuc = tmp.resolve("files");
-        var r = TepJob.tai(db, thuMuc, n -> { }, cli, 0, 100_000, 0);
+                "/uploads/e.pdf", new Resp(200, "", "", new byte[200_000])), calls);
+        Path dir = tmp.resolve("files");
+        var r = DocumentJob.download(db, dir, n -> { }, cli, 0, 100_000, 0);
         assertEquals(List.of(2, 1), List.of(r.get("errors"), r.get("too_large")));       // robots cấm d.pdf, c.doc 404 (Q2: doc không còn unsupported) ; e.pdf quá lớn
-        assertFalse(goi.contains("https://hust.edu.vn/cam/d.pdf"));                       // bị cấm thì KHÔNG gọi
+        assertFalse(calls.contains("https://hust.edu.vn/cam/d.pdf"));                       // bị cấm thì KHÔNG gọi
         assertEquals("robots.txt cấm", db.getCollection("documents").find(new Document("_id", "https://hust.edu.vn/cam/d.pdf")).first().getString("error"));
-        assertEquals(2, Files.list(thuMuc).count());                                      // a.pdf, b.docx
-        int nGoi = goi.size();                                                            // gọi lại không tải lại tệp đã có sha1
-        TepJob.tai(db, thuMuc, n -> { }, cli, 0, 100_000, 0);
-        assertTrue(goi.subList(nGoi, goi.size()).stream().noneMatch(g -> g.endsWith(".pdf")));
+        assertEquals(2, Files.list(dir).count());                                      // a.pdf, b.docx
+        int nGoi = calls.size();                                                            // gọi lại không tải lại tệp đã có sha1
+        DocumentJob.download(db, dir, n -> { }, cli, 0, 100_000, 0);
+        assertTrue(calls.subList(nGoi, calls.size()).stream().noneMatch(g -> g.endsWith(".pdf")));
 
-        var kq = TepJob.bocChu(db, thuMuc, n -> { });
-        assertEquals(List.of(2, 2), List.of(kq.get("extracted"), kq.get("ok")));
+        var result = DocumentJob.extractText(db, dir, n -> { });
+        assertEquals(List.of(2, 2), List.of(result.get("extracted"), result.get("ok")));
         Document a = db.getCollection("documents").find(new Document("_id", "https://hust.edu.vn/uploads/a.pdf")).first();
         assertEquals("ok", a.getString("status"));
         assertTrue(a.getString("text").contains("hoc bong"));
@@ -318,10 +318,10 @@ class MongoTest {
     }
 
     @Test
-    void httpLoiGhiStatusError() throws Exception {
-        nap();
-        TepJob.danhMuc(db, List.<JsonNode>of().iterator());
-        TepJob.tai(db, tmp.resolve("f"), n -> { }, mayChu(Map.of(), new ArrayList<>()), 0, 1 << 20, 0);   // mọi đường dẫn 404
+    void httpErrorRecordsStatusError() throws Exception {
+        seedLinks();
+        DocumentJob.catalog(db, List.<JsonNode>of().iterator());
+        DocumentJob.download(db, tmp.resolve("f"), n -> { }, server(Map.of(), new ArrayList<>()), 0, 1 << 20, 0);   // mọi đường dẫn 404
         assertEquals("HTTP 404", db.getCollection("documents").find(new Document("_id", "https://hust.edu.vn/uploads/a.pdf")).first().getString("error"));
     }
 }

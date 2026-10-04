@@ -18,7 +18,7 @@ public final class Rank {
 
     /** Loại trang đoán từ url. Không cần trường mới trong index: đường dẫn của
      *  hust.edu.vn đã nói rõ trang phân trang, trang chuyên mục hay bài viết. */
-    static double kieuTrang(String url) {
+    static double pageType(String url) {
         if (url == null || url.isEmpty()) return 1.0;
         String u = url.toLowerCase();
         if (u.contains("/page-") || u.contains("/page/")) return 0.50;   // trang 2, 3, 4…
@@ -29,27 +29,27 @@ public final class Rank {
 
     /** Bài dài thì thường là nội dung thật, bài vài chục chữ thường là vỏ trang.
      *  Đường cong thoải để không thành "cứ dài là hơn". */
-    static double doDay(int soKyTu) {
-        double x = Math.min(1.0, soKyTu / 1200.0);
+    static double lengthFactor(int charCount) {
+        double x = Math.min(1.0, charCount / 1200.0);
         return 0.75 + 0.25 * x;
     }
 
     /** Tin mới nhỉnh hơn tin cũ. Không có ngày thì đứng giữa, không thưởng không phạt. */
-    static double doMoi(String ngay, int namHienTai) {
-        if (ngay == null || ngay.length() < 4) return 1.0;
-        int nam;
+    static double recencyFactor(String date, int currentYear) {
+        if (date == null || date.length() < 4) return 1.0;
+        int year;
         try {
-            nam = Integer.parseInt(ngay.substring(0, 4));
+            year = Integer.parseInt(date.substring(0, 4));
         } catch (NumberFormatException e) {
             return 1.0;
         }
-        if (nam < 1990 || nam > namHienTai + 1) return 1.0;              // ngày rác
-        double tuoi = Math.max(0, namHienTai - nam);
-        return 0.92 + 0.16 * Math.exp(-tuoi / 3.0);
+        if (year < 1990 || year > currentYear + 1) return 1.0;              // ngày rác
+        double age = Math.max(0, currentYear - year);
+        return 0.92 + 0.16 * Math.exp(-age / 3.0);
     }
 
     /** Nhân ba tín hiệu lại. Gọi một lần cho mỗi tài liệu trong cửa sổ xếp lại. */
-    public static double diemNen(String url, int soKyTu, String ngay, int namHienTai) {
-        return kieuTrang(url) * doDay(soKyTu) * doMoi(ngay, namHienTai);
+    public static double baseScore(String url, int charCount, String date, int currentYear) {
+        return pageType(url) * lengthFactor(charCount) * recencyFactor(date, currentYear);
     }
 }

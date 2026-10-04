@@ -1,25 +1,25 @@
-package vn.hust.search.boctach;
+package vn.hust.search.extract;
 
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
-import vn.hust.search.kho.Url;
+import vn.hust.search.store.Url;
 
 /**
  * Tiện ích HTML dùng chung — bản port của {@code boc_tach/html_sach.py}, cộng các hàm làm jsoup
  * cư xử giống BeautifulSoup + lxml (KE-HOACH-PORT-JAVA.md mục 4). Trong bóc tách KHÔNG dùng
  * {@code Element.text()}: nó chuẩn hoá khoảng trắng và không chèn dấu cách giữa các mảnh chữ.
  */
-public final class HtmlSach {
-    private HtmlSach() {}
+public final class HtmlUtil {
+    private HtmlUtil() {}
 
     /** {@code \s} của Python 3 (Unicode): thêm \x1c-\x1f mà Java không coi là khoảng trắng. */
     public static final Pattern WS = Pattern.compile("[\\s\\x1c-\\x1f]+", Pattern.UNICODE_CHARACTER_CLASS);
 
     /** Thẻ chứa chữ mà bs4 tách khỏi get_text() (string_containers của HTMLTreeBuilder). */
-    private static final Set<String> KHONG_LAY_CHU = Set.of("script", "style", "template", "rt", "rp");
+    private static final Set<String> SKIPPED_TEXT_TAGS = Set.of("script", "style", "template", "rt", "rp");
 
     public static String strip(String s) {
         return Url.pyStrip(s);
@@ -53,16 +53,16 @@ public final class HtmlSach {
      */
     public static String text(Element el, String sep, boolean strip) {
         StringBuilder sb = new StringBuilder();
-        boolean[] dau = {true};
+        boolean[] first = {true};
         el.traverse((node, depth) -> {
-            if (node instanceof TextNode t && !trongHopKhongChu(t, el)) {
+            if (node instanceof TextNode t && !insideSkippedTag(t, el)) {
                 String s = t.getWholeText();
                 if (strip) {
                     s = strip(s);
                     if (s.isEmpty()) return;
                 }
-                if (!dau[0]) sb.append(sep);
-                dau[0] = false;
+                if (!first[0]) sb.append(sep);
+                first[0] = false;
                 sb.append(s);
             }
         });
@@ -73,21 +73,21 @@ public final class HtmlSach {
         return text(el, " ", true);
     }
 
-    private static boolean trongHopKhongChu(Node n, Element goc) {
+    private static boolean insideSkippedTag(Node n, Element root) {
         for (Node p = n.parentNode(); p != null; p = p.parentNode()) {
-            if (p instanceof Element e && KHONG_LAY_CHU.contains(e.normalName()) && e != goc) return true;
-            if (p == goc) return false;
+            if (p instanceof Element e && SKIPPED_TEXT_TAGS.contains(e.normalName()) && e != root) return true;
+            if (p == root) return false;
         }
         return false;
     }
 
     /** Còn gắn vào cây của tài liệu? (bs4: {@code not t.decomposed}). */
-    public static boolean conGan(Node n) {
+    public static boolean isAttached(Node n) {
         return n.ownerDocument() != null;
     }
 
     /** Mọi phần tử con cháu theo thứ tự tài liệu, không gồm chính nó (bs4 {@code find_all(True)}). */
-    public static java.util.List<Element> conChau(Element el) {
+    public static java.util.List<Element> descendants(Element el) {
         var all = el.getAllElements();
         return all.subList(1, all.size());
     }
@@ -100,10 +100,10 @@ public final class HtmlSach {
     }
 
     // ------------------------------------------------------------------ dọn HTML xem trước
-    private static final Set<String> THE_GIU = Set.of("p", "br", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li",
+    private static final Set<String> KEEP_TAGS = Set.of("p", "br", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li",
             "blockquote", "figure", "figcaption", "table", "thead", "tbody", "tr", "th", "td", "strong", "b", "em",
             "i", "u", "sub", "sup", "img", "a", "div", "span", "section", "article");
-    private static final Set<String> BO_HAN_PREVIEW = Set.of("script", "style", "form", "iframe", "noscript", "svg",
+    private static final Set<String> DROP_TAGS = Set.of("script", "style", "form", "iframe", "noscript", "svg",
             "button", "input", "select", "nav", "footer", "header");
 
     /**
@@ -112,83 +112,83 @@ public final class HtmlSach {
      * rồi unwrap; không cần parse lần hai), theo định dạng của bs4: {@code <br/>}, thoát & < >.
      * Cắt ở 40.000 ký tự.
      */
-    public static String donHtml(Element node, String goc) {
+    public static String cleanHtml(Element node, String baseUrl) {
         if (node == null) return "";
         StringBuilder sb = new StringBuilder();
-        ghi(node, goc, sb, false);
+        write(node, baseUrl, sb, false);
         return head(sb.toString(), 40_000);
     }
 
-    private static final Set<String> GIU_KHOANG_TRANG = Set.of("pre", "textarea");
+    private static final Set<String> PRESERVE_WS_TAGS = Set.of("pre", "textarea");
 
     /** Con của {@code e}. Các TextNode liền nhau gộp thành một chuỗi (bs4 parse lại str() nên thấy chúng là một). */
-    private static void ghiCon(Element e, String goc, StringBuilder sb, boolean giuTrang) {
-        giuTrang |= GIU_KHOANG_TRANG.contains(e.normalName());
-        StringBuilder chu = new StringBuilder();
+    private static void writeChildren(Element e, String baseUrl, StringBuilder sb, boolean preserveWs) {
+        preserveWs |= PRESERVE_WS_TAGS.contains(e.normalName());
+        StringBuilder pending = new StringBuilder();
         for (Node c : e.childNodes()) {
             if (c instanceof TextNode t) {
-                chu.append(t.getWholeText());
+                pending.append(t.getWholeText());
                 continue;
             }
-            xaChu(chu, sb, giuTrang);
-            if (c instanceof Element ce) ghi(ce, goc, sb, giuTrang);
+            flushText(pending, sb, preserveWs);
+            if (c instanceof Element ce) write(ce, baseUrl, sb, preserveWs);
         }
-        xaChu(chu, sb, giuTrang);
+        flushText(pending, sb, preserveWs);
     }
 
     /** bs4: chuỗi chỉ gồm khoảng trắng ASCII thì thành một "\n" (nếu có xuống dòng) hoặc một dấu cách. */
-    private static void xaChu(StringBuilder chu, StringBuilder sb, boolean giuTrang) {
-        if (chu.length() == 0) return;
-        String s = chu.toString();
-        chu.setLength(0);
-        if (!giuTrang && s.chars().allMatch(c -> c == ' ' || c == '\n' || c == '\t' || c == '\f' || c == '\r'))
+    private static void flushText(StringBuilder pending, StringBuilder sb, boolean preserveWs) {
+        if (pending.length() == 0) return;
+        String s = pending.toString();
+        pending.setLength(0);
+        if (!preserveWs && s.chars().allMatch(c -> c == ' ' || c == '\n' || c == '\t' || c == '\f' || c == '\r'))
             s = s.indexOf('\n') >= 0 ? "\n" : " ";
-        sb.append(thoat(s));
+        sb.append(escape(s));
     }
 
-    private static void ghi(Element e, String goc, StringBuilder sb, boolean giuTrang) {
-        String ten = e.normalName();
-        if (BO_HAN_PREVIEW.contains(ten)) return;
-        if (!THE_GIU.contains(ten)) {
-            ghiCon(e, goc, sb, giuTrang);                              // gỡ vỏ
+    private static void write(Element e, String baseUrl, StringBuilder sb, boolean preserveWs) {
+        String name = e.normalName();
+        if (DROP_TAGS.contains(name)) return;
+        if (!KEEP_TAGS.contains(name)) {
+            writeChildren(e, baseUrl, sb, preserveWs);                              // gỡ vỏ
             return;
         }
-        StringBuilder tag = new StringBuilder("<").append(ten);
+        StringBuilder tag = new StringBuilder("<").append(name);
         // bs4 xuất thuộc tính theo thứ tự chữ cái
-        switch (ten) {
+        switch (name) {
             case "img" -> {
-                String src = joinHttp(goc, e.attr("src"));
+                String src = joinHttp(baseUrl, e.attr("src"));
                 if (src.isEmpty()) return;
-                if (e.hasAttr("alt")) tag.append(' ').append(thuocTinh("alt", e.attr("alt")));
-                tag.append(' ').append(thuocTinh("loading", "lazy")).append(' ').append(thuocTinh("src", src));
+                if (e.hasAttr("alt")) tag.append(' ').append(attribute("alt", e.attr("alt")));
+                tag.append(' ').append(attribute("loading", "lazy")).append(' ').append(attribute("src", src));
             }
             case "a" -> {
-                String href = joinHttp(goc, e.attr("href"));
+                String href = joinHttp(baseUrl, e.attr("href"));
                 if (href.isEmpty()) {
-                    ghiCon(e, goc, sb, giuTrang);
+                    writeChildren(e, baseUrl, sb, preserveWs);
                     return;
                 }
-                tag.append(' ').append(thuocTinh("href", href)).append(' ').append(thuocTinh("rel", "noopener"))
-                        .append(' ').append(thuocTinh("target", "_blank"));
+                tag.append(' ').append(attribute("href", href)).append(' ').append(attribute("rel", "noopener"))
+                        .append(' ').append(attribute("target", "_blank"));
             }
             default -> {}
         }
-        if (ten.equals("br") || ten.equals("img")) {
+        if (name.equals("br") || name.equals("img")) {
             sb.append(tag).append("/>");
             return;
         }
         sb.append(tag).append('>');
-        ghiCon(e, goc, sb, giuTrang);
-        sb.append("</").append(ten).append('>');
+        writeChildren(e, baseUrl, sb, preserveWs);
+        sb.append("</").append(name).append('>');
     }
 
-    private static String thoat(String s) {
+    private static String escape(String s) {
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     /** Thuộc tính theo bs4: giá trị có " thì bọc bằng ' (nếu không có ' nữa), không thì thoát thành &quot;. */
-    private static String thuocTinh(String k, String v) {
-        v = thoat(v);
+    private static String attribute(String k, String v) {
+        v = escape(v);
         if (v.contains("\"")) {
             if (v.contains("'")) return k + "=\"" + v.replace("\"", "&quot;") + "\"";
             return k + "='" + v + "'";

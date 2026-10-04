@@ -5,8 +5,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import vn.hust.search.boctach.HtmlSach;
-import vn.hust.search.kho.Url;
+import vn.hust.search.extract.HtmlUtil;
+import vn.hust.search.store.Url;
 
 /**
  * robots.txt theo đúng luật của {@code urllib.robotparser} (Python 3.10): trong một nhóm, dòng khớp
@@ -14,17 +14,17 @@ import vn.hust.search.kho.Url;
  * {@code parse(List.of())} nghĩa là cho phép tất cả.
  */
 public final class Robots {
-    private record Dong(String path, boolean allow) {
-        boolean khop(String f) {
+    private record Rule(String path, boolean allow) {
+        boolean matches(String f) {
             return path.equals("*") || f.startsWith(path);
         }
     }
 
-    private static final class Nhom {
+    private static final class Group {
         final List<String> agents = new ArrayList<>();
-        final List<Dong> dong = new ArrayList<>();
+        final List<Rule> rules = new ArrayList<>();
 
-        boolean ungVoi(String ua) {
+        boolean appliesTo(String ua) {
             ua = ua.split("/", -1)[0].toLowerCase(Locale.ROOT);
             for (String a : agents) {
                 if (a.equals("*")) return true;
@@ -33,35 +33,35 @@ public final class Robots {
             return false;
         }
 
-        boolean choPhep(String f) {
-            for (Dong d : dong) if (d.khop(f)) return d.allow;
+        boolean allows(String f) {
+            for (Rule d : rules) if (d.matches(f)) return d.allow;
             return true;
         }
     }
 
-    private final List<Nhom> nhom = new ArrayList<>();
-    private Nhom macDinh;
+    private final List<Group> groups = new ArrayList<>();
+    private Group defaultGroup;
 
     public static Robots parse(List<String> lines) {
         Robots r = new Robots();
         int state = 0;
-        Nhom e = new Nhom();
+        Group e = new Group();
         for (String line : lines) {
             if (line.isEmpty()) {
-                if (state == 1) { e = new Nhom(); state = 0; }
-                else if (state == 2) { r.them(e); e = new Nhom(); state = 0; }
+                if (state == 1) { e = new Group(); state = 0; }
+                else if (state == 2) { r.addGroup(e); e = new Group(); state = 0; }
             }
             int i = line.indexOf('#');
             if (i >= 0) line = line.substring(0, i);
-            line = HtmlSach.strip(line);
+            line = HtmlUtil.strip(line);
             if (line.isEmpty()) continue;
             int c = line.indexOf(':');
             if (c < 0) continue;
-            String k = HtmlSach.strip(line.substring(0, c)).toLowerCase(Locale.ROOT);
-            String v = unquote(HtmlSach.strip(line.substring(c + 1)));
+            String k = HtmlUtil.strip(line.substring(0, c)).toLowerCase(Locale.ROOT);
+            String v = unquote(HtmlUtil.strip(line.substring(c + 1)));
             switch (k) {
                 case "user-agent" -> {
-                    if (state == 2) { r.them(e); e = new Nhom(); }
+                    if (state == 2) { r.addGroup(e); e = new Group(); }
                     e.agents.add(v);
                     state = 1;
                 }
@@ -69,30 +69,30 @@ public final class Robots {
                     if (state != 0) {
                         boolean allow = k.equals("allow");
                         if (v.isEmpty() && !allow) allow = true;          // Disallow: rỗng = cho phép tất cả
-                        e.dong.add(new Dong(quote(v), allow));
+                        e.rules.add(new Rule(quote(v), allow));
                         state = 2;
                     }
                 }
                 default -> {}
             }
         }
-        if (state == 2) r.them(e);
+        if (state == 2) r.addGroup(e);
         return r;
     }
 
-    private void them(Nhom e) {
+    private void addGroup(Group e) {
         if (e.agents.contains("*")) {
-            if (macDinh == null) macDinh = e;                             // nhóm * đầu tiên thắng
+            if (defaultGroup == null) defaultGroup = e;                             // nhóm * đầu tiên thắng
         } else {
-            nhom.add(e);
+            groups.add(e);
         }
     }
 
     public boolean canFetch(String ua, String url) {
-        String f = quote(Url.sauHost(unquote(url)));
+        String f = quote(Url.afterHost(unquote(url)));
         if (f.isEmpty()) f = "/";
-        for (Nhom e : nhom) if (e.ungVoi(ua)) return e.choPhep(f);
-        return macDinh == null || macDinh.choPhep(f);
+        for (Group e : groups) if (e.appliesTo(ua)) return e.allows(f);
+        return defaultGroup == null || defaultGroup.allows(f);
     }
 
     /** {@code urllib.parse.unquote}: %XX là byte UTF-8, hỏng thì thay bằng U+FFFD. */

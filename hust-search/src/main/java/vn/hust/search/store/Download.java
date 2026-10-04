@@ -1,7 +1,6 @@
-package vn.hust.search.kho;
+package vn.hust.search.store;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -16,44 +15,44 @@ import vn.hust.search.web.HttpError;
  * Chặn nhịp ở phía máy chủ chứ không tin giao diện: bấm nhanh tay hay mở hai tab là bắn liên tiếp,
  * đúng kiểu ăn 429. Bản port của {@code main.py: tai_ve}.
  */
-public class TaiVe {
-    public static final long NHIP_MS = 3000;
-    private static final String UA_TRINH_DUYET = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+public class Download {
+    public static final long INTERVAL_MS = 3000;
+    private static final String BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
     private static final Pattern CHARSET = Pattern.compile("charset=\"?([^\";\\s]+)", Pattern.CASE_INSENSITIVE);
 
     /** Phần của phản hồi mà các nơi dùng tới. {@code url} là url sau khi theo redirect. */
-    public record PhanHoi(String url, int status, String contentType, String encoding, byte[] body) {}
+    public record Response(String url, int status, String contentType, String encoding, byte[] body) {}
 
     private final HttpClient cli = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(30)).build();
-    private final long nhipMs;
-    private long lanCuoi = 0;
+    private final long intervalMs;
+    private long lastRequest = 0;
 
-    public TaiVe() {
-        this(NHIP_MS);
+    public Download() {
+        this(INTERVAL_MS);
     }
 
-    public TaiVe(long nhipMs) {
-        this.nhipMs = nhipMs;
+    public Download(long intervalMs) {
+        this.intervalMs = intervalMs;
     }
 
-    public PhanHoi tai(String url) {
+    public Response fetch(String url) {
         synchronized (this) {
-            long cho = nhipMs - (System.currentTimeMillis() - lanCuoi);
-            if (cho > 0) {
+            long waitMs = intervalMs - (System.currentTimeMillis() - lastRequest);
+            if (waitMs > 0) {
                 try {
-                    Thread.sleep(cho);
+                    Thread.sleep(waitMs);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
             }
-            lanCuoi = System.currentTimeMillis();
+            lastRequest = System.currentTimeMillis();
         }
         HttpResponse<byte[]> r;
         try {
             r = cli.send(HttpRequest.newBuilder(Url.httpUri(url)).timeout(Duration.ofSeconds(30))
-                    .header("User-Agent", UA_TRINH_DUYET).build(), HttpResponse.BodyHandlers.ofByteArray());
+                    .header("User-Agent", BROWSER_UA).build(), HttpResponse.BodyHandlers.ofByteArray());
         } catch (IOException | IllegalArgumentException e) {
             throw new HttpError(502, "không tải được: " + e);
         } catch (InterruptedException e) {
@@ -65,6 +64,6 @@ public class TaiVe {
         String ct = r.headers().firstValue("Content-Type").orElse("");
         Matcher m = CHARSET.matcher(ct);
         String enc = m.find() ? m.group(1) : StandardCharsets.UTF_8.name().toLowerCase();
-        return new PhanHoi(r.uri().toString(), r.statusCode(), ct, enc, r.body());
+        return new Response(r.uri().toString(), r.statusCode(), ct, enc, r.body());
     }
 }

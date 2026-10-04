@@ -1,4 +1,4 @@
-package vn.hust.search.kho;
+package vn.hust.search.store;
 
 import java.util.List;
 import java.util.Locale;
@@ -35,7 +35,7 @@ public final class Url {
             Pattern.compile("^(?<a>.*/)page/(?<n>\\d+)/?$", F));                     // WordPress, path
     private static final List<String> PAGE_TPL = List.of(
             "{a}page-{n}/", "{a}trang-{n}/", "{a}p{n}/", "{a}page={n}", "{a}paged={n}", "{a}page/{n}/");
-    private static final Set<String> QUERY_RAC =
+    private static final Set<String> TRACKING_PARAMS =
             Set.of("fbclid", "utm_source", "utm_medium", "utm_campaign", "gidzl", "PHPSESSID");
 
     /** Khuôn có {n}, số trang, gốc (phần url trước chỗ đánh số). */
@@ -73,7 +73,7 @@ public final class Url {
         for (String kv : p.query.split("&", -1)) {
             if (kv.isEmpty()) continue;
             int eq = kv.indexOf('=');
-            if (QUERY_RAC.contains(eq < 0 ? kv : kv.substring(0, eq))) continue;
+            if (TRACKING_PARAMS.contains(eq < 0 ? kv : kv.substring(0, eq))) continue;
             if (q.length() > 0) q.append('&');
             q.append(kv);
         }
@@ -122,7 +122,7 @@ public final class Url {
     }
 
     /** Scheme http/https và có netloc: điều kiện "url đầy đủ" mà các endpoint kiểm trước khi nhận. */
-    public static boolean httpDayDu(String url) {
+    public static boolean isFullHttp(String url) {
         try {
             Parts p = urlsplit(url, "");
             return (p.scheme.equalsIgnoreCase("http") || p.scheme.equalsIgnoreCase("https")) && !p.netloc.isEmpty();
@@ -138,7 +138,7 @@ public final class Url {
     }
 
     /** {@code urlunparse(('', '', path, params, query, fragment))} — phần sau host, cho robots.txt. */
-    public static String sauHost(String url) {
+    public static String afterHost(String url) {
         Parts p = urlparse(url);
         return urlunsplit("", "", p.params.isEmpty() ? p.path : p.path + ";" + p.params, p.query, p.fragment);
     }
@@ -293,11 +293,11 @@ public final class Url {
             segments.addAll(List.of(path.split("/", -1)));
             // bỏ phần tử rỗng ở giữa để ghép lại không sinh "//"
             if (segments.size() > 2) {
-                List<String> gon = new java.util.ArrayList<>();
-                gon.add(segments.get(0));
-                for (String s : segments.subList(1, segments.size() - 1)) if (!s.isEmpty()) gon.add(s);
-                gon.add(segments.get(segments.size() - 1));
-                segments = gon;
+                List<String> merged = new java.util.ArrayList<>();
+                merged.add(segments.get(0));
+                for (String s : segments.subList(1, segments.size() - 1)) if (!s.isEmpty()) merged.add(s);
+                merged.add(segments.get(segments.size() - 1));
+                segments = merged;
             }
         }
         List<String> resolved = new java.util.ArrayList<>();

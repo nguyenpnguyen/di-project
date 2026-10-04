@@ -24,13 +24,13 @@ dữ liệu thật (container dùng để viết tài liệu này không có `da
 >
 > | Cũ (Python) | Nay (Java) |
 > |---|---|
-> | `main.py`, `routes_bt.py` | `web/ApiTimKiem.java`, `web/ApiBocTach.java`, `web/ApiCrawl.java`, `web/Http.java` |
-> | `boc_tach/khoi.py` `khuon.py` `truong.py` `lien_ket.py` `html_sach.py` | `boctach/Khoi.java` `Khuon.java` `Truong.java` `LienKet.java` `HtmlSach.java` |
-> | `boc_tach/__init__.py` (`boc_tach`, `giai_thich`) | `boctach/BocTach.java` (`bocTach`, `giaiThich`) |
-> | `boc_tach/tep.py` (pdfminer, python-docx…) | `boctach/Tep.java` (Apache Tika; nhận cả doc/xls/ppt) |
-> | `db.py`, `trich.py`, `tep_job.py` | `mongo/Db.java` (+ `mongo-schema.json`), `Trich.java`, `TepJob.java`, `Robots.java` |
+> | `main.py`, `routes_bt.py` | `web/ApiSearch.java`, `web/ApiExtract.java`, `web/ApiCrawl.java`, `web/Http.java` |
+> | `boc_tach/khoi.py` `khuon.py` `truong.py` `lien_ket.py` `html_sach.py` | `extract/ContentBlock.java` `Template.java` `Fields.java` `Links.java` `HtmlUtil.java` |
+> | `boc_tach/__init__.py` (`boc_tach`, `giai_thich`) | `extract/Extractor.java` (`extract`, `explain`) |
+> | `boc_tach/tep.py` (pdfminer, python-docx…) | `extract/DocumentText.java` (Apache Tika; nhận cả doc/xls/ppt) |
+> | `db.py`, `trich.py`, `tep_job.py` | `mongo/Db.java` (+ `mongo-schema.json`), `Pipeline.java`, `DocumentJob.java`, `Robots.java` |
 > | `so_sanh.py` | bỏ (Q3 của kế hoạch port) |
-> | `tests/test_*.py`, `danh_gia_khoi.py` | `src/test/java/…` (`BocTachTest`, `DanhGiaKhoiTest`, `MongoTest`, `TepTest`, `ApiTest`, `ExtractUrlTest`) |
+> | `tests/test_*.py`, `danh_gia_khoi.py` | `src/test/java/…` (`ExtractorTest`, `BlockEvaluationTest`, `MongoTest`, `DocumentTextTest`, `ApiTest`, `ExtractUrlTest`) |
 >
 > Thuật toán và hằng số giữ nguyên; bản `extractor_version` đổi từ "1" sang "2". Trên 3.438 trang kho thật,
 > `method/title/date/author/section/path/cạnh` khớp bản Python 100%. `$jsonSchema` đã được kiểm trên MongoDB thật
@@ -490,5 +490,5 @@ không nhân bản ghi; `/api/files/fetch` trả 409 khi crawler đang chạy;
 | 9 | giao diện trực quan: tab **Bóc tách khối** (phễu, các bậc đi xuống cây, chia cạnh), đồ thị hình sao SVG, dải 4 bước ở Bảng điều khiển; API `/api/extract/explain`, `/api/extract/overview`; `tim_khoi(vet=…)` | xong; 64 pytest đạt; giao diện mới thử trên dữ liệu giả |
 | 10 | viết lại tài liệu, thêm sơ đồ Mermaid cho luồng dữ liệu và các thuật toán | xong |
 
-Còn lại: đọc coverage trên kho thật, dò lại hằng số ở `Khoi.java`
+Còn lại: đọc coverage trên kho thật, dò lại hằng số ở `ContentBlock.java`
 và ngưỡng khử khuôn; đo số dòng `nav_links`; quyết định có đưa `author`/anchor text vào xếp hạng không.

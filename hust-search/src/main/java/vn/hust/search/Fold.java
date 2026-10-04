@@ -27,7 +27,7 @@ public final class Fold {
     /** "Điểm chuẩn ĐHBK" -> "Diem chuan DHBK". Giữ nguyên độ dài từng ký tự gốc
      *  ở mức đủ dùng: một chữ cái vào là một chữ cái ra, nên offset tô sáng
      *  không lệch. */
-    public static String bo_dau(String s) {
+    public static String stripAccents(String s) {
         if (s == null || s.isEmpty()) return "";
         String nfd = Normalizer.normalize(s, Normalizer.Form.NFD);
         StringBuilder b = new StringBuilder(nfd.length());
@@ -51,7 +51,7 @@ public final class Fold {
         @Override public boolean incrementToken() throws IOException {
             if (!input.incrementToken()) return false;
             String s = term.toString();
-            String f = bo_dau(s);
+            String f = stripAccents(s);
             if (!f.equals(s)) term.setEmpty().append(f);
             return true;
         }

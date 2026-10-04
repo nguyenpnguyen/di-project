@@ -24,7 +24,7 @@ cd hust-search && mvn -B test                    # JUnit; test Mongo cần MONGO
 
 Ba dịch vụ: `search` (Java 21, **một tiến trình**: HTTP API + giao diện + bóc tách bằng jsoup + Tika +
 driver Mongo + Lucene 9.11, cổng 8000), `crawler` (Python, chỉ `crawlctl.py` nghe start/stop/status trong
-mạng docker, cổng 8090 không mở ra host) và `mongo` (không mở cổng). Java bóc tách HTML (`boctach/`: khối
+mạng docker, cổng 8090 không mở ra host) và `mongo` (không mở cổng). Java bóc tách HTML (`extract/`: khối
 nội dung, trường, đồ thị liên kết, tệp) rồi ghi vào Mongo; `/api/index/run` đọc Mongo đẩy vào Lucene
 ngay trong tiến trình. `/api/crawl/*` chỉ chuyển tiếp sang service `crawler`.
 Compose giữ `name: hust-search` để không đổi tên volume (đổi tên project là mất dữ liệu cũ hiện ra).
@@ -32,6 +32,8 @@ Hợp đồng HTTP (đường dẫn, tham số, khoá JSON) giữ nguyên bản 
 riêng lỗi tìm kiếm (`/api/search`: q rỗng, cú pháp sai) giữ `{"error": ...}` vì giao diện đọc `d.error`.
 Kế hoạch port và quyết định: `hust-search/KE-HOACH-PORT-JAVA.md`; bóc tách: `hust-search/KE-HOACH-BOC-TACH.md`,
 lược đồ: `hust-search/SCHEMA.md`. Thuật toán bóc tách + đồ thị (sơ đồ Mermaid): `hust-search/THUAT-TOAN-BOC-TACH.md`.
+Tên package/class/biến/method Java dùng tiếng Anh (`extract/`, `store/`, `Extractor`, `RawStore`, `Pipeline`…);
+khoá JSON của API, tên collection/trường Mongo và chuỗi hiển thị giữ nguyên tiếng Việt cũ vì là hợp đồng với giao diện/dữ liệu.
 Sơ đồ luồng dữ liệu và từng thuật toán: `BAO-CAO-KY-THUAT.md`. Giao diện có tab "Bóc tách khối"
 (`POST /api/extract/url`) nhận url bất kỳ: lấy trong kho hoặc tải từ web, bóc tách, lưu Mongo + Lucene, rồi
 hiện trường, nội dung và liên kết đã bóc; tab "Đồ thị liên kết" có nút "Tải & bóc tách". Kho
@@ -43,7 +45,7 @@ hiện trường, nội dung và liên kết đã bóc; tab "Đồ thị liên k
 
 Test: 32 (pytest engine) + 115 (JUnit Java: url/kho, bóc tách khớp bản Python trên kho thật, Tika, Mongo thật,
 HTTP). Đã chạy trên MongoDB thật và kho thật (03/10/2026). Bản Java không crawl được trang dựng bằng JS
-(đã bỏ Playwright, ví dụ `work.hust.edu.vn`); `Tep.java` dùng **một** `AutoDetectParser` dùng chung vì dựng
+(đã bỏ Playwright, ví dụ `work.hust.edu.vn`); `DocumentText.java` dùng **một** `AutoDetectParser` dùng chung vì dựng
 mới mỗi tệp mất ~1 s.
 
 Chỉ `hust-crawler/` được version. `job-di/` là repo lồng: `git add job-di/` sẽ tạo

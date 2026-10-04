@@ -100,15 +100,15 @@ di-project/
       Index.java Rank.java Fold.java Sig.java      giữ nguyên
       Main.java                 MỚI: mở Index + Mongo, dựng HttpServer :8000 (thay SearchServer)
       web/Http.java             router, đọc query/body, gửi JSON, lỗi {"detail": "..."}
-      web/ApiTimKiem.java       /api/search, /api/index/*, /api/preview, /api/health, /api/stats, /api/fetch
-      web/ApiBocTach.java       /api/extract/*, /api/files*, /api/images, /api/referrers, /api/graph/*
+      web/ApiSearch.java       /api/search, /api/index/*, /api/preview, /api/health, /api/stats, /api/fetch
+      web/ApiExtract.java       /api/extract/*, /api/files*, /api/images, /api/referrers, /api/graph/*
       web/ApiCrawl.java         chuyển tiếp /api/crawl/* sang service crawler
-      web/ViecNen.java          một việc nền tại một thời điểm (thay _job / _chay_nen)
-      kho/Url.java              norm, dedupKey, kindOf, pageOf — bản sao của crawl_all
-      kho/Kho.java              đọc shard gzip, timBanGhi, tatCaBanGhi, ghi raw-adhoc
-      kho/TaiVe.java            tải lẻ theo nhịp 3 s
-      boctach/BocTach.java Khoi.java Khuon.java Truong.java LienKet.java HtmlSach.java Tep.java
-      mongo/Db.java Trich.java TepJob.java Robots.java
+      web/BackgroundJob.java          một việc nền tại một thời điểm (thay _job / _chay_nen)
+      store/Url.java             norm, dedupKey, kindOf, pageOf — bản sao của crawl_all
+      store/RawStore.java              đọc shard gzip, findRecord, forEachRecord, ghi raw-adhoc
+      store/Download.java            tải lẻ theo nhịp 3 s
+      extract/Extractor.java ContentBlock.java Template.java Fields.java Links.java HtmlUtil.java DocumentText.java
+      mongo/Db.java Pipeline.java DocumentJob.java Robots.java
     src/main/resources/mongo-schema.json   SCHEMAS + INDEXES của db.py, dạng JSON
     src/test/java/…  src/test/resources/{html/, tep/, golden/}
     tests/integration.sh integration_bt.sh  giữ, chỉ sửa đường dẫn compose
@@ -183,18 +183,18 @@ Quy tắc chung:
 | Endpoint | Java | Thay đổi |
 |---|---|---|
 | `POST /api/crawl/start` `stop`, `GET /api/crawl/status` | `ApiCrawl` → `crawler:8090` | `render ≠ never` trả 400 "không còn hỗ trợ render (đã bỏ Playwright)"; kiểm việc nền `files` **ở phía Java** trước khi chuyển tiếp |
-| `GET /api/stats` | `ApiTimKiem` | đọc `state.json` từ volume `/data` như cũ |
-| `POST /api/index/run` | `ApiTimKiem` | gọi thẳng `Index`, không qua `/bulk` |
-| `POST /api/index/documents` | `ApiTimKiem` | kiểm tra hợp lệ của `PublicDocument` port sang Java (url http/https, kind, cắt title 500 / content 200.000, ngày YYYY-MM-DD, cần title hoặc content), tối đa 5.000 tài liệu |
-| `GET /api/index/stats` `list` `dict` `posting`, `GET /api/search`, `GET /api/preview` | `ApiTimKiem` | gọi thẳng `Index` (trước là chuyển tiếp HTTP) |
-| `POST /api/fetch` | `ApiTimKiem` + `TaiVe` | |
-| `GET /api/health` | `ApiTimKiem` | `lucene` luôn `true`; thêm `mongo`, `crawler` (gọi được `crawler:8090` không) |
+| `GET /api/stats` | `ApiSearch` | đọc `state.json` từ volume `/data` như cũ |
+| `POST /api/index/run` | `ApiSearch` | gọi thẳng `Index`, không qua `/bulk` |
+| `POST /api/index/documents` | `ApiSearch` | kiểm tra hợp lệ của `PublicDocument` port sang Java (url http/https, kind, cắt title 500 / content 200.000, ngày YYYY-MM-DD, cần title hoặc content), tối đa 5.000 tài liệu |
+| `GET /api/index/stats` `list` `dict` `posting`, `GET /api/search`, `GET /api/preview` | `ApiSearch` | gọi thẳng `Index` (trước là chuyển tiếp HTTP) |
+| `POST /api/fetch` | `ApiSearch` + `Download` | |
+| `GET /api/health` | `ApiSearch` | `lucene` luôn `true`; thêm `mongo`, `crawler` (gọi được `crawler:8090` không) |
 | `GET /` , `/static/*` | `Http` | phục vụ từ `STATIC_DIR` |
-| `POST /api/extract/templates` `run`, `GET status` `coverage` `explain` `overview` | `ApiBocTach` | |
-| `POST /api/extract/url` | `ApiBocTach` | |
-| `POST /api/files/fetch` | `ApiBocTach` | "crawler đang chạy?" hỏi `crawler:8090/status` thay cho `_alive()` |
-| `POST /api/files/extract`, `GET /api/files` `images` `referrers` `graph/out` `graph/stats` | `ApiBocTach` | |
-| `GET /api/graph/edges.csv` | `ApiBocTach` | gửi chunked (`sendResponseHeaders(200, 0)`), không dồn cả file vào bộ nhớ |
+| `POST /api/extract/templates` `run`, `GET status` `coverage` `explain` `overview` | `ApiExtract` | |
+| `POST /api/extract/url` | `ApiExtract` | |
+| `POST /api/files/fetch` | `ApiExtract` | "crawler đang chạy?" hỏi `crawler:8090/status` thay cho `_alive()` |
+| `POST /api/files/extract`, `GET /api/files` `images` `referrers` `graph/out` `graph/stats` | `ApiExtract` | |
+| `GET /api/graph/edges.csv` | `ApiExtract` | gửi chunked (`sendResponseHeaders(200, 0)`), không dồn cả file vào bộ nhớ |
 
 Trước khi port, chụp lại phản hồi của mọi endpoint GET trên stack Python đang chạy
 (`tests/golden/api/*.json`) để so tự động với bản Java (giai đoạn 0).
@@ -208,7 +208,7 @@ Thuật toán chọn khối được chỉnh trên **cây DOM của lxml và ng�
 
 | # | Python | Java — bẫy | Cách xử lý |
 |---|---|---|---|
-| 1 | `get_text(" ", strip=True)` nối **từng** mảnh text bằng một dấu cách: `a<b>b</b>` → `"a b"` | jsoup `Element.text()` cho ra `"ab"` | Viết `HtmlSach.textBs4(el)`: duyệt các `TextNode` con cháu, strip từng mảnh, bỏ mảnh rỗng, nối bằng `" "`. **Không bao giờ dùng `text()`** trong bóc tách |
+| 1 | `get_text(" ", strip=True)` nối **từng** mảnh text bằng một dấu cách: `a<b>b</b>` → `"a b"` | jsoup `Element.text()` cho ra `"ab"` | Viết `HtmlUtil.textBs4(el)`: duyệt các `TextNode` con cháu, strip từng mảnh, bỏ mảnh rỗng, nối bằng `" "`. **Không bao giờ dùng `text()`** trong bóc tách |
 | 2 | `\s` trong regex Python 3 khớp cả NBSP ` ` và khoảng trắng Unicode | `\s` của Java chỉ là ASCII | Mọi `Pattern` dùng cờ `UNICODE_CHARACTER_CLASS` (hoặc `(?U)`). `&nbsp;` gặp khắp nơi trong HTML NukeViet — sai chỗ này là `clean_space`, đếm chữ, vân tay khuôn và regex ngày đều lệch |
 | 3 | `re.I` với chữ Việt; `.lower()` | `CASE_INSENSITIVE` mặc định chỉ ASCII | Dùng `CASE_INSENSITIVE \| UNICODE_CASE`; `toLowerCase(Locale.ROOT)` |
 | 4 | Nội dung `<script>` là `NavigableString` (`s.string`) | jsoup để nội dung script/style trong `DataNode`, `text()` trả rỗng | JSON-LD đọc bằng `script.data()` |
@@ -264,42 +264,42 @@ Bản Python còn sống là "đáp án". Chụp lại trước khi đụng vào
 4. `Main.java` tạm thời chỉ thay `SearchServer` (cùng route cũ) để chắc build/Docker vẫn chạy;
    31 JUnit hiện có vẫn xanh.
 
-### Giai đoạn 2 — `kho/`: url và kho thô (1 ngày)
+### Giai đoạn 2 — `store/`: url và kho thô (1 ngày)
 
 1. `Url.java`: `norm(url, base)`, `norm(url)` (base mặc định `https://hust.edu.vn`), `dedupKey`,
    `kindOf`, `pageOf` (6 mẫu phân trang), hằng `UA`. Javadoc ghi rõ: **bản sao của
    `crawl_all.py`, sửa bên này thì sửa bên kia và chạy lại `url.tsv`**.
-2. `Kho.java`: `khoDirs()`, `hostOf()`, `records(dir)` (lười, chịu shard cụt), `tatCaBanGhi()`
-   (bỏ url trùng), `timBanGhi(Set<String>)` (lọc thô theo chuỗi rồi mới parse JSON), `ghiKho(rec)`
+2. `RawStore.java`: `storeDirs()`, `hostOf()`, `records(dir)` (lười, chịu shard cụt), `forEachRecord()`
+   (bỏ url trùng), `findRecord(Set<String>)` (lọc thô theo chuỗi rồi mới parse JSON), `append(rec)`
    vào `raw-adhoc/pages-0001.jsonl.gz`, flush từng dòng (ràng buộc trong CLAUDE.md).
-3. `TaiVe.java`: nhịp tối thiểu 3 s giữa hai lần tải lẻ (khoá chung), UA trình duyệt, theo redirect,
+3. `Download.java`: nhịp tối thiểu 3 s giữa hai lần tải lẻ (khoá chung), UA trình duyệt, theo redirect,
    429 → `HttpError(429)`, ≥ 400 → 502, lỗi kết nối → 502 "không tải được: …".
 
 **Cổng qua:** `UrlGoldenTest` khớp **100%** `url.tsv`. Lệch một dòng là dừng lại sửa — đây đúng là loại
 lỗi "thiếu 17 link" CLAUDE.md đã ghi.
-`KhoTest`: shard cụt giữa chừng, nhiều gzip member, dòng JSON hỏng, thoát `\u` trong lọc thô.
+`RawStoreTest`: shard cụt giữa chừng, nhiều gzip member, dòng JSON hỏng, thoát `\u` trong lọc thô.
 
-### Giai đoạn 3 — `boctach/`: bóc tách HTML (2 ngày) — phần rủi ro nhất
+### Giai đoạn 3 — `extract/`: bóc tách HTML (2 ngày) — phần rủi ro nhất
 
 Thứ tự port theo phụ thuộc, mỗi file có test riêng trước khi sang file sau:
 
-1. `HtmlSach`: `joinHttp`, `cleanSpace`, `textBs4` (bẫy 1, 2), `donHtml` (bẫy 8; giữ danh sách thẻ
+1. `HtmlUtil`: `joinHttp`, `cleanSpace`, `textBs4` (bẫy 1, 2), `cleanHtml` (bẫy 8; giữ danh sách thẻ
    và thuộc tính, cắt 40.000).
-2. `Khuon`: `vanTay` (sha1 16 hex của chuỗi lower, số → `0`), `khoiLa`, `vanTayTrang`, `demHost`,
-   `tapKhuon`, `boKhuon`; hằng `NGUONG_TRANG = 0.30`, `TOI_THIEU_TRANG = 20`.
-3. `Khoi`: `donCay`, `duongDan`, `thongKe` (C, LC, P, Q từ lá lên gốc), `diem`, `heSo`, `soChu`,
-   `nhan`, `timKhoi` (selector theo host → heuristic đi xuống → fallback), `ghiBac` cho
+2. `Template`: `fingerprint` (sha1 16 hex của chuỗi lower, số → `0`), `leafBlocks`, `pageFingerprints`, `countByHost`,
+   `templateSet`, `removeTemplate`; hằng `PAGE_RATIO_THRESHOLD = 0.30`, `MIN_PAGES = 20`.
+3. `ContentBlock`: `cleanTree`, `cssPath`, `stats` (C, LC, P, Q từ lá lên gốc), `nodeScore`, `weight`, `charCount`,
+   `nhan`, `findBlock` (selector theo host → heuristic đi xuống → fallback), `recordStep` cho
    `/api/extract/explain`. Hằng `ALPHA=2, BETA=30, GAMMA=1, DELTA=0.65` và hai regex
    `PHAT` / `THUONG` chép nguyên.
-4. `Truong`: `jsonLd` (bẫy 4), `tieuDe`, `catHauTo`, `chuanNgay`, `ngayDang`, `tacGiaMeta`,
+4. `Fields`: `jsonLd` (bẫy 4), `title`, `cutSuffix`, `normalizeDate`, `publishedDate`, `authorMeta`,
    `dongTacGiaNguon` (gỡ dòng tác giả/nguồn khỏi khối — sửa cây tại chỗ, bẫy 5).
-5. `LienKet`: `trongHoHust`, `loaiDich`, `thuThap` (trước khi dọn cây), `chia`, `canhRaCongKhai`.
-6. `BocTach`: `bocTach(html, url, khuon)` → record, và `giaiThich(...)`. Hằng
+5. `Links`: `trongHoHust`, `destKind`, `collect` (trước khi dọn cây), `split`, `toPublicLinks`.
+6. `Extractor`: `extract(html, url, khuon)` → record, và `explain(...)`. Hằng
    `VERSION = "2"` (bản Python là `"1"`), để `coverage` và `extractor_version` phân biệt được trang do bản nào bóc.
 
 Test: port 25 test của `test_boc_tach.py` dùng `tests/fixtures/html` (chuyển sang `src/test/resources/html`).
 
-**Cổng qua (`SoKhopTest`, chạy trên `boc_tach.jsonl.gz`)** — ngưỡng đề xuất, chỉnh sau lần đo đầu:
+**Cổng qua (`PythonParityTest`, chạy trên `boc_tach.jsonl.gz`)** — ngưỡng đề xuất, chỉnh sau lần đo đầu:
 
 | Trường | Ngưỡng khớp |
 |---|---|
@@ -313,7 +313,7 @@ bẫy 1 hoặc 2) hay do cây HTML5 khác cây libxml2 (bẫy 10 — chấp nh�
 `danh_gia_khoi.py` port thành một test in P/R/F1 của 3 mốc (body / lớp 3 / lớp 2+3) trên bộ mẫu
 tổng hợp; số Java phải bằng số Python ± 0,01.
 
-### Giai đoạn 4 — `Tep.java` bằng Tika (0,5 ngày)
+### Giai đoạn 4 — `DocumentText.java` bằng Tika (0,5 ngày)
 
 ```java
 // phác thảo
@@ -330,7 +330,7 @@ p.parse(new ByteArrayInputStream(data), h, meta, ctx);
   (pptx); xlsx thì đếm sheet. Không có thì 0.
 - Giữ luật `needs_ocr` (pdf có ít hơn 20 ký tự mỗi trang → bỏ chữ, gắn cờ), giữ heuristic
   `nghi_sai_bang_ma` (TCVN3/VNI) và bước chuẩn hoá khoảng trắng.
-- Q2: `HO_TRO = {pdf, docx, xlsx, pptx, doc, xls, ppt}`, `CU` rỗng.
+- Q2: `SUPPORTED = {pdf, docx, xlsx, pptx, doc, xls, ppt}`, `CU` rỗng.
 - Tệp hỏng → `status=error`, không ném lỗi ra ngoài (Tika ném `TikaException` / `SAXException` /
   `IOException`, và POI đôi khi ném `RuntimeException` — bắt cả).
 - Tika không có OCR trong image (không cài tesseract) nên `NO_OCR` chỉ để chắc chắn.
@@ -347,11 +347,11 @@ trên ≥ 95% số tệp. Tika và pdfminer ngắt dòng khác nhau là bình th
    `Document.parse` gọn hơn dựng BSON bằng code), `init()` = `create`/`collMod` kèm validator +
    tạo index, chạy lại nhiều lần không sao. Kết nối với `serverSelectionTimeoutMS=3000`; Mongo chưa
    lên thì API vẫn chạy, các route Mongo trả 503 (giữ hành vi hiện tại).
-2. `Trich.java`: `dungTemplates`, `khuonTheoHost`, `dungBanGhi`, `ghiMotTrang`, `ghiPhuMotTrang`,
-   `luceneTuMongo`, `tepTuMongo`, `chayExtract` (bộ đệm 200 trang, bí danh qua `dedupKey`, dựng lại
+2. `Pipeline.java`: `buildTemplates`, `templatesByHost`, `buildPageRecord`, `writeSinglePage`, `writeSinglePageExtras`,
+   `luceneFromMongo`, `filesFromMongo`, `runExtract` (bộ đệm 200 trang, bí danh qua `dedupKey`, dựng lại
    `nav_links` và `images` mỗi lần chạy), `coverage`. Hằng `TOI_THIEU_DEM = 3`, `NGUONG_GIU = 0.05`.
-3. `TepJob.java`: `danhMuc`, `tai` (robots.txt, nhịp 2,5 s, 429 thì chờ `Retry-After`, trần 50 MB),
-   `bocChu`.
+3. `DocumentJob.java`: `catalog`, `download` (robots.txt, nhịp 2,5 s, 429 thì chờ `Retry-After`, trần 50 MB),
+   `extractText`.
 4. `Robots.java`: tách nhóm theo `User-agent`, `Allow`/`Disallow` theo tiền tố, **dòng khớp đầu tiên
    thắng** như `urllib.robotparser`; không tải được robots.txt thì coi như cho phép. Kiểm bằng
    `golden/robots/`.
@@ -369,16 +369,16 @@ ghi sai lược đồ bị từ chối** — mongomock không chạy `$jsonSchem
 1. `Http.java`: bảng route `(method, path) → handler`; đọc query (giải mã UTF-8, kiểu int/bool/
    float với giá trị mặc định), body JSON → record; ánh xạ `HttpError(code, detail)` → JSON
    `{"detail"}`; lỗi khác → 500 kèm log; phục vụ `static/` (chặn `..`); executor virtual thread.
-2. `ViecNen.java`: một việc nền tại một thời điểm (`templates | extract | files | files-extract`),
+2. `BackgroundJob.java`: một việc nền tại một thời điểm (`templates | extract | files | files-extract`),
    trạng thái `{running, what, done, started, result, error, elapsed_sec}` — đúng khoá
    `/api/extract/status` đang trả.
-3. `ApiTimKiem`, `ApiBocTach`, `ApiCrawl`: theo bảng ở mục 3. Lỗi nghiệp vụ dùng lại đúng câu chữ
+3. `ApiSearch`, `ApiExtract`, `ApiCrawl`: theo bảng ở mục 3. Lỗi nghiệp vụ dùng lại đúng câu chữ
    tiếng Việt của bản Python (giao diện hiện nguyên văn).
 4. `Main.java`: mở `Index` từ `INDEX_DIR`, thử `Db.init`, dựng server ở `PORT` (mặc định 8000).
 
 Test: port 5 test của `test_api.py` (kiểm tra hợp lệ `PublicDocument`, ánh xạ sang tài liệu Lucene)
 và 11 test của `test_extract_url.py`. Bản Python thay `main.tai_ve` bằng mock; Java truyền vào
-`ApiBocTach` một `Function<String, PhanHoi>` để tải (chỉ dùng kiểu có sẵn của JDK, không thêm
+`ApiExtract` một `Function<String, PhanHoi>` để tải (chỉ dùng kiểu có sẵn của JDK, không thêm
 interface riêng cho test).
 `ApiGoldenTest` (`@Tag("stack")`) gọi bản Java đang chạy rồi so với `tests/golden/api/`: cùng khoá
 JSON, cùng kiểu dữ liệu; số liệu được phép lệch trong ngưỡng của giai đoạn 3.
@@ -447,7 +447,7 @@ viết code thuần vẫn khoảng 4-5 ngày.
 
 | Rủi ro | Mức | Giảm thiểu |
 |---|---|---|
-| Bóc tách lệch do jsoup ≠ lxml và ngữ nghĩa chuỗi | cao | bảng bẫy ở mục 4, `SoKhopTest` trên cả kho, ngưỡng rõ ràng |
+| Bóc tách lệch do jsoup ≠ lxml và ngữ nghĩa chuỗi | cao | bảng bẫy ở mục 4, `PythonParityTest` trên cả kho, ngưỡng rõ ràng |
 | `Url.norm` Java lệch `crawl_all.norm` theo thời gian | cao | `url.tsv` 100%; javadoc hai bên trỏ sang nhau; sửa crawler thì sinh lại vector |
 | Tika làm image nặng (~+70 MB) và khởi động chậm | thấp | chấp nhận; đo ngày 03/10: `hust-search-api` (nền Playwright) 3,04 GB, `hust-search-lucene` 505 MB — gộp lại cộng Tika vẫn dưới 1 GB |
 | PDF bệnh làm Tika treo hoặc ăn hết heap | trung bình | trần 50 MB/tệp (đã có), bóc chữ chạy trong việc nền; nếu gặp thật thì thêm timeout cho mỗi tệp |

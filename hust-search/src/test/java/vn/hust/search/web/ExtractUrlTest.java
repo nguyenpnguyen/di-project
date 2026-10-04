@@ -10,7 +10,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
@@ -266,7 +265,7 @@ class ExtractUrlTest {
         cho();
         assertEquals(1, dem("templates", new Document()));
         // việc đang chạy thì từ chối việc thứ hai
-        var truoc = s.viec.chay("giu", tien -> { Thread.sleep(300); return "xong"; });
+        var truoc = s.viec.run("giu", tien -> { Thread.sleep(300); return "xong"; });
         assertEquals("giu", truoc.get("started"));
         var hai = s.post("/api/extract/run", "{}");
         assertEquals(409, hai.status());

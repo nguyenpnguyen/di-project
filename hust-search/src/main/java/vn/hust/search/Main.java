@@ -12,7 +12,7 @@ import vn.hust.search.web.ApiCrawl;
 import vn.hust.search.web.ApiTimKiem;
 import vn.hust.search.web.Http;
 import vn.hust.search.web.Mongo;
-import vn.hust.search.web.ViecNen;
+import vn.hust.search.web.BackgroundJob;
 
 /**
  * Một tiến trình: Lucene + MongoDB + bóc tách + HTTP API và giao diện, cổng {@code PORT} (mặc định 8000).
@@ -40,7 +40,7 @@ public final class Main {
             System.out.println("[mongo] chưa khởi tạo được lược đồ: " + e);
         }
 
-        ViecNen viec = new ViecNen();
+        BackgroundJob viec = new BackgroundJob();
         ApiCrawl crawl = new ApiCrawl(env.getOrDefault("CRAWLER_URL", "http://crawler:8090"), viec);
         TaiVe taiVe = new TaiVe();
         Http http = new Http(staticDir);

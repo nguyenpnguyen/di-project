@@ -16,10 +16,10 @@ import java.time.Duration;
  */
 public final class ApiCrawl {
     private final String url;
-    private final ViecNen viec;
+    private final BackgroundJob viec;
     private final HttpClient cli = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
 
-    public ApiCrawl(String crawlerUrl, ViecNen viec) {
+    public ApiCrawl(String crawlerUrl, BackgroundJob viec) {
         this.url = crawlerUrl.replaceAll("/+$", "");
         this.viec = viec;
     }
@@ -29,7 +29,7 @@ public final class ApiCrawl {
             JsonNode b = r.body();
             if (!Http.bodyStr(b, "render", "never").equals("never"))
                 throw new HttpError(400, "không còn hỗ trợ render (đã bỏ Playwright)");
-            if (viec.dangChay("files")) throw new HttpError(409, "đang tải tệp tài liệu, đợi xong rồi hãy crawl");
+            if (viec.isRunning("files")) throw new HttpError(409, "đang tải tệp tài liệu, đợi xong rồi hãy crawl");
             return chuyen("POST", "/start", b.toString(), 30);
         });
         h.post("/api/crawl/stop", r -> chuyen("POST", "/stop", "{}", 60));   // crawler chờ tới 30 s cho tiến trình thoát êm

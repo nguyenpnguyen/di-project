@@ -25,7 +25,7 @@ final class TestStack implements AutoCloseable {
     final Kho kho;
     final Db db;
     final Mongo mongo;
-    final ViecNen viec = new ViecNen();
+    final BackgroundJob viec = new BackgroundJob();
     final HttpServer server;
     final HttpClient cli = HttpClient.newHttpClient();
     final int port;

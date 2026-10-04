@@ -64,11 +64,11 @@ public final class ApiBocTach {
     private final Mongo mongo;
     private final Function<String, PhanHoi> taiVe;
     private final Path filesDir;
-    private final ViecNen viec;
+    private final BackgroundJob viec;
     private final ApiCrawl crawl;
     private final Function<String, TepJob.Resp> httpTep;
 
-    public ApiBocTach(Index idx, Kho kho, Mongo mongo, Function<String, PhanHoi> taiVe, Path filesDir, ViecNen viec,
+    public ApiBocTach(Index idx, Kho kho, Mongo mongo, Function<String, PhanHoi> taiVe, Path filesDir, BackgroundJob viec,
                       ApiCrawl crawl, Function<String, TepJob.Resp> httpTep) {
         this.idx = idx;
         this.kho = kho;
@@ -102,7 +102,7 @@ public final class ApiBocTach {
     /** Dựng bảng khối lặp theo host (lớp 2 của thuật toán khối nội dung). */
     Object templates(Http.Req r) {
         MongoDatabase d = mongo.get();
-        return viec.chay("templates", cb -> Trich.dungTemplates(d, kho.banGhi(), cb));
+        return viec.run("templates", cb -> Trich.dungTemplates(d, kho.banGhi(), cb));
     }
 
     /** Kho thô -> bóc tách -> Mongo (pages, links, nav_links, images). */
@@ -110,7 +110,7 @@ public final class ApiBocTach {
         int gioiHan = r.integer("limit", 0);
         MongoDatabase d = mongo.get();
         mongo.db().init();
-        return viec.chay("extract", cb -> Trich.chayExtract(d, kho.banGhi(), gioiHan, cb, 200));
+        return viec.run("extract", cb -> Trich.chayExtract(d, kho.banGhi(), gioiHan, cb, 200));
     }
 
     /**
@@ -122,7 +122,7 @@ public final class ApiBocTach {
         if (crawl.dangChay()) throw new HttpError(409, "crawler đang chạy, dừng trước rồi hãy tải tệp");
         MongoDatabase d = mongo.get();
         mongo.db().init();
-        return viec.chay("files", cb -> {
+        return viec.run("files", cb -> {
             Map<String, Object> kq = new LinkedHashMap<>(TepJob.danhMuc(d, kho.banGhi()));
             kq.putAll(TepJob.tai(d, filesDir, cb, httpTep, TepJob.NHIP_MS, TepJob.MAX_BYTES, gioiHan));
             return kq;
@@ -132,7 +132,7 @@ public final class ApiBocTach {
     /** Bóc chữ các tệp đã tải -> documents.text. */
     Object filesExtract(Http.Req r) {
         MongoDatabase d = mongo.get();
-        return viec.chay("files-extract", cb -> TepJob.bocChu(d, filesDir, cb));
+        return viec.run("files-extract", cb -> TepJob.bocChu(d, filesDir, cb));
     }
 
     // ------------------------------------------------------------------ giải thích và bóc một url

@@ -112,10 +112,52 @@ public final class Url {
         return h.toLowerCase(Locale.ROOT);
     }
 
+    /** {@code urlsplit(url).scheme}, chưa viết thường; rỗng nếu url hỏng. */
+    public static String scheme(String url) {
+        try {
+            return urlsplit(url, "").scheme;
+        } catch (IllegalArgumentException e) {
+            return "";
+        }
+    }
+
+    /** Scheme http/https và có netloc: điều kiện "url đầy đủ" mà các endpoint kiểm trước khi nhận. */
+    public static boolean httpDayDu(String url) {
+        try {
+            Parts p = urlsplit(url, "");
+            return (p.scheme.equalsIgnoreCase("http") || p.scheme.equalsIgnoreCase("https")) && !p.netloc.isEmpty();
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     /** {@code urlsplit(url).path} (không tách ;params) và {@code .query}. */
     public static String[] pathQuery(String url) {
         Parts p = urlsplit(url, "");
         return new String[]{p.path, p.query};
+    }
+
+    /** {@code urlunparse(('', '', path, params, query, fragment))} — phần sau host, cho robots.txt. */
+    public static String sauHost(String url) {
+        Parts p = urlparse(url);
+        return urlunsplit("", "", p.params.isEmpty() ? p.path : p.path + ";" + p.params, p.query, p.fragment);
+    }
+
+    /**
+     * Url -> {@link java.net.URI} cho HttpClient. {@code URI.create} ném lỗi trên dấu cách, chữ có dấu,
+     * '|'..., còn url trong kho (đã qua {@link #norm}) có đủ thứ đó: mã hoá phần không hợp lệ thành
+     * %XX (UTF-8) như httpx, giữ nguyên các %XX đã có.
+     */
+    public static java.net.URI httpUri(String url) {
+        StringBuilder sb = new StringBuilder();
+        byte[] b = url.strip().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        for (int i = 0; i < b.length; i++) {
+            int c = b[i] & 0xff;
+            boolean pct = c == '%' && i + 2 < b.length && Character.digit(b[i + 1], 16) >= 0 && Character.digit(b[i + 2], 16) >= 0;
+            if (pct || (c > 0x20 && c < 0x7f && " \"<>\\^`{|}%".indexOf(c) < 0)) sb.append((char) c);
+            else sb.append(String.format("%%%02X", c));
+        }
+        return java.net.URI.create(sb.toString());
     }
 
     /** Đường dẫn của url, như {@code urlparse(url).path} (đã tách ;params). */

@@ -13,6 +13,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <lucene.version>9.11.1</lucene.version>
     <tika.version>4.1.0</tika.version>
+    <test.excludedGroups>stack</test.excludedGroups>
   </properties>
 
   <dependencies>
@@ -51,6 +52,11 @@
       <artifactId>jsoup</artifactId>
       <version>1.23.2</version>
     </dependency>
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>mongodb-driver-sync</artifactId>
+      <version>5.13.0</version>
+    </dependency>
     <!-- Bóc chữ pdf/docx/xlsx/pptx và doc/xls/ppt cũ (POI). Không OCR: image không có tesseract. -->
     <dependency>
       <groupId>org.apache.tika</groupId>
@@ -85,7 +91,7 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>vn.hust.search.SearchServer</mainClass>
+              <mainClass>vn.hust.search.Main</mainClass>
               <addClasspath>true</addClasspath>
               <classpathPrefix>lib/</classpathPrefix>
             </manifest>
@@ -111,7 +117,22 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.2.5</version>
+        <configuration>
+          <!-- Test gắn @Tag("stack") gọi bản đang chạy ở localhost:8000: chỉ chạy bằng -Pstack -->
+          <excludedGroups>${test.excludedGroups}</excludedGroups>
+        </configuration>
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <!-- mvn test -Pstack: chỉ chạy ApiGoldenTest trên stack đang bật -->
+    <profile>
+      <id>stack</id>
+      <properties>
+        <test.excludedGroups>khong-co-nhom-nao</test.excludedGroups>
+        <groups>stack</groups>
+      </properties>
+    </profile>
+  </profiles>
 </project>

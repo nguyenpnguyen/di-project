@@ -6,7 +6,8 @@ Bài tập môn Tích hợp dữ liệu (IT5420). Repo chứa tài liệu môn h
 
 ```
 hust-crawler/     engine crawl + soát kho (chạy độc lập, không cần docker)
-hust-search/      stack docker: Lucene (Java) + API/UI (Python) — xem hust-search/README.md
+hust-search/      project Maven Java 21: HTTP API + UI + bóc tách + Mongo + Lucene — xem hust-search/README.md
+docker-compose.yml  dựng search (Java) + crawler (Python, service riêng) + mongo
 job-di/           project tích hợp tin tuyển dụng — CÓ .git RIÊNG, đừng add vào repo này
 *.pdf, *.docx     slide và đề bài, để untracked
 OneDrive_*/       tài liệu tải về, để untracked
@@ -15,24 +16,35 @@ OneDrive_*/       tài liệu tải về, để untracked
 ## Stack tìm kiếm
 
 ```bash
-cd hust-search && docker compose up -d --build   # http://localhost:8000
-./tests/integration.sh                           # 33 kiểm tra đường đi thật
+docker compose up -d --build                     # từ thư mục gốc repo → http://localhost:8000
+hust-search/tests/integration.sh                 # 33 kiểm tra đường đi thật
+hust-search/tests/integration_bt.sh              # 19 kiểm tra bóc tách/Mongo/đồ thị
+cd hust-search && mvn -B test                    # JUnit; test Mongo cần MONGO_URL (mặc định localhost:27017)
 ```
 
-Ba dịch vụ: `lucene` (Java 21 + Lucene 9.11, cổng 8081), `api` (FastAPI +
-giao diện, cổng 8000) và `mongo` (không mở cổng). Python bóc tách HTML
-(`api/boc_tach/`: khối nội dung, trường, đồ thị liên kết, tệp) rồi ghi vào Mongo;
-`/api/index/run` đọc từ Mongo đẩy sang Java; Java chỉ lo index và tìm kiếm.
-Kế hoạch và quyết định: `hust-search/KE-HOACH-BOC-TACH.md`, lược đồ: `hust-search/SCHEMA.md`.
-Thuật toán bóc tách + đồ thị (sơ đồ Mermaid): `hust-search/THUAT-TOAN-BOC-TACH.md`.
-Sơ đồ luồng dữ liệu và từng thuật toán (Mermaid): `BAO-CAO-KY-THUAT.md`. Giao diện có tab
-"Bóc tách khối" (`POST /api/extract/url`) nhận url bất kỳ: lấy trong kho hoặc tải từ web, bóc tách,
-lưu Mongo + Lucene, rồi hiện trường, nội dung và liên kết đã bóc; tab "Đồ thị liên kết" có nút "Tải & bóc tách". Kho `hust-crawler/data` được mount vào container ở `/crawler`
-nên **sửa `crawl_all.py` không cần build lại image**.
+Ba dịch vụ: `search` (Java 21, **một tiến trình**: HTTP API + giao diện + bóc tách bằng jsoup + Tika +
+driver Mongo + Lucene 9.11, cổng 8000), `crawler` (Python, chỉ `crawlctl.py` nghe start/stop/status trong
+mạng docker, cổng 8090 không mở ra host) và `mongo` (không mở cổng). Java bóc tách HTML (`boctach/`: khối
+nội dung, trường, đồ thị liên kết, tệp) rồi ghi vào Mongo; `/api/index/run` đọc Mongo đẩy vào Lucene
+ngay trong tiến trình. `/api/crawl/*` chỉ chuyển tiếp sang service `crawler`.
+Compose giữ `name: hust-search` để không đổi tên volume (đổi tên project là mất dữ liệu cũ hiện ra).
+Hợp đồng HTTP (đường dẫn, tham số, khoá JSON) giữ nguyên bản Python cũ; lỗi là `{"detail": "<chuỗi>"}`,
+riêng lỗi tìm kiếm (`/api/search`: q rỗng, cú pháp sai) giữ `{"error": ...}` vì giao diện đọc `d.error`.
+Kế hoạch port và quyết định: `hust-search/KE-HOACH-PORT-JAVA.md`; bóc tách: `hust-search/KE-HOACH-BOC-TACH.md`,
+lược đồ: `hust-search/SCHEMA.md`. Thuật toán bóc tách + đồ thị (sơ đồ Mermaid): `hust-search/THUAT-TOAN-BOC-TACH.md`.
+Sơ đồ luồng dữ liệu và từng thuật toán: `BAO-CAO-KY-THUAT.md`. Giao diện có tab "Bóc tách khối"
+(`POST /api/extract/url`) nhận url bất kỳ: lấy trong kho hoặc tải từ web, bóc tách, lưu Mongo + Lucene, rồi
+hiện trường, nội dung và liên kết đã bóc; tab "Đồ thị liên kết" có nút "Tải & bóc tách". Kho
+`hust-crawler/data` được mount vào `search` ở `/data` và vào `crawler` ở `/app/data`, nên **sửa
+`crawl_all.py` không cần build lại image** (chỉ cần dừng rồi chạy lại mẻ crawl).
 
-Test: 32 (pytest engine) + 81 (pytest api) + 31 (JUnit Lucene). Tích hợp: `integration.sh`
-(tìm kiếm) và `integration_bt.sh` (bóc tách/Mongo) — cần stack docker; phần bóc tách
-chưa từng chạy trên MongoDB thật và kho thật.
+**`Url.java` là bản sao của `crawl_all.norm/dedup_key/kind_of`.** Sửa bên nào thì sửa bên kia và chạy lại
+`UrlGoldenTest` (khớp 100% `src/test/resources/golden/url.tsv`) — lệch là lỗi "thiếu 17 link" kiểu `http://` vs `https://`.
+
+Test: 32 (pytest engine) + 115 (JUnit Java: url/kho, bóc tách khớp bản Python trên kho thật, Tika, Mongo thật,
+HTTP). Đã chạy trên MongoDB thật và kho thật (03/10/2026). Bản Java không crawl được trang dựng bằng JS
+(đã bỏ Playwright, ví dụ `work.hust.edu.vn`); `Tep.java` dùng **một** `AutoDetectParser` dùng chung vì dựng
+mới mỗi tệp mất ~1 s.
 
 Chỉ `hust-crawler/` được version. `job-di/` là repo lồng: `git add job-di/` sẽ tạo
 gitlink rỗng (thư mục hiện trên GitHub nhưng bấm vào không có gì).

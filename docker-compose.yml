@@ -1,0 +1,47 @@
+# Dựng từ thư mục này:  docker compose up -d --build   →  http://localhost:8000
+# Giữ `name` cũ trong lúc chuyển từ hust-search/ lên đây: đổi tên project là đổi tên volume
+# (hust-search_lucene-index → di-project_lucene-index) và dữ liệu cũ không tự hiện ra.
+name: hust-search
+
+services:
+  # Một tiến trình Java: HTTP API + giao diện + bóc tách + MongoDB + Lucene
+  search:
+    build: ./hust-search
+    depends_on:
+      mongo: {condition: service_healthy}
+    ports: ["8000:8000"]
+    volumes:
+      - lucene-index:/index                  # index nằm ở volume, xoá container không mất
+      - ./hust-crawler/data:/data            # đọc kho thô; ghi raw-adhoc/ và files/
+      - ./hust-search/static:/app/static     # sửa giao diện không phải build lại
+    environment:
+      DATA_DIR: /data
+      MONGO_URL: mongodb://mongo:27017
+      CRAWLER_URL: http://crawler:8090
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # Crawler chạy riêng; chỉ `search` gọi được (không mở cổng ra host)
+  crawler:
+    build: ./hust-crawler
+    volumes:
+      - ./hust-crawler:/app                  # sửa crawl_all.py không phải build lại image
+    command: ["python", "crawlctl.py", "--port", "8090"]
+
+  mongo:
+    image: mongo:7.0
+    volumes:
+      - mongo-data:/data/db                  # kết quả bóc tách; xoá container không mất
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    # không mở cổng ra host: stack chưa có xác thực (README mục 10)
+
+volumes:
+  lucene-index:
+  mongo-data:

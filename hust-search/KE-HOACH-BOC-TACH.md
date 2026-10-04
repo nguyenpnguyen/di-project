@@ -18,6 +18,24 @@ Mọi ước lượng thời gian, ngưỡng và quy mô ở đây là **phỏng
 dữ liệu thật (container dùng để viết tài liệu này không có `data/` và không vào
 được hust.edu.vn).
 
+> **Ghi chú 03/10/2026 — đã port sang Java.** Toàn bộ tầng API Python mô tả dưới đây (`api/`) đã được port
+> sang một project Java (`KE-HOACH-PORT-JAVA.md`) và thư mục `api/` đã xoá. Tên file trong tài liệu này là
+> tên **cũ**; ánh xạ sang code hiện tại (`src/main/java/vn/hust/search/`):
+>
+> | Cũ (Python) | Nay (Java) |
+> |---|---|
+> | `main.py`, `routes_bt.py` | `web/ApiTimKiem.java`, `web/ApiBocTach.java`, `web/ApiCrawl.java`, `web/Http.java` |
+> | `boc_tach/khoi.py` `khuon.py` `truong.py` `lien_ket.py` `html_sach.py` | `boctach/Khoi.java` `Khuon.java` `Truong.java` `LienKet.java` `HtmlSach.java` |
+> | `boc_tach/__init__.py` (`boc_tach`, `giai_thich`) | `boctach/BocTach.java` (`bocTach`, `giaiThich`) |
+> | `boc_tach/tep.py` (pdfminer, python-docx…) | `boctach/Tep.java` (Apache Tika; nhận cả doc/xls/ppt) |
+> | `db.py`, `trich.py`, `tep_job.py` | `mongo/Db.java` (+ `mongo-schema.json`), `Trich.java`, `TepJob.java`, `Robots.java` |
+> | `so_sanh.py` | bỏ (Q3 của kế hoạch port) |
+> | `tests/test_*.py`, `danh_gia_khoi.py` | `src/test/java/…` (`BocTachTest`, `DanhGiaKhoiTest`, `MongoTest`, `TepTest`, `ApiTest`, `ExtractUrlTest`) |
+>
+> Thuật toán và hằng số giữ nguyên; bản `extractor_version` đổi từ "1" sang "2". Trên 3.438 trang kho thật,
+> `method/title/date/author/section/path/cạnh` khớp bản Python 100%. `$jsonSchema` đã được kiểm trên MongoDB thật
+> (`integration_bt.sh` 19/19), nên các câu "chưa kiểm trên Mongo thật" ở dưới đã lỗi thời.
+
 > Đây là tài liệu **kế hoạch**; mục 1 tả hiện trạng *trước khi làm*. Cách hệ thống
 > chạy **hiện nay**, kèm sơ đồ từng thuật toán, ở `../BAO-CAO-KY-THUAT.md` mục 3-5.
 > Tiến độ ở mục 11.
@@ -472,5 +490,5 @@ không nhân bản ghi; `/api/files/fetch` trả 409 khi crawler đang chạy;
 | 9 | giao diện trực quan: tab **Bóc tách khối** (phễu, các bậc đi xuống cây, chia cạnh), đồ thị hình sao SVG, dải 4 bước ở Bảng điều khiển; API `/api/extract/explain`, `/api/extract/overview`; `tim_khoi(vet=…)` | xong; 64 pytest đạt; giao diện mới thử trên dữ liệu giả |
 | 10 | viết lại tài liệu, thêm sơ đồ Mermaid cho luồng dữ liệu và các thuật toán | xong |
 
-Còn lại: chạy trên stack docker với kho thật, đọc coverage, dò lại hằng số ở `khoi.py`
+Còn lại: đọc coverage trên kho thật, dò lại hằng số ở `Khoi.java`
 và ngưỡng khử khuôn; đo số dòng `nav_links`; quyết định có đưa `author`/anchor text vào xếp hạng không.

@@ -29,7 +29,7 @@ public final class BocTach {
                       String date, String dateSrc, String author, String authorSrc, String citedSource, Block block,
                       List<CongKhai> outgoingLinks, List<Canh> links, List<Canh> navLinks) {}
 
-    static Document parse(String html) {
+    public static Document parse(String html) {
         return Jsoup.parse(html);
     }
 

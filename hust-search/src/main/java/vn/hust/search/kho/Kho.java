@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -29,7 +30,7 @@ import java.util.zip.GZIPOutputStream;
  * Bản port của {@code main.py: kho_dirs / records / tim_ban_ghi / tat_ca_ban_ghi / _ghi_kho}.
  */
 public class Kho {
-    static final ObjectMapper JSON = new ObjectMapper();
+    public static final ObjectMapper JSON = new ObjectMapper();
     private final Path data;
 
     public Kho(Path data) {
@@ -133,15 +134,39 @@ public class Kho {
         };
     }
 
-    /** Mọi bản ghi của mọi kho, bỏ url trùng (theo chuỗi url thô). */
-    public void tatCaBanGhi(Consumer<JsonNode> f) {
+    /** Mọi bản ghi của mọi kho, bỏ url trùng (theo chuỗi url thô). Đọc lười, dừng sớm được. */
+    public Iterator<JsonNode> banGhi() {
         Set<String> seen = new HashSet<>();
-        for (Path d : khoDirs()) {
-            for (Iterator<JsonNode> it = records(d); it.hasNext(); ) {
-                JsonNode r = it.next();
-                if (seen.add(r.path("url").asText())) f.accept(r);
+        Iterator<Path> dirs = khoDirs().iterator();
+        return new Iterator<>() {
+            Iterator<JsonNode> cur = Collections.emptyIterator();
+            JsonNode tiep;
+
+            @Override
+            public boolean hasNext() {
+                while (tiep == null) {
+                    while (!cur.hasNext()) {
+                        if (!dirs.hasNext()) return false;
+                        cur = records(dirs.next());
+                    }
+                    JsonNode r = cur.next();
+                    if (seen.add(r.path("url").asText())) tiep = r;
+                }
+                return true;
             }
-        }
+
+            @Override
+            public JsonNode next() {
+                if (!hasNext()) throw new NoSuchElementException();
+                JsonNode r = tiep;
+                tiep = null;
+                return r;
+            }
+        };
+    }
+
+    public void tatCaBanGhi(Consumer<JsonNode> f) {
+        banGhi().forEachRemaining(f);
     }
 
     /**

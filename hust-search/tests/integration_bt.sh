@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Test tích hợp phần bóc tách + đồ thị + Mongo, chạy trên stack đang bật:
-#   docker compose up -d --build && ./tests/integration_bt.sh
+#   (cd .. && docker compose up -d --build) && ./tests/integration_bt.sh
 # Cần kho hust-crawler/data có ít nhất vài chục trang. Bước bóc tách chạy nền nên
 # script chờ tối đa WAIT giây (mặc định 900) — kho vài nghìn trang có thể lâu hơn.
 set -uo pipefail
@@ -77,8 +77,9 @@ i=$(curl -s --max-time 20 "$API/api/images?limit=3")
 has "danh sách ảnh trả JSON" "$i" '"items"'
 
 echo "── 8. Lược đồ Mongo từ chối bản ghi sai (cần docker compose) ──"
-if command -v docker >/dev/null 2>&1 && docker compose ps mongo >/dev/null 2>&1; then
-  v=$(docker compose exec -T mongo mongosh --quiet --eval \
+COMPOSE="docker compose -f ../docker-compose.yml"     # compose nằm ở thư mục cha
+if command -v docker >/dev/null 2>&1 && $COMPOSE ps mongo >/dev/null 2>&1; then
+  v=$($COMPOSE exec -T mongo mongosh --quiet --eval \
       'try{db.getSiblingDB("hust").pages.insertOne({_id:"x"});print("ACCEPTED")}catch(e){print("REJECTED")}' 2>&1 | tail -1)
   check "validator từ chối trang thiếu trường bắt buộc" "$v" "REJECTED"
 else echo "  (bỏ qua: không có docker compose)"; fi

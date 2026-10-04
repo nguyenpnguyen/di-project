@@ -30,6 +30,8 @@ public final class Tep {
             "application/msword", "doc",
             "application/vnd.ms-excel", "xls",
             "application/vnd.ms-powerpoint", "ppt");
+    /** Dựng AutoDetectParser nạp cả bộ parser qua ServiceLoader (~1 s); dùng chung, nó an toàn khi nhiều luồng. */
+    private static final AutoDetectParser PARSER = new AutoDetectParser();
     static final int TOI_DA_KY_TU = 500_000;
     /** PDF có ít hơn chừng này ký tự mỗi trang thì coi là scan (không có lớp chữ). */
     static final int NGUONG_KY_TU_TRANG = 20;
@@ -91,7 +93,7 @@ public final class Tep {
         var handler = new BodyContentHandler(TOI_DA_KY_TU);
         var md = new Metadata();
         try (var in = TikaInputStream.get(data)) {
-            new AutoDetectParser().parse(in, handler, md, new ParseContext());
+            PARSER.parse(in, handler, md, new ParseContext());
         } catch (Exception e) {                               // TikaException, SAXException, IOException, RuntimeException của POI
             if (!WriteLimitReachedException.isWriteLimitReached(e)) {
                 String m = e.getClass().getSimpleName() + ": " + e.getMessage();

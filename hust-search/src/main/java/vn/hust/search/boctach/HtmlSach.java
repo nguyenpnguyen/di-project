@@ -16,7 +16,7 @@ public final class HtmlSach {
     private HtmlSach() {}
 
     /** {@code \s} của Python 3 (Unicode): thêm \x1c-\x1f mà Java không coi là khoảng trắng. */
-    static final Pattern WS = Pattern.compile("[\\s\\x1c-\\x1f]+", Pattern.UNICODE_CHARACTER_CLASS);
+    public static final Pattern WS = Pattern.compile("[\\s\\x1c-\\x1f]+", Pattern.UNICODE_CHARACTER_CLASS);
 
     /** Thẻ chứa chữ mà bs4 tách khỏi get_text() (string_containers của HTMLTreeBuilder). */
     private static final Set<String> KHONG_LAY_CHU = Set.of("script", "style", "template", "rt", "rp");

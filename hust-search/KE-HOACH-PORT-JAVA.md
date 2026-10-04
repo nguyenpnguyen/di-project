@@ -1,6 +1,23 @@
 # Kế hoạch: port tầng API Python sang Java — `hust-search` thành một project Java
 
-Lập ngày 03/10/2026. Trạng thái: **đang làm** trên nhánh `port-java`; quyết định đã chốt ở mục 1.
+Lập ngày 03/10/2026. Trạng thái: **xong cả chín giai đoạn** (03/10/2026) trên nhánh `port-java`; quyết định đã chốt ở mục 1.
+
+**Kết quả và chỗ lệch so với kế hoạch** (giai đoạn 6-9):
+
+- Giai đoạn 6: `SearchServer.java` xoá luôn (không giữ song song tới giai đoạn 9) vì `Main` thay hoàn toàn. Lỗi
+  `/api/search` do Lucene (q rỗng, cú pháp sai) **giữ khoá `"error"`** thay vì `"detail"`, vì giao diện đọc `d.error`
+  ở các tab tìm kiếm; mọi lỗi khác là `"detail"` chuỗi. `ApiGoldenTest` kèm 1 test overlap@10 và chạy bằng `-Pstack`.
+  Test HTTP dựng server thật trên cổng ngẫu nhiên (`TestStack`) thay vì gọi hàm handler; Mongo thật qua `MONGO_URL`
+  (không dùng Testcontainers, như giai đoạn 5).
+- Giai đoạn 7: thêm `hust-crawler/.dockerignore`; `name: hust-search` giữ trong compose. Bỏ ô `render` ở tab Crawl.
+- Giai đoạn 8 (trên MongoDB 7.0 thật + kho thật): `integration.sh` 33/33, `integration_bt.sh` 19/19, `ApiGoldenTest` khớp
+  71 mẫu. Đo: `extract/run` 3.627 trang 12-21 s, `index/run` 2 s, RSS ~690 MB với `-Xmx1g`. Lỗi tìm ra: `AutoDetectParser` dựng
+  mới mỗi tệp (~1 s, bộ test tệp 14 phút → dùng chung một cái, 197 s); thứ tự khoá của `content_edges_by_dst_kind` không ổn định
+  (nay sắp xếp). Không có lỗi `$jsonSchema` nào lộ ra.
+- Giai đoạn 9: chạy lại `templates → extract/run → files/extract → index/run`: overlap@10 trung bình **0,97**, không truy vấn nào dưới 0,5.
+  **Chưa làm:** `files/fetch` cho 1.806 tệp còn `pending` (~75 phút tải thật từ hust.edu.vn) — chạy khi cần:
+  `curl -X POST localhost:8000/api/files/fetch`. Q2 đã chuyển 33 tệp doc/xls/ppt `unsupported → pending` lúc `Main` khởi động.
+  Đã xoá `api/`, `tests/*.py`, `tests/fixtures/html`, cổng 8081, profile `compare`.
 
 Mục tiêu:
 

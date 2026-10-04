@@ -23,7 +23,7 @@ public class TaiVe {
     private static final Pattern CHARSET = Pattern.compile("charset=\"?([^\";\\s]+)", Pattern.CASE_INSENSITIVE);
 
     /** Phần của phản hồi mà các nơi dùng tới. {@code url} là url sau khi theo redirect. */
-    public record PhanHoi(String url, int status, String encoding, byte[] body) {}
+    public record PhanHoi(String url, int status, String contentType, String encoding, byte[] body) {}
 
     private final HttpClient cli = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(30)).build();
@@ -52,7 +52,7 @@ public class TaiVe {
         }
         HttpResponse<byte[]> r;
         try {
-            r = cli.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30))
+            r = cli.send(HttpRequest.newBuilder(Url.httpUri(url)).timeout(Duration.ofSeconds(30))
                     .header("User-Agent", UA_TRINH_DUYET).build(), HttpResponse.BodyHandlers.ofByteArray());
         } catch (IOException | IllegalArgumentException e) {
             throw new HttpError(502, "không tải được: " + e);
@@ -65,6 +65,6 @@ public class TaiVe {
         String ct = r.headers().firstValue("Content-Type").orElse("");
         Matcher m = CHARSET.matcher(ct);
         String enc = m.find() ? m.group(1) : StandardCharsets.UTF_8.name().toLowerCase();
-        return new PhanHoi(r.uri().toString(), r.statusCode(), enc, r.body());
+        return new PhanHoi(r.uri().toString(), r.statusCode(), ct, enc, r.body());
     }
 }

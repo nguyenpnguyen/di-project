@@ -182,6 +182,89 @@ flowchart LR
 `visit()` luôn quét mọi `<a href>` của trang vừa tải để đẩy thêm url nội bộ —
 "lưới vét cuối cùng": trang nào có người trỏ tới thì cuối cùng cũng được thăm.
 
+### 2.3.1. Chế độ 4 — crawl theo khoảng ngày đăng mới nhất (`mode=recent`)
+
+**Vấn đề:** ba chế độ sẵn có (`resume`, `listing`, `site`) đều không quan tâm
+đến *thời điểm bài được đăng* — chúng chọn URL theo hàng đợi BFS hoặc theo
+host. Người dùng cần một chế độ riêng: "lấy các bài đăng trong N ngày gần
+nhất" (ví dụ 7/10 → 10/10/2026), chọn được qua thanh ngày trên giao diện,
+không cho chọn ngày sau hôm nay.
+
+**Giới hạn phải tôn trọng:** ngày đăng bài (`datePublished`) chỉ được tính ra
+sau khi **bóc tách HTML** (`Fields.publishedDate()` ở tầng Java, mục 3.4) —
+tầng crawl Python hiện chỉ biết `fetched_at` (lúc tải), không biết lúc đăng.
+Nếu phải tải hết bài rồi mới lọc theo ngày thì mất hết lợi ích "chỉ lấy mới
+nhất" (vẫn tốn request cho toàn bộ 5700+ URL còn lại trong hàng đợi).
+
+**Lối ra — đọc ngày ngay trên trang danh sách, không cần tải từng bài:**
+kiểm chứng trên `hust.edu.vn/vi/su-kien-noi-bat/` (và tương tự ở `tin-tuc-su-kien`,
+`thong-bao-chung`…) cho thấy mỗi mục trong danh sách in kèm ngày `dd/mm/yyyy`
+*ngay trong HTML của trang listing*, và toàn site xếp bài **theo ngày đăng
+giảm dần**. Vậy chỉ cần tải các trang listing (rẻ — một trang listing chứa
+hàng chục bài, so với tải từng bài), bóc ngày in kèm mỗi mục, rồi quyết định
+tiếp mà không cần mở bài:
+
+```mermaid
+flowchart TD
+    A["Site đưa vào, ví dụ hôm nay 10/10/2026<br/>since=07/10, until=10/10"] --> B["Tải trang listing đầu<br/>(su-kien-noi-bat, tin-tuc-su-kien, …)"]
+    B --> C["Với mỗi mục trong trang:<br/>bóc href + ngày dd/mm/yyyy đi kèm"]
+    C --> D{"ngày mục<br/>so với [since, until]?"}
+    D -- "until < ngày" --> E["bỏ qua mục (hiếm, lệch giờ),<br/>KHÔNG dừng listing"]
+    D -- "since ≤ ngày ≤ until" --> F["push url bài vào hàng đợi<br/>ưu tiên cao nhất (đi trước mọi loại khác)"]
+    D -- "ngày < since" --> G["dừng duyệt listing này —<br/>đã sắp giảm dần nên phần còn lại chắc chắn cũ hơn"]
+    F --> H["Trang sau (page-2, page-3…)<br/>chỉ mở nếu trang hiện tại<br/>chưa gặp mục nào < since"]
+    G --> I(["Tổng kết: n bài trong khoảng,<br/>đã đẩy vào hàng đợi ưu tiên"])
+    H --> B
+```
+
+**Vì sao an toàn khi dừng sớm theo "ngày < since":** đây dựa trên quan sát thực
+tế trang listing xếp giảm dần theo ngày — tức phần tử đầu luôn mới nhất. Rủi ro
+duy nhất là một chuyên mục nào đó KHÔNG xếp giảm dần (ví dụ bị ghim bài nổi
+bật lên đầu bất kể ngày) — nếu gặp, log cảnh báo "ngày không giảm dần ở X" và
+chuyển qua duyệt hết trang đó (an toàn hơn, chấp nhận chậm) thay vì cắt oan.
+**Phải xét "giảm dần" trên TOÀN BỘ các mục của một trang trước khi quyết định
+dừng** — thử dừng ngay khi gặp mục đầu tiên < since (chưa biết monotonic hay
+không) thì bỏ sót chính xác trường hợp cần phát hiện: mục ghim nằm NGAY ĐẦU
+trang, cũ hơn `since`, các mục sau mới hơn. Bài học rút ra khi viết test (mục
+2.3.1, `test_listing_khong_giam_dan_thi_khong_cat_oan`): lần sửa đầu tiên dừng
+oan ngay ở mục ghim vì chưa thấy mục nào "tăng trở lại" để biết là không giảm
+dần — phải quét hết mục có ngày trong trang, tính `monotonic` một lần, rồi mới
+quyết định dừng hay duyệt tiếp.
+
+**Khác với 3 chế độ cũ ở điểm:** `resume`/`listing`/`site` chọn theo *cấu trúc
+hàng đợi đã có* (BFS, menu, subdomain); `recent` chọn theo *nội dung thời gian
+đọc trực tiếp từ danh sách*, không đụng tới `frontier`/`state.json` của mẻ BFS
+đang chạy — hai hàng đợi tách biệt để không làm rối tiến độ `--resume` hiện có.
+
+**Bug thật gặp khi kiểm thử trên site thật (sau khi code xong, trước khi coi
+là xong):** `push()` xếp url theo `--prefer` (mặc định ưu tiên LISTING), nên
+các url bài tìm được ở chế độ 4 bị `push()` xếp **cuối** hàng đợi — ngược hẳn
+thiết kế "đi trước mọi loại khác". Mẻ `--resume` kế tiếp tải 6 trang khác chứ
+không phải 5 bài vừa lọc. Sửa: sau khi `push()` xong (vẫn cần nó để chạy đúng
+khử trùng/dedup/robots), chủ động lọc các url chế độ 4 ra khỏi vị trí `push()`
+đặt và `appendleft` lại theo đúng thứ tự mới nhất trước. Kiểm chứng bằng cách
+dựng `Crawler` thật, gieo trước hai url "seed" giả vào hàng đợi, gọi
+`run_recent()`, rồi in `frontier` — xác nhận 5 url chế độ 4 nằm NGAY ĐẦU hàng
+đợi, trước cả hai url seed cũ.
+
+**Tham số dự kiến:**
+
+| Tham số | Ở đâu | Ghi chú |
+|---|---|---|
+| `mode=recent` | `POST /api/crawl/start` | giá trị mới cho tham số `mode` đã có |
+| `since`, `until` (YYYY-MM-DD) | cùng request | `until` **bắt buộc ≤ ngày hôm nay** — chặn ở cả giao diện (thuộc tính `max` của input ngày) và backend (`crawlctl.py` trả 400 nếu vi phạm, Java `ApiCrawl` validate lại lần hai vì không tin dữ liệu từ phía gọi) |
+| `--since`, `--until` | cờ mới của `crawl_all.py` | kích hoạt nhánh duyệt listing-theo-ngày ở trên, thay cho BFS thường |
+
+**Việc cần làm khi code (chưa làm ở bước này — bước này chỉ chốt thiết kế):**
+1. `crawl_all.py`: thêm regex bóc ngày `dd/mm/yyyy` cạnh mỗi mục listing (bản
+   Python tối giản của `Fields.RE_DATE_VN`), thêm nhánh `--since/--until`.
+2. `crawlctl.py`: nhận `since`, `until` trong `crawl_start()`, validate
+   `until ≤ hôm nay`, build cờ tương ứng.
+3. `ApiCrawl` (Java): chuyển tiếp hai tham số mới, validate lại ngày.
+4. `static/index.html`: thêm option "Mới nhất theo thời gian" vào `#mode`,
+   hai input `type=date` cho since/until với `max` = hôm nay (tính bằng JS
+   `new Date()` phía client, không hardcode).
+
 ### 2.4. Nhịp tự dò (rate limiting)
 
 **Đo được:** hust.edu.vn chặn ở khoảng **20-25 request/phút**, vượt là HTTP 429

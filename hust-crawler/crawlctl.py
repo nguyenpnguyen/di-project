@@ -8,6 +8,7 @@ song song sẽ đạp nhau ở state.json. Lỗi luôn là {"detail": "..."} đ�
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import pathlib
 import signal
@@ -35,11 +36,18 @@ def _alive() -> subprocess.Popen | None:
     return p if p and p.poll() is None else None
 
 
+def _parse_date(s: str, field: str) -> dt.date:
+    try:
+        return dt.date.fromisoformat(s)
+    except (ValueError, TypeError):
+        raise Loi(400, f"{field} '{s}' không đúng dạng YYYY-MM-DD")
+
+
 def crawl_start(req: dict) -> dict:
     with _lock:
         if _alive():
             raise Loi(409, "đang có mẻ chạy, dừng trước đã")
-        mode = req.get("mode", "resume")          # resume | listing | file | site
+        mode = req.get("mode", "resume")          # resume | listing | file | site | recent
         cmd = ["python", "crawl_all.py"]
         if mode in ("resume", "listing"):
             cmd.append("--resume")
@@ -49,6 +57,22 @@ def crawl_start(req: dict) -> dict:
             if not req.get("from_file"):
                 raise Loi(400, "mode=file thì phải có from_file")
             cmd += ["--from-file", str(req["from_file"])]
+        if mode == "recent":
+            # chế độ 4 (mục 2.3.1 BAO-CAO-KY-THUAT.md): lọc theo khoảng ngày đăng.
+            # Validate lại ở đây dù crawl_all.py cũng validate — service này nhận
+            # trực tiếp từ Java/HTTP nên không tin dữ liệu phía gọi (defense in depth).
+            if not req.get("since"):
+                raise Loi(400, "mode=recent thì phải có since (YYYY-MM-DD)")
+            since = req["since"]
+            until = req.get("until") or since
+            d_since = _parse_date(since, "since")
+            d_until = _parse_date(until, "until")
+            today = dt.date.today()
+            if d_until > today:
+                raise Loi(400, f"until {until} muộn hơn hôm nay ({today.isoformat()})")
+            if d_since > d_until:
+                raise Loi(400, f"since {since} muộn hơn until {until}")
+            cmd += ["--since", since, "--until", until]
         if req.get("site"):
             cmd += ["--site", str(req["site"])]
         if req.get("max_pages"):

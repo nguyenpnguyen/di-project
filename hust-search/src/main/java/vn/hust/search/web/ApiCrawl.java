@@ -7,6 +7,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 
 /**
  * Chuyển tiếp {@code /api/crawl/*} sang service crawler ({@code crawlctl.py}, mạng nội bộ docker).
@@ -30,10 +32,38 @@ public final class ApiCrawl {
             if (!Http.bodyStr(b, "render", "never").equals("never"))
                 throw new HttpError(400, "không còn hỗ trợ render (đã bỏ Playwright)");
             if (jobs.isRunning("files")) throw new HttpError(409, "đang tải tệp tài liệu, đợi xong rồi hãy crawl");
+            if (Http.bodyStr(b, "mode", "resume").equals("recent")) validateRecent(b);
             return forward("POST", "/start", b.toString(), 30);
         });
         h.post("/api/crawl/stop", r -> forward("POST", "/stop", "{}", 60));   // crawler chờ tới 30 s cho tiến trình thoát êm
         h.get("/api/crawl/status", r -> forward("GET", "/status", null, 10));
+    }
+
+    /**
+     * Chế độ 4 (mục 2.3.1 BAO-CAO-KY-THUAT.md): validate lại since/until phía Java trước khi
+     * chuyển tiếp sang crawlctl.py. crawlctl.py và crawl_all.py cũng validate — ba lớp vì mỗi
+     * tầng nhận input từ một nguồn khác nhau (giao diện, Java, rồi chính crawler), không tầng
+     * nào tin dữ liệu từ tầng gọi nó.
+     */
+    private void validateRecent(JsonNode b) {
+        String since = Http.bodyStr(b, "since", "");
+        if (since.isEmpty()) throw new HttpError(400, "mode=recent thì phải có since (YYYY-MM-DD)");
+        String until = Http.bodyStr(b, "until", since);
+        LocalDate dSince = parseDate(since, "since");
+        LocalDate dUntil = parseDate(until, "until");
+        LocalDate today = LocalDate.now();
+        if (dUntil.isAfter(today))
+            throw new HttpError(400, "until " + until + " muộn hơn hôm nay (" + today + ")");
+        if (dSince.isAfter(dUntil))
+            throw new HttpError(400, "since " + since + " muộn hơn until " + until);
+    }
+
+    private static LocalDate parseDate(String s, String field) {
+        try {
+            return LocalDate.parse(s);
+        } catch (DateTimeParseException e) {
+            throw new HttpError(400, field + " '" + s + "' không đúng dạng YYYY-MM-DD");
+        }
     }
 
     private Http.Status forward(String method, String path, String body, int seconds) {

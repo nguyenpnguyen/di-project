@@ -417,11 +417,17 @@ svg.g .n{cursor:pointer}svg.g .n:hover rect{stroke-width:2.5}
           <option value="resume">Chạy tiếp (tải nội dung bài)</option>
           <option value="listing">Chỉ lấy link (trang danh sách)</option>
           <option value="site">Site khác / subdomain</option>
+          <option value="recent">Mới nhất theo thời gian</option>
         </select>
         <label>Site</label><input id="site" placeholder="hust.edu.vn" size="20">
         <label>Trần trang</label><input id="cap" type="number" value="100" size="5" style="width:90px">
         <button class="btn" id="cstart">Chạy</button>
         <button class="btn warn" id="cstop">Dừng</button>
+      </div>
+      <div class="row" id="crecent" style="margin-bottom:12px;display:none">
+        <label>Từ ngày</label><input id="csince" type="date">
+        <label>Đến ngày</label><input id="cuntil" type="date">
+        <span class="meta" style="margin:0">Chỉ lấy bài đăng trong khoảng này; không chọn được ngày sau hôm nay</span>
       </div>
       <pre id="clog">—</pre>
     </div>
@@ -987,6 +993,13 @@ $('#cstart').onclick = async () => {
     site: $('#site').value.trim() || null,
     max_pages: +$('#cap').value || 0,
   };
+  if (mode === 'recent') {
+    const since = $('#csince').value, until = $('#cuntil').value || since;
+    if (!since) { $('#clog').textContent = 'Lỗi: chọn ngày bắt đầu'; return; }
+    body.mode = 'recent';
+    body.since = since;
+    body.until = until;
+  }
   const r = await fetch('/api/crawl/start', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const d = await r.json();
@@ -998,6 +1011,17 @@ $('#cstop').onclick = async () => {
   $('#clog').textContent = d.graceful === false ? 'Đã kill cứng' : 'Đã dừng sạch';
   setTimeout(refresh, 1000);
 };
+
+// Chế độ 4 (mục 2.3.1): hiện 2 ô ngày chỉ khi chọn 'recent'; chặn chọn ngày
+// sau hôm nay ngay trên giao diện qua thuộc tính 'max' (validate lại ở server).
+(() => {
+  const today = new Date().toISOString().slice(0, 10);
+  $('#csince').max = today;
+  $('#cuntil').max = today;
+  $('#mode').addEventListener('change', () => {
+    $('#crecent').style.display = $('#mode').value === 'recent' ? 'flex' : 'none';
+  });
+})();
 
 // Hai nguồn dùng CÙNG thuật toán boc_tach; khác nhau ở khử khuôn (chỉ Mongo, khi đã dựng bảng khuôn),
 // khử trùng (Mongo theo dedup_key, kho thô theo url) và tệp tài liệu (chỉ Mongo). Mongo nhanh hơn vì

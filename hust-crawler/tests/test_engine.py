@@ -5,6 +5,7 @@ mình đang phá cái gì.
 
     cd hust-crawler && .venv/bin/python -m pytest tests -q
 """
+import argparse
 import importlib.util
 import pathlib
 import sys
@@ -190,3 +191,144 @@ class TestRender:
         rd = _load("render")
         html = "<html>" + '<a href="/x">link</a>' * 30 + " ".join(["chữ"] * 300) + "</html>"
         assert not rd.looks_blocked(200, html)
+
+
+# --------------------------------------------------------- chế độ 4: ngày đăng
+class TestParseDateVn:
+    """parse_date_vn: bản tối giản của Fields.normalizeDate() (Java) — chỉ cần
+    đọc dd/mm/yyyy in cạnh mỗi mục trên trang danh sách (mục 2.3.1)."""
+
+    def test_bam_duoc_ngay_lan_trong_doan_text_dai(self):
+        assert ca.parse_date_vn("THÔNG BÁO TUYỂN DỤNG ĐỢT 3 NĂM 2026\n30/09/2026") == "2026-09-30"
+
+    def test_mot_chu_so_cho_ngay_va_thang(self):
+        assert ca.parse_date_vn("đăng 2/3/2026") == "2026-03-02"
+
+    def test_ngay_khong_hop_le_tra_rong(self):
+        assert ca.parse_date_vn("ngày 31/02/2026 không có thật") == ""
+
+    def test_khong_co_ngay_tra_rong(self):
+        assert ca.parse_date_vn("xem thêm 1790757300") == ""
+        assert ca.parse_date_vn("") == ""
+
+    def test_khong_dinh_vao_so_khac_vd_id_bai_hoac_nam_dai_hon(self):
+        """(?<!\\d)...(?!\\d) phải chặn số dính liền ở hai đầu, không chỉ ở giữa."""
+        assert ca.parse_date_vn("bài viết 123/04/2026999 không phải ngày") == ""
+
+
+class TestRecentWalkListing:
+    """run_recent/_recent_walk_listing: duyệt listing theo ngày giảm dần, dừng
+    sớm khi gặp ngày < since — không tải mạng thật, mock Crawler.fetch()."""
+
+    def _crawler(self, tmp_path, monkeypatch, **extra_args):
+        monkeypatch.setattr(ca, "RAW", tmp_path)
+        # test chỉ cần MỘT danh mục mới nhất để không phải mock nhiều URL khác
+        # nhau — RECENT_LISTINGS thật của hust.edu.vn có 2, không liên quan tới
+        # đúng/sai của thuật toán duyệt-một-listing đang được test ở đây.
+        monkeypatch.setitem(ca.RECENT_LISTINGS, "hust.edu.vn", ("/vi/su-kien-noi-bat/",))
+        args = argparse.Namespace(
+            site="hust.edu.vn", seed_url=None, from_file=None, follow=False,
+            allow_domain=None, render="never", render_timeout=30, insecure=False,
+            max_pages=0, max_depth=6, max_pages_per_cat=400, lang="all",
+            only="all", prefer="listing", delay=2.5, max_delay=30.0, max_429=8,
+            workers=2, retries=3, timeout=25, shard_size=200, no_gzip=True,
+            checkpoint=50, resume=False, seed_file=None, quiet=True,
+            since=None, until=None,
+        )
+        for k, v in extra_args.items():
+            setattr(args, k, v)
+        c = ca.Crawler(args)
+        return c
+
+    @staticmethod
+    def _page(items, next_href=None):
+        """items: list[(href, text_kem_ngay)]. Sinh HTML danh sách tối giản."""
+        li = "".join(f'<li><a href="{h}">bài</a><span>{t}</span></li>' for h, t in items)
+        nxt = f'<a href="{next_href}">Trang sau</a>' if next_href else ""
+        return f"<html><body><ul>{li}</ul>{nxt}</body></html>"
+
+    def test_mo_moi_bai_trong_khoang_duoc_day_vao_hang_doi(self, tmp_path, monkeypatch):
+        c = self._crawler(tmp_path, monkeypatch)
+        html = self._page([
+            ("/vi/su-kien-noi-bat/a-654801.html", "10/10/2026"),
+            ("/vi/su-kien-noi-bat/b-654800.html", "09/10/2026"),
+            ("/vi/su-kien-noi-bat/c-654799.html", "08/10/2026"),
+        ])
+
+        class FakeResp:
+            text = html
+
+        monkeypatch.setattr(c, "fetch", lambda url: (FakeResp(), ""))
+        manifest = c.run_recent("2026-10-08", "2026-10-10")
+        assert manifest["matched"] == 3
+        assert manifest["pushed_to_queue"] == 3
+        pushed = {u for u, _, _ in c.frontier}
+        assert "https://hust.edu.vn/vi/su-kien-noi-bat/a-654801.html" in pushed
+        assert "https://hust.edu.vn/vi/su-kien-noi-bat/c-654799.html" in pushed
+
+    def test_bai_cu_hon_since_bi_cat_khong_day_vao_hang_doi(self, tmp_path, monkeypatch):
+        """Danh sách giảm dần: gặp 05/10 < since=08/10 thì dừng, không xét tiếp."""
+        c = self._crawler(tmp_path, monkeypatch)
+        html = self._page([
+            ("/vi/su-kien-noi-bat/a-1.html", "10/10/2026"),
+            ("/vi/su-kien-noi-bat/b-2.html", "05/10/2026"),    # < since -> dừng ở đây
+            ("/vi/su-kien-noi-bat/c-3.html", "01/10/2026"),    # không bao giờ được xét
+        ])
+
+        class FakeResp:
+            text = html
+
+        monkeypatch.setattr(c, "fetch", lambda url: (FakeResp(), ""))
+        manifest = c.run_recent("2026-10-08", "2026-10-10")
+        assert manifest["matched"] == 1          # chỉ "a"
+        urls = {u for u, _, _ in c.frontier}
+        assert "https://hust.edu.vn/vi/su-kien-noi-bat/a-1.html" in urls
+        assert "https://hust.edu.vn/vi/su-kien-noi-bat/c-3.html" not in urls
+
+    def test_ngay_tuong_lai_bi_bo_qua_khong_lam_dung_duyet(self, tmp_path, monkeypatch):
+        """Mục có ngày > until (lệch giờ máy chủ) chỉ bị loại, KHÔNG dừng cả trang."""
+        c = self._crawler(tmp_path, monkeypatch)
+        html = self._page([
+            ("/vi/su-kien-noi-bat/future-1.html", "11/10/2026"),   # > until, bỏ qua
+            ("/vi/su-kien-noi-bat/ok-2.html", "09/10/2026"),       # trong khoảng
+        ])
+
+        class FakeResp:
+            text = html
+
+        monkeypatch.setattr(c, "fetch", lambda url: (FakeResp(), ""))
+        manifest = c.run_recent("2026-10-08", "2026-10-10")
+        assert manifest["skipped_future"] == 1
+        assert manifest["matched"] == 1
+        urls = {u for u, _, _ in c.frontier}
+        assert "https://hust.edu.vn/vi/su-kien-noi-bat/ok-2.html" in urls
+        assert "https://hust.edu.vn/vi/su-kien-noi-bat/future-1.html" not in urls
+
+    def test_listing_khong_giam_dan_thi_khong_cat_oan(self, tmp_path, monkeypatch):
+        """Bài bị ghim lên đầu (ngày cũ hơn mục sau) -> không coi là giảm dần,
+        duyệt hết trang thay vì dừng oan ở mục ghim."""
+        c = self._crawler(tmp_path, monkeypatch)
+        html = self._page([
+            ("/vi/su-kien-noi-bat/pinned-1.html", "01/09/2026"),   # ghim, cũ hơn since
+            ("/vi/su-kien-noi-bat/new-2.html", "10/10/2026"),      # mục sau lại mới hơn -> không giảm dần
+            ("/vi/su-kien-noi-bat/new-3.html", "09/10/2026"),
+        ])
+
+        class FakeResp:
+            text = html
+
+        monkeypatch.setattr(c, "fetch", lambda url: (FakeResp(), ""))
+        manifest = c.run_recent("2026-10-08", "2026-10-10")
+        # không giảm dần -> duyệt hết trang; chỉ các mục THỰC SỰ trong khoảng mới match
+        urls = {u for u, _, _ in c.frontier}
+        assert "https://hust.edu.vn/vi/su-kien-noi-bat/new-2.html" in urls
+        assert "https://hust.edu.vn/vi/su-kien-noi-bat/new-3.html" in urls
+        assert "https://hust.edu.vn/vi/su-kien-noi-bat/pinned-1.html" not in urls
+
+    def test_site_chua_khai_recent_listings_tra_ket_qua_rong(self, tmp_path, monkeypatch):
+        c = self._crawler(tmp_path, monkeypatch)
+        ca.set_site("library.hust.edu.vn")     # không có trong RECENT_LISTINGS
+        c2 = self._crawler(tmp_path, monkeypatch)
+        manifest = c2.run_recent("2026-10-08", "2026-10-10")
+        assert manifest["matched"] == 0
+        assert manifest["pages"] == 0

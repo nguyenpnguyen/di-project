@@ -71,6 +71,36 @@ SEED_MENU = {
                     "/vi/lich-lam-viec/Truong-dai-hoc-BKHN/", "/vi/contact/"),
 }
 
+# Chế độ --since/--until (mục 2.3.1 BAO-CAO-KY-THUAT.md): các trang danh sách
+# xếp bài THEO NGÀY ĐĂNG GIẢM DẦN, dùng làm điểm vào để lấy "bài mới nhất
+# trong N ngày" mà không cần tải từng bài. Chỉ đúng với hust.edu.vn (NukeViet).
+# /vi/su-kien-noi-bat/ in ngày dd/mm/yyyy ngay cạnh mỗi mục (đã kiểm chứng).
+# /vi/news/ (mục "Tin Tức") KHÔNG in ngày trên trang chủ — bỏ khỏi danh sách
+# cho tới khi kiểm chứng được trang nào của nó có in ngày kèm theo.
+RECENT_LISTINGS = {
+    "hust.edu.vn": ("/vi/su-kien-noi-bat/",),
+}
+
+# dd/mm/yyyy hoặc d/m/yyyy, không cho dính vào số khác (vd id bài, năm trong chuỗi dài hơn)
+RE_DATE_VN = re.compile(r"(?<!\d)(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})(?!\d)")
+
+
+def parse_date_vn(text: str) -> str:
+    """Chuỗi có DD/MM/YYYY ở đâu đó -> 'YYYY-MM-DD', hoặc '' nếu không thấy / không hợp lệ.
+
+    Bản tối giản của Fields.normalizeDate() (Java, mục 3.4) — ở đây chỉ cần đọc
+    ngày in kèm mục listing, không cần đọc ISO hay json-ld.
+    """
+    m = RE_DATE_VN.search(text or "")
+    if not m:
+        return ""
+    d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    try:
+        dt.date(y, mo, d)
+    except ValueError:
+        return ""
+    return f"{y:04d}-{mo:02d}-{d:02d}"
+
 
 def set_site(host: str):
     """Trỏ crawler sang site khác. Mỗi site một thư mục kho riêng, không lẫn nhau."""
@@ -590,6 +620,155 @@ class Crawler:
 
         self.log(f"      {n_sm} url từ sitemap -> hàng đợi {len(self.frontier)} url")
 
+    # -- chế độ 4: mới nhất theo khoảng ngày đăng (mục 2.3.1) ----------------
+    def run_recent(self, since: str, until: str) -> dict:
+        """Duyệt các trang danh sách 'mới nhất', lọc theo ngày đăng [since, until].
+
+        KHÔNG đụng tới self.frontier/state.json của mẻ BFS thường — hàng đợi
+        riêng `urls`, tải ngay trong hàm này bằng self.fetch(), không qua pop()/
+        worker() của run(). An toàn khi chạy xen với mẻ --resume khác vì không
+        chia sẻ cấu trúc nào ngoài self.done/self.store (ghi thêm, không xoá).
+        """
+        listings = RECENT_LISTINGS.get(HOST, ())
+        if not listings:
+            self.log(f"      site {HOST} chưa khai RECENT_LISTINGS, không có gì để duyệt")
+            return {"site": BASE, "since": since, "until": until, "pages": 0,
+                     "matched": 0, "skipped_future": 0, "errors": len(self.errors)}
+
+        self.log(f"[1/1] Chế độ 4 — bài đăng {since} .. {until}, "
+                 f"{len(listings)} danh mục mới nhất")
+        matched: list[str] = []
+        self._last_skipped_future = 0
+        budget = self.a.max_pages or float("inf")
+
+        for base_path in listings:
+            if len(matched) >= budget:
+                break
+            self._recent_walk_listing(BASE + base_path, since, until, matched)
+
+        if budget != float("inf"):
+            matched = matched[: int(budget)]
+        pushed = 0
+        pushed_urls: list[str] = []
+        for u in matched:
+            if self.a.only == "listing":
+                continue      # giống --only listing: chỉ muốn danh sách, không tải nội dung
+            before = len(self.queued)
+            self.push(u, 1, "recent")
+            if len(self.queued) > before:        # push() có thể bỏ qua (đã queued/alias/robots)
+                pushed_urls.append(u)
+                pushed += 1
+        # push() xếp theo self.a.prefer (mặc định ưu tiên LISTING), nên url bài ở
+        # đây có thể bị đẩy xuống cuối — chế độ 4 cần NGƯỢC LẠI: các bài vừa lọc
+        # theo ngày phải đi TRƯỚC mọi url khác đang có trong hàng đợi (mục 2.3.1).
+        # Làm bằng cách lọc chúng ra khỏi vị trí push() đặt, rồi appendleft lại
+        # theo đúng thứ tự mới nhất trước (matched đã là thứ tự giảm dần).
+        if pushed_urls:
+            keep = collections.deque(x for x in self.frontier if x[0] not in pushed_urls)
+            for u in reversed(pushed_urls):
+                keep.appendleft((u, 1, "recent"))
+            self.frontier = keep
+
+        self.store.close()
+        self.save_state()
+        manifest = {
+            "site": BASE, "since": since, "until": until,
+            "matched": len(matched), "skipped_future": self._last_skipped_future,
+            "pushed_to_queue": pushed, "errors": len(self.errors),
+        }
+        self.log("[1/1] Tổng kết\n" + json.dumps(manifest, ensure_ascii=False, indent=1))
+        return manifest
+
+    def _recent_walk_listing(self, start_url: str, since: str, until: str,
+                              matched: list[str]) -> None:
+        """Duyệt một danh mục trang-theo-trang, dừng sớm khi ngày < since.
+
+        Giả định: mục trong danh sách giảm dần theo ngày đăng (đã kiểm chứng
+        trên hust.edu.vn/vi/su-kien-noi-bat/, mục 2.3.1). Mỗi trang tự xét
+        "có giảm dần không" dựa trên CHÍNH các mục của trang đó (không so
+        sánh giữa trang với trang) — nếu không giảm dần (vd vài bài bị ghim
+        lên đầu bất kể ngày), log cảnh báo và duyệt hết trang đó thay vì cắt
+        oan, nhưng vẫn chuyển sang trang kế bình thường (không lặp vô hạn vì
+        max_pages_per_cat vẫn chặn số trang tối đa).
+        """
+        url = start_url
+        page_no = 1
+        while url and page_no <= self.a.max_pages_per_cat:
+            r, err = self.fetch(url)
+            if not r:
+                self.log(f"    ! recent: {err}  {url[-70:]}")
+                return
+            soup = BeautifulSoup(r.text, "lxml")
+            items = self._recent_extract_items(soup, url)
+            if not items:
+                return             # trang rỗng hoặc đổi cấu trúc — không đoán thêm
+            # Quét HẾT các mục có ngày trong trang trước khi quyết định dừng:
+            # chỉ nhìn từng mục một thì gặp ngay mục đầu < since đã stop, không
+            # có cơ hội thấy mục sau tăng trở lại để biết trang này không giảm
+            # dần (vd bài ghim lên đầu bất kể ngày) — đo được lỗi này khi viết
+            # test với item đầu bị ghim, mục 2.3.1.
+            dated = [(h, d) for h, d in items if d]
+            monotonic = all(dated[i][1] >= dated[i + 1][1] for i in range(len(dated) - 1))
+            if not monotonic:
+                self.log(f"      ! {url[-60:]} không xếp giảm dần theo ngày — "
+                         f"duyệt hết trang này thay vì cắt sớm")
+            stop = False
+            for href, iso_date in items:
+                if not iso_date:
+                    continue        # mục không bóc được ngày: bỏ qua, không dùng để quyết định dừng
+                if iso_date > until:
+                    self._last_skipped_future += 1
+                    continue        # tương lai/lệch giờ — bỏ qua, KHÔNG dừng
+                if iso_date < since:
+                    if monotonic:
+                        stop = True
+                        break
+                    continue         # listing không giảm dần: không cắt oan, duyệt hết trang
+                matched.append(href)
+            if stop:
+                return
+            # sang trang kế: dùng chính cơ chế phân trang đã có (expand_pagination
+            # chỉ nở toàn dải một lần; ở đây cần tuần tự nên tự tính trang kế)
+            nxt = self._recent_next_page(url, soup, page_no)
+            if not nxt:
+                return
+            url, page_no = nxt, page_no + 1
+
+    def _recent_extract_items(self, soup, page_url: str) -> list[tuple[str, str]]:
+        """Mỗi mục danh sách -> (url bài, ngày ISO hoặc ''). Bỏ mục không phải bài."""
+        out: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for a in soup.select("a[href]"):
+            href = norm(a["href"], page_url)
+            if not href or not in_scope(href) or kind_of(href) != "article":
+                continue
+            if href in seen:
+                continue
+            seen.add(href)
+            # ngày thường in trong khối cha gần nhất (li/div bọc cả tiêu đề+ngày),
+            # không trong chính thẻ <a> — leo tối đa 3 cấp cha để tìm
+            node, text = a, ""
+            for _ in range(4):
+                if node is None:
+                    break
+                text = node.get_text(" ", strip=True)
+                if RE_DATE_VN.search(text):
+                    break
+                node = node.parent
+            out.append((href, parse_date_vn(text)))
+        return out
+
+    def _recent_next_page(self, url: str, soup, page_no: int) -> str | None:
+        """Trang kế của CHÍNH chuyên mục này, dùng khuôn page_of() đã có (2.6)."""
+        here = page_of(url)
+        stem = here[2] if here else url
+        want = page_no + 1
+        for a in soup.select("a[href]"):
+            pg = page_of(norm(a["href"], url) or "")
+            if pg and pg[2] == stem and pg[1] == want:
+                return pg[0].replace("{n}", str(want))
+        return None
+
     # -- state --------------------------------------------------------------
     def save_state(self):
         with self.lock:
@@ -634,6 +813,14 @@ class Crawler:
         # cuối mẻ ghi đè lên file — xoá sạch hàng đợi 4.220 url đã dựng công phu.
         # --resume giờ chỉ quyết định có gieo lại hạt giống hay không.
         loaded = self.load_state() if self.state_path.exists() else False
+
+        if self.a.since:
+            # Chế độ 4 (mục 2.3.1): không BFS, không seed — chỉ duyệt vài trang
+            # danh sách rồi dừng. Vẫn nạp state trước đó (ở trên) để push() khử
+            # trùng đúng với những gì đã biết, và ghi lại state sau khi xong để
+            # mẻ --resume kế tiếp thấy các url mới lọt vào hàng đợi.
+            return self.run_recent(self.a.since, self.a.until or self.a.since)
+
         if self.a.seed_file or self.a.from_file:
             # gác hàng đợi cũ sang một bên chứ không xoá, nếu không lần --resume
             # sau sẽ mất sạch những url đã phát hiện được
@@ -683,7 +870,7 @@ class Crawler:
                 finally:
                     with self.lock:
                         active[0] -= 1
-                if len(self.done) >= budget:
+                if len(self.done) - self.n_start >= budget:
                     self.stop.set()
                 if self.store.n_total % self.a.checkpoint == 0:
                     self.save_state()
@@ -745,6 +932,11 @@ def main():
                          "data/raw-<host>; kiểu phân trang tự nhận, không cần sửa code")
     ap.add_argument("--seed-url", nargs="*", help="url hạt giống thêm, khi site không có sitemap")
     ap.add_argument("--from-file", help="crawl đúng danh sách url trong file này (mỗi dòng một url)")
+    ap.add_argument("--since", help="YYYY-MM-DD: chế độ 4 (mục 2.3.1) — chỉ lấy bài đăng "
+                                     "từ ngày này. Có --since thì bỏ qua BFS, chỉ duyệt "
+                                     "các danh mục 'mới nhất' tới khi gặp ngày cũ hơn")
+    ap.add_argument("--until", help="YYYY-MM-DD: hạn trên của --since, mặc định bằng --since "
+                                     "(một ngày). KHÔNG được muộn hơn hôm nay")
     ap.add_argument("--follow", action="store_true",
                     help="với --from-file: bò tiếp theo link tìm thấy, mặc định chỉ tải đúng danh sách")
     ap.add_argument("--allow-domain",
@@ -788,6 +980,30 @@ def main():
     set_site(args.site)             # phải gọi TRƯỚC khi dựng Crawler: RAW đổi theo site
     if args.allow_domain:
         globals()["ALLOW_SUFFIX"] = args.allow_domain.lower().strip(". ")
+    if args.since:
+        def _valid_date(s):
+            try:
+                return dt.date.fromisoformat(s)
+            except ValueError:
+                return None
+        d_since = _valid_date(args.since)
+        if not d_since:
+            print(f"! --since '{args.since}' không đúng dạng YYYY-MM-DD", file=sys.stderr)
+            sys.exit(2)
+        until_str = args.until or args.since
+        d_until = _valid_date(until_str)
+        if not d_until:
+            print(f"! --until '{until_str}' không đúng dạng YYYY-MM-DD", file=sys.stderr)
+            sys.exit(2)
+        today = dt.date.today()
+        if d_until > today:
+            print(f"! --until {until_str} muộn hơn hôm nay ({today.isoformat()}) — "
+                  f"không thể crawl bài chưa đăng", file=sys.stderr)
+            sys.exit(2)
+        if d_since > d_until:
+            print(f"! --since {args.since} muộn hơn --until {until_str}", file=sys.stderr)
+            sys.exit(2)
+        args.until = until_str
     if args.render != "never":
         ok, why = render.available()
         if not ok:

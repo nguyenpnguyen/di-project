@@ -46,7 +46,7 @@
       <artifactId>jackson-databind</artifactId>
       <version>2.17.2</version>
     </dependency>
-    <!-- Bóc tách HTML: DOM kiểu HTML5. Khác lxml ở cách sửa HTML lỗi (KE-HOACH-PORT-JAVA.md mục 4). -->
+    <!-- Bóc tách HTML: DOM kiểu HTML5. Khác lxml ở cách sửa HTML lỗi. -->
     <dependency>
       <groupId>org.jsoup</groupId>
       <artifactId>jsoup</artifactId>

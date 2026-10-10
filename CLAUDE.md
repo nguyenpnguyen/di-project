@@ -6,12 +6,28 @@ Bài tập môn Tích hợp dữ liệu (IT5420). Repo chứa tài liệu môn h
 
 ```
 hust-crawler/     engine crawl + soát kho (chạy độc lập, không cần docker)
-hust-search/      project Maven Java 21: HTTP API + UI + bóc tách + Mongo + Lucene — xem hust-search/README.md
+hust-search/      project Maven Java 21: HTTP API + UI + bóc tách + Mongo + Lucene
+docs/             MỌI tài liệu (xem bảng dưới) — tài liệu mới cũng đặt ở đây, đừng rải vào hust-*/
 docker-compose.yml  dựng search (Java) + crawler (Python, service riêng) + mongo
 job-di/           project tích hợp tin tuyển dụng — CÓ .git RIÊNG, đừng add vào repo này
 *.pdf, *.docx     slide và đề bài, để untracked
 OneDrive_*/       tài liệu tải về, để untracked
 ```
+
+## Tài liệu (`docs/`)
+
+| File | Nội dung |
+|---|---|
+| `BAO-CAO-KY-THUAT.md` | báo cáo kỹ thuật: kiến trúc, sơ đồ luồng dữ liệu và từng thuật toán (crawl, chế độ `recent`, bóc tách, Mongo, Lucene), test, giới hạn |
+| `hust-search.md` | chạy stack, API, giao diện, chỗ từng hỏng, sửa ở đâu (đường dẫn tính từ `hust-search/`) |
+| `hust-crawler.md` | crawler: chạy gì tiếp, số liệu kho, khảo sát site (lệnh chạy từ `hust-crawler/`) |
+| `SCHEMA.md` | lược đồ MongoDB — sửa cùng lúc với `hust-search/src/main/resources/mongo-schema.json` |
+| `THUAT-TOAN-BOC-TACH.md` | thuật toán chọn khối, khử khuôn, bóc trường, đồ thị (Mermaid) |
+| `CHIA-DU-LIEU.md` | đóng gói / chuyển kho dữ liệu (`hustdata`) |
+| `so-do-luong-du-lieu.html` | sơ đồ SVG một trang: HTML thô → kết quả tìm kiếm |
+
+`README.md` ở gốc chỉ là cửa vào, trỏ sang `docs/`. Code comment trỏ tài liệu bằng đường dẫn
+`docs/…` (vd. `mục 2.3.1 docs/BAO-CAO-KY-THUAT.md`) — đổi tên/chuyển file thì grep cả code.
 
 ## Stack tìm kiếm
 
@@ -30,11 +46,9 @@ ngay trong tiến trình. `/api/crawl/*` chỉ chuyển tiếp sang service `cra
 Compose giữ `name: hust-search` để không đổi tên volume (đổi tên project là mất dữ liệu cũ hiện ra).
 Hợp đồng HTTP (đường dẫn, tham số, khoá JSON) giữ nguyên bản Python cũ; lỗi là `{"detail": "<chuỗi>"}`,
 riêng lỗi tìm kiếm (`/api/search`: q rỗng, cú pháp sai) giữ `{"error": ...}` vì giao diện đọc `d.error`.
-Kế hoạch port và quyết định: `hust-search/KE-HOACH-PORT-JAVA.md`; bóc tách: `hust-search/KE-HOACH-BOC-TACH.md`,
-lược đồ: `hust-search/SCHEMA.md`. Thuật toán bóc tách + đồ thị (sơ đồ Mermaid): `hust-search/THUAT-TOAN-BOC-TACH.md`.
 Tên package/class/biến/method Java dùng tiếng Anh (`extract/`, `store/`, `Extractor`, `RawStore`, `Pipeline`…);
 khoá JSON của API, tên collection/trường Mongo và chuỗi hiển thị giữ nguyên tiếng Việt cũ vì là hợp đồng với giao diện/dữ liệu.
-Sơ đồ luồng dữ liệu và từng thuật toán: `BAO-CAO-KY-THUAT.md`. Giao diện có tab "Bóc tách khối"
+Giao diện có tab "Bóc tách khối"
 (`POST /api/extract/url`) nhận url bất kỳ: lấy trong kho hoặc tải từ web, bóc tách, lưu Mongo + Lucene, rồi
 hiện trường, nội dung và liên kết đã bóc; tab "Đồ thị liên kết" có nút "Tải & bóc tách". Kho
 `hust-crawler/data` được mount vào `search` ở `/data` và vào `crawler` ở `/app/data`, nên **sửa
@@ -43,12 +57,12 @@ hiện trường, nội dung và liên kết đã bóc; tab "Đồ thị liên k
 **`Url.java` là bản sao của `crawl_all.norm/dedup_key/kind_of`.** Sửa bên nào thì sửa bên kia và chạy lại
 `UrlGoldenTest` (khớp 100% `src/test/resources/golden/url.tsv`) — lệch là lỗi "thiếu 17 link" kiểu `http://` vs `https://`.
 
-Test: 32 (pytest engine) + 115 (JUnit Java: url/kho, bóc tách khớp bản Python trên kho thật, Tika, Mongo thật,
+Test: 34 (pytest engine) + 115 (JUnit Java: url/kho, bóc tách khớp bản Python trên kho thật, Tika, Mongo thật,
 HTTP). Đã chạy trên MongoDB thật và kho thật (03/10/2026). Bản Java không crawl được trang dựng bằng JS
 (đã bỏ Playwright, ví dụ `work.hust.edu.vn`); `DocumentText.java` dùng **một** `AutoDetectParser` dùng chung vì dựng
 mới mỗi tệp mất ~1 s.
 
-Chỉ `hust-crawler/` được version. `job-di/` là repo lồng: `git add job-di/` sẽ tạo
+Repo version `hust-crawler/`, `hust-search/`, `docs/` và các file ở gốc. `job-di/` là repo lồng: `git add job-di/` sẽ tạo
 gitlink rỗng (thư mục hiện trên GitHub nhưng bấm vào không có gì).
 
 ## hust-crawler
@@ -116,7 +130,7 @@ file `*links*` không đuôi trong `data/raw` mà ghi đè, đừng đẻ file m
 
 `data/` gitignore nên code và kho đi hai đường. Đóng/mở gói bằng
 `hust-crawler/hustdata` (`export` / `import` / `info` / `check`), hướng dẫn đầy
-đủ ở `hust-crawler/CHIA-DU-LIEU.md`. Gói ra `GOI-DU-LIEU/` ở gốc repo — cũng gitignore.
+đủ ở `docs/CHIA-DU-LIEU.md`. Gói ra `GOI-DU-LIEU/` ở gốc repo — cũng gitignore.
 Index Lucene, MongoDB và `data/files/` không đi kèm gói — dựng lại từ kho (index khoảng hai phút).
 
 Không trộn được hai kho crawl song song trên cùng một host: hai `state.json`

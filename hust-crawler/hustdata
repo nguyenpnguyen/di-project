@@ -116,7 +116,7 @@ lam_goi() {
     echo "Gửi kèm $ten.tar.gz.sha256 và $ten.manifest.txt để đầu kia đối chiếu."
   fi
   echo ""
-  echo "Bên nhận làm gì tiếp: xem CHIA-DU-LIEU.md, mục 3."
+  echo "Bên nhận làm gì tiếp: xem docs/CHIA-DU-LIEU.md, mục 3."
 }
 
 # ---------------------------------------------------------------- import

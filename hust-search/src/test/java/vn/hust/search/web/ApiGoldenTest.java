@@ -88,7 +88,7 @@ class ApiGoldenTest {
             JsonNode t = getJson(m.path());
             n++;
             if (t.get("status").asInt() != m.status()) { errors.add(m.name() + " " + m.path() + ": mã " + t.get("status") + " thay vì " + m.status()); continue; }
-            if (m.name().equals("loi-search-thieu-q.json")) continue;     // FastAPI trả detail dạng mảng, Java trả chuỗi (KE-HOACH mục 3)
+            if (m.name().equals("loi-search-thieu-q.json")) continue;     // FastAPI trả detail dạng mảng, Java trả chuỗi
             checkShape(m.name(), m.body(), t.get("body"), errors);
         }
         assertTrue(errors.isEmpty(), n + " mẫu, " + errors.size() + " lệch:\n" + String.join("\n", errors));

@@ -40,7 +40,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-    # không mở cổng ra host: stack chưa có xác thực (README mục 10)
+    # không mở cổng ra host: stack chưa có xác thực (docs/hust-search.md mục 10)
 
 volumes:
   lucene-index:

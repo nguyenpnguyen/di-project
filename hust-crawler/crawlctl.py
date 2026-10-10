@@ -58,7 +58,7 @@ def crawl_start(req: dict) -> dict:
                 raise Loi(400, "mode=file thì phải có from_file")
             cmd += ["--from-file", str(req["from_file"])]
         if mode == "recent":
-            # chế độ 4 (mục 2.3.1 BAO-CAO-KY-THUAT.md): lọc theo khoảng ngày đăng.
+            # chế độ 4 (mục 2.3.1 docs/BAO-CAO-KY-THUAT.md): lọc theo khoảng ngày đăng.
             # Validate lại ở đây dù crawl_all.py cũng validate — service này nhận
             # trực tiếp từ Java/HTTP nên không tin dữ liệu phía gọi (defense in depth).
             if not req.get("since"):

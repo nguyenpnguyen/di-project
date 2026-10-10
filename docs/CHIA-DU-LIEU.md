@@ -1,5 +1,7 @@
 # Chia việc: code đi đường git, dữ liệu đi đường riêng
 
+Mọi lệnh dưới đây (`./hustdata`, `./hustctl`, `data/…`) chạy từ thư mục `hust-crawler/`.
+
 Kho crawl nằm ở `hust-crawler/data/` và **bị `.gitignore` chặn**. Đó là chủ ý,
 không phải sót: kho hiện đã 149 MB HTML thô và còn phình theo mỗi mẻ crawl, đẩy
 lên git là repo phồng vĩnh viễn — git giữ lại mọi phiên bản của mọi file nhị

@@ -71,7 +71,7 @@ SEED_MENU = {
                     "/vi/lich-lam-viec/Truong-dai-hoc-BKHN/", "/vi/contact/"),
 }
 
-# Chế độ --since/--until (mục 2.3.1 BAO-CAO-KY-THUAT.md): các trang danh sách
+# Chế độ --since/--until (mục 2.3.1 docs/BAO-CAO-KY-THUAT.md): các trang danh sách
 # xếp bài THEO NGÀY ĐĂNG GIẢM DẦN, dùng làm điểm vào để lấy "bài mới nhất
 # trong N ngày" mà không cần tải từng bài. Chỉ đúng với hust.edu.vn (NukeViet).
 # /vi/su-kien-noi-bat/ in ngày dd/mm/yyyy ngay cạnh mỗi mục (đã kiểm chứng).

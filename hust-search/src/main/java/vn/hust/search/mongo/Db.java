@@ -17,7 +17,7 @@ import org.bson.Document;
 
 /**
  * Kết nối MongoDB, lược đồ {@code $jsonSchema} và index — bản port của {@code db.py}.
- * Lược đồ nằm ở {@code mongo-schema.json}; mô tả từng trường ở SCHEMA.md.
+ * Lược đồ nằm ở {@code mongo-schema.json}; mô tả từng trường ở docs/SCHEMA.md.
  * Mongo là tầng lưu kết quả bóc tách nằm giữa kho thô của crawler và Lucene.
  */
 public final class Db implements AutoCloseable {

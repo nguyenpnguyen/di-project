@@ -92,8 +92,10 @@ flowchart LR
 | Java 21 (`Lucene 9.11` core, không Elasticsearch/Solr) | Đánh chỉ mục, tìm, xếp hạng, highlight | Đề bài yêu cầu dùng Lucene thuần |
 | Java (`com.sun.net.httpserver`) | Điều phối: chuyển tiếp lệnh crawl, chạy job nền, phục vụ giao diện | Lớp mỏng, virtual thread cho mỗi yêu cầu |
 
-Bản đầu của hệ thống viết tầng bóc tách + điều phối bằng Python (FastAPI) rồi port sang Java ngày 03/10/2026
-(`hust-search/KE-HOACH-PORT-JAVA.md`): hợp đồng HTTP giữ nguyên, thuật toán và hằng số giữ nguyên.
+Bản đầu của hệ thống viết tầng bóc tách + điều phối bằng Python (FastAPI) và một server Lucene riêng
+(cổng 8081), rồi gộp hết vào một tiến trình Java ngày 03/10/2026: hợp đồng HTTP (đường dẫn, tham số,
+khoá JSON) giữ nguyên, thuật toán và hằng số giữ nguyên, bản Java khớp bản Python 100% trên 3.438 trang
+kho thật (`PythonParityTest`).
 
 ---
 
@@ -247,23 +249,26 @@ dựng `Crawler` thật, gieo trước hai url "seed" giả vào hàng đợi, g
 `run_recent()`, rồi in `frontier` — xác nhận 5 url chế độ 4 nằm NGAY ĐẦU hàng
 đợi, trước cả hai url seed cũ.
 
-**Tham số dự kiến:**
+**Tham số:**
 
 | Tham số | Ở đâu | Ghi chú |
 |---|---|---|
 | `mode=recent` | `POST /api/crawl/start` | giá trị mới cho tham số `mode` đã có |
 | `since`, `until` (YYYY-MM-DD) | cùng request | `until` **bắt buộc ≤ ngày hôm nay** — chặn ở cả giao diện (thuộc tính `max` của input ngày) và backend (`crawlctl.py` trả 400 nếu vi phạm, Java `ApiCrawl` validate lại lần hai vì không tin dữ liệu từ phía gọi) |
-| `--since`, `--until` | cờ mới của `crawl_all.py` | kích hoạt nhánh duyệt listing-theo-ngày ở trên, thay cho BFS thường |
+| `--since`, `--until` | cờ của `crawl_all.py` | kích hoạt nhánh duyệt listing-theo-ngày ở trên, thay cho BFS thường |
 
-**Việc cần làm khi code (chưa làm ở bước này — bước này chỉ chốt thiết kế):**
-1. `crawl_all.py`: thêm regex bóc ngày `dd/mm/yyyy` cạnh mỗi mục listing (bản
-   Python tối giản của `Fields.RE_DATE_VN`), thêm nhánh `--since/--until`.
-2. `crawlctl.py`: nhận `since`, `until` trong `crawl_start()`, validate
-   `until ≤ hôm nay`, build cờ tương ứng.
-3. `ApiCrawl` (Java): chuyển tiếp hai tham số mới, validate lại ngày.
-4. `static/index.html`: thêm option "Mới nhất theo thời gian" vào `#mode`,
-   hai input `type=date` cho since/until với `max` = hôm nay (tính bằng JS
-   `new Date()` phía client, không hardcode).
+**Cài ở đâu (đã xong):**
+
+| Tầng | File | Chỗ |
+|---|---|---|
+| Crawl | `crawl_all.py` | `RE_DATE_VN` (bản Python của `Fields.RE_DATE_VN`), `RECENT_LISTINGS` (danh mục duyệt theo host), `Crawler.run_recent()`, `_recent_walk_listing()`, `_recent_extract_items()`, `_recent_next_page()`; `run()` gặp `--since` thì rẽ sang `run_recent()` |
+| Điều khiển | `crawlctl.py` | `mode=recent` → validate ngày, thêm `--since/--until` |
+| API | `web/ApiCrawl.java` | `validateRecent()` kiểm lại ngày rồi mới chuyển tiếp |
+| Giao diện | `static/index.html` | option "Mới nhất theo thời gian" trong `#mode`, hai ô `type=date` với `max` = hôm nay (tính bằng JS phía client) |
+| Test | `tests/test_engine.py` | `test_bai_cu_hon_since_bi_cat_khong_day_vao_hang_doi`, `test_listing_khong_giam_dan_thi_khong_cat_oan`, `test_site_chua_khai_recent_listings_tra_ket_qua_rong` |
+
+`run_recent()` chỉ đẩy url bài vào hàng đợi (rồi ghi `state.json`), không tải bài; mẻ `--resume`
+kế tiếp tải chúng trước tiên. Site chưa khai trong `RECENT_LISTINGS` thì trả kết quả rỗng.
 
 ### 2.4. Nhịp tự dò (rate limiting)
 
@@ -441,26 +446,26 @@ crawl (gồm `tin-tuc-su-kien` 295 trang) sau một lần `--seed-file` xoá fro
 ## 3. Bóc tách nội dung — khối, trường, đồ thị
 
 Nằm ở `hust-search/src/main/java/vn/hust/search/extract/`. Cửa vào duy nhất là
-`Extractor.extract(html, url, khuon)`; các route chỉ giải base64 (`RawStore.decodeHtml`) rồi gọi
+`Extractor.extract(html, url, templateFps)`; các route chỉ giải base64 (`RawStore.decodeHtml`) rồi gọi
 hàm này, nên `/api/fetch`, `/api/index/run` (nguồn kho thô) và
 `/api/extract/run` (ghi Mongo) dùng **cùng một bộ bóc tách**.
 
-### 3.1. Thứ tự các bước trong `boc_tach()`
+### 3.1. Thứ tự các bước trong `Extractor.extract()`
 
 Thứ tự có chủ ý: liên kết và JSON-LD phải lấy **trước** khi dọn cây, vì dọn cây
 xoá mất `<script>` (chứa JSON-LD) và `<nav>`/`<footer>` (chứa cạnh khuôn).
 
 ```mermaid
 flowchart TD
-    H(["HTML thô + url"]) --> S["BeautifulSoup(lxml)"]
-    S --> J["truong.json_ld()<br/>đọc JSON-LD trong &lt;script&gt;"]
-    S --> R["lien_ket.thu_thap()<br/>mọi a[href], img[src|data-src], og:image<br/>mỗi cạnh giữ tham chiếu tới thẻ của nó"]
-    S --> M["meta: article:section,<br/>tác giả từ microdata/meta/JSON-LD"]
-    J & R & M --> K["khoi.tim_khoi()<br/>dọn cây → khử khuôn → chọn khối (3.2)"]
-    K --> T["truong: tiêu đề, ngày đăng,<br/>dòng 'Tác giả:' / 'Nguồn:' cuối khối (3.4)"]
-    K --> C["lien_ket.chia(raw, khối)<br/>cạnh trong khối / ngoài khối (3.5)"]
-    T & C --> OUT(["dict: title, text, html, date, author,<br/>cited_source, block, links, nav_links,<br/>outgoing_links"])
-    T -.->|"không có tiêu đề lẫn chữ"| NONE(["None — bỏ trang"])
+    H(["HTML thô + url"]) --> S["Jsoup.parse()"]
+    S --> J["Fields.jsonLd()<br/>đọc JSON-LD trong &lt;script&gt;"]
+    S --> R["Links.collect()<br/>mọi a[href], img[src|data-src], og:image<br/>mỗi cạnh giữ tham chiếu tới thẻ của nó"]
+    S --> M["Fields.section(), Fields.authorMeta()<br/>article:section, tác giả microdata/meta/JSON-LD"]
+    J & R & M --> K["ContentBlock.findBlock()<br/>dọn cây → khử khuôn → chọn khối (3.2)"]
+    K --> T["Fields.title / publishedDate /<br/>authorAndSourceLines (3.4)"]
+    K --> C["Links.split(raw, khối)<br/>cạnh trong khối / ngoài khối (3.5)"]
+    T & C --> OUT(["record Extraction: title, text, html, date, author,<br/>citedSource, block, links, navLinks,<br/>outgoingLinks"])
+    T -.->|"không có tiêu đề lẫn chữ"| NONE(["null — bỏ trang"])
 ```
 
 ### 3.2. Thuật toán tìm khối nội dung (`ContentBlock.java`)
@@ -474,11 +479,11 @@ lại trước khi trích dẫn. Cách cài là bản đơn giản hoá tự vi�
 
 ```mermaid
 flowchart TD
-    A(["soup"]) --> L1["<b>Lớp 1 — dọn cây</b> (don_cay)<br/>bỏ script, style, noscript, iframe, form, svg, button,<br/>input, select, nav, footer, aside, template;<br/>bỏ thẻ hidden / display:none và comment"]
-    L1 --> L2["<b>Lớp 2 — khử khuôn theo host</b> (khuon.bo_khuon)<br/>xoá khối lá có vân tay nằm trong bảng khuôn của host (3.3)"]
+    A(["cây jsoup"]) --> L1["<b>Lớp 1 — dọn cây</b> (cleanTree)<br/>bỏ script, style, noscript, iframe, form, svg, button,<br/>input, select, nav, footer, aside, template;<br/>bỏ thẻ hidden / display:none và comment"]
+    L1 --> L2["<b>Lớp 2 — khử khuôn theo host</b> (Template.removeTemplate)<br/>xoá khối lá có vân tay nằm trong bảng khuôn của host (3.3)"]
     L2 --> SEL{"host có selector<br/>đã kiểm chứng?<br/>(hust.edu.vn → .bodytext)"}
     SEL -- "có và khớp, có chữ" --> MS(["method = selector"])
-    SEL -- "không / không khớp" --> TK["<b>Lớp 3 — chấm điểm</b><br/>_thong_ke(): tính C, LC, P, Q cho mọi nút,<br/>một lượt từ lá lên gốc"]
+    SEL -- "không / không khớp" --> TK["<b>Lớp 3 — chấm điểm</b><br/>stats(): tính C, LC, P, Q cho mọi nút,<br/>một lượt từ lá lên gốc; nodeScore() × weight()"]
     TK --> E{"body có chữ?"}
     E -- không --> FB(["method = fallback<br/>lấy cả body"])
     E -- có --> N0["node = body"]
@@ -490,7 +495,7 @@ flowchart TD
     TH -- "không: chữ trải đều nhiều con" --> HE
 ```
 
-**Công thức điểm** (hằng số trong `ContentBlock.java`):
+**Công thức điểm** (hằng số `ALPHA`, `BETA`, `GAMMA`, `DELTA` trong `ContentBlock.java`):
 
 ```
 C  = số ký tự chữ của nút          LC = số ký tự nằm trong <a>
@@ -510,7 +515,7 @@ Trực giác: khối nội dung có nhiều chữ thường, ít chữ trong lin
 thì đi tiếp, không thì dừng — vì khi đó chữ đang trải đều nhiều con (ví dụ thân
 bài chia thành nhiều `div` anh em), chọn một con sẽ cắt mất nội dung.
 
-Ví dụ thật trên trang mẫu WordPress tổng hợp (`tests/fixtures/html/wordpress.test/00.html`),
+Ví dụ thật trên trang mẫu WordPress tổng hợp (`hust-search/src/test/resources/html/wordpress.test/00.html`),
 số lấy từ `/api/extract/explain`:
 
 | Bậc | Cha (điểm) | Ngưỡng 65% | Con tốt nhất (điểm) | Kết luận |
@@ -525,8 +530,8 @@ Kết quả: còn 391/890 ký tự của trang (dọn cây bỏ 109, phần ngo�
 với cả `body`. **Chỉ mới đo trên trang tổng hợp** (bộ mẫu trong test), chưa đo
 trên trang thật có nhãn; bản Java khớp bản Python 100% trên 3.438 trang kho thật. Các hằng số α, β, γ, δ là khởi điểm, chưa được dò.
 
-**Xem trực quan:** tab **Bóc tách khối** trên giao diện vẽ lại đúng các bước
-này cho từng trang (mục 7.2).
+**Xem từng bước:** `GET /api/extract/explain?url=` (`Extractor.explain()`) chạy lại đúng các bước
+này trên HTML thô trong kho và trả số liệu từng bậc (mục 7.2).
 
 ### 3.3. Khử khuôn theo host (`Template.java`)
 
@@ -536,13 +541,13 @@ bản xuất hiện trên quá nhiều trang của một host thì là khuôn.
 ```mermaid
 flowchart LR
     P["Mỗi trang của host"] --> KL["Khối lá: p, li, td, div, h1-h6…<br/>không chứa khối con"]
-    KL --> VT["Vân tay = sha1(chữ thường hoá,<br/>gộp khoảng trắng, số → 0)[:16]"]
+    KL --> VT["fingerprint() = sha1(chữ thường hoá,<br/>gộp khoảng trắng, số → 0)[:16]"]
     VT --> DEM["Đếm theo host:<br/>vân tay → số trang có nó"]
     DEM --> M[("Mongo templates<br/>{_id: host, n_pages, blocks}")]
     M --> Q{"host ≥ 20 trang?"}
     Q -- không --> NO["không khử khuôn<br/>(không đủ mẫu)"]
     Q -- có --> KH["khuôn = vân tay có mặt<br/>trên > 30% số trang"]
-    KH --> BO["bo_khuon(): xoá các khối lá đó<br/>trước khi chấm điểm"]
+    KH --> BO["removeTemplate(): xoá các khối lá đó<br/>trước khi chấm điểm"]
 ```
 
 Bảng dựng một lần bằng `POST /api/extract/templates`. Để document không vượt
@@ -585,12 +590,12 @@ chúng:
 
 ```mermaid
 flowchart TD
-    E(["Một cạnh lấy từ thu_thap()"]) --> IN{"thẻ của cạnh nằm<br/>trong khối nội dung?<br/>(hoặc og:image)"}
+    E(["Một cạnh lấy từ Links.collect()"]) --> IN{"thẻ của cạnh nằm<br/>trong khối nội dung?<br/>(hoặc og:image)"}
     IN -- không --> NAV["<b>cạnh khuôn</b>"]
     IN -- có --> FN{"ảnh khuôn?<br/>đường dẫn /themes/ /templates/ /assets/<br/>hoặc rộng/cao ≤ 16 px"}
     FN -- có --> NAV
     FN -- không --> CT["<b>cạnh nội dung</b>"]
-    CT --> KIND["dst_kind = loai_dich(dst)<br/>ngoài họ hust.edu.vn → external<br/>pdf/doc(x)/xls(x)/ppt(x), download=1 → document<br/>jpg/png/gif/webp/svg… → image<br/>còn lại → page"]
+    CT --> KIND["dst_kind = destKind(dst)<br/>ngoài họ hust.edu.vn → external<br/>pdf/doc(x)/xls(x)/ppt(x), download=1 → document<br/>jpg/png/gif/webp/svg… → image<br/>còn lại → page"]
     KIND --> LK[("links<br/>từng cạnh: src, dst, type, text, count")]
     NAV --> NL[("nav_links<br/>gộp theo (host, dst, type, text):<br/>n_pages, sample_src ≤ 3")]
 ```
@@ -624,22 +629,23 @@ flowchart LR
 ```
 
 Văn bản mô tả của cạnh: chữ của `<a>` → `title` → `aria-label` → `alt` của ảnh
-con; với ảnh: `alt` → `title` → `figcaption`. Mọi url đi qua `crawl_all.norm()`.
+con; với ảnh: `alt` → `title` → `figcaption`. Mọi url đi qua `Url.norm()` (bản sao `crawl_all.norm()`,
+kiểm bằng `UrlGoldenTest`).
 `outgoing_links` của schema public là cạnh `href` trong khối, mỗi url một dòng.
 
-### 3.6. Ghi kho thô vào Mongo (`trich.chay_extract`)
+### 3.6. Ghi kho thô vào Mongo (`Pipeline.runExtract`)
 
 ```mermaid
 flowchart TD
-    R(["mỗi bản ghi kho thô"]) --> N["url = norm(url)<br/>key = dedup_key(url)"]
+    R(["mỗi bản ghi kho thô"]) --> N["url = Url.norm(url)<br/>key = Url.dedupKey(url)"]
     N --> D{"key đã gặp?"}
     D -- có --> AL["thêm url vào aliases<br/>của trang chính, bỏ qua"]
-    D -- không --> B["boc_tach(html, url, khuôn của host)"]
+    D -- không --> B["Extractor.extract(html, url, khuôn của host)"]
     B --> OK{"có kết quả?"}
     OK -- không --> SK["skipped += 1"]
     OK -- có --> BUF["bộ đệm: page + các cạnh nội dung<br/>gom nav_links và ảnh vào bộ nhớ"]
     BUF --> F{"đủ 200 trang?"}
-    F -- có --> W["xả: links.delete_many(src ∈ lô)<br/>pages.replace_one(upsert)<br/>links.insert_many"]
+    F -- có --> W["flush(): links.deleteMany(src ∈ lô)<br/>pages.bulkWrite(ReplaceOne, upsert)<br/>links.insertMany"]
     F -- không --> R
     W --> R
     R -. "hết kho" .-> END["xả lô cuối<br/>nav_links, images: xoá rồi ghi lại toàn bộ"]
@@ -658,11 +664,11 @@ Ba bước, chạy nền qua API, mỗi tệp đi qua các trạng thái:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending: danh_muc()<br/>cạnh nội dung dst_kind=document<br/>hoặc bản ghi kho có content-type pdf/office
+    [*] --> pending: catalog()<br/>cạnh nội dung dst_kind=document<br/>hoặc bản ghi kho có content-type pdf/office
     pending --> error: robots.txt cấm / HTTP ≥ 400 / lỗi mạng
     pending --> skipped_too_large: tệp lớn hơn 50 MB
     pending --> unsupported: tải về nhưng định dạng không hỗ trợ
-    pending --> da_tai: tai()<br/>ghi data/files/sha1.ext
+    pending --> da_tai: download()<br/>ghi data/files/sha1.ext
     da_tai --> ok: extractText()<br/>Apache Tika (pdf, docx, xlsx, pptx, doc, xls, ppt)
     da_tai --> error: lỗi bóc / mất tệp
     ok --> [*]: có chữ → index kind=document
@@ -689,7 +695,7 @@ chữ mô tả từng gặp; `is_template = true` nếu ảnh chỉ xuất hiệ
 ## 5. Lưu trữ MongoDB
 
 Lược đồ ràng buộc bằng `$jsonSchema` trong `mongo-schema.json` (`mongo/Db.java` nạp), tạo lúc `search` khởi động; đã được MongoDB thật kiểm (`integration_bt.sh`, `MongoTest`).
-Mô tả đầy đủ từng trường ở `hust-search/SCHEMA.md`.
+Mô tả đầy đủ từng trường ở [`SCHEMA.md`](SCHEMA.md).
 
 ```mermaid
 erDiagram
@@ -760,7 +766,7 @@ lại không bị lệch.
 **Vì sao MongoDB:** Lucene không hợp để lưu quan hệ "ai trỏ tới ai". Các truy vấn
 đề bài cần (cạnh vào một bước, đếm bậc, xuất CSV) đều là truy vấn một bước. Phân
 tích nhiều bước (đường đi, PageRank) thì xuất `GET /api/graph/edges.csv` sang
-networkx/Gephi. So sánh với các lựa chọn khác ở `hust-search/KE-HOACH-BOC-TACH.md` mục 8.
+networkx/Gephi.
 
 **Đã kiểm chứng (03/10/2026):** `MongoTest` và `integration_bt.sh` chạy trên MongoDB 7.0 thật và kho thật,
 kể cả việc `$jsonSchema` từ chối bản ghi sai (bản Python dùng `mongomock` nên chưa từng thử được điều này).
@@ -773,11 +779,11 @@ kể cả việc `$jsonSchema` từ chối bản ghi sai (bản Python dùng `mo
 
 | Thành phần | Công nghệ | File |
 |---|---|---|
-| Lõi tìm kiếm | **Apache Lucene 9.11.1** thuần | `lucene/` |
-| Ngôn ngữ | Java 21 | |
-| HTTP | `com.sun.net.httpserver` có sẵn trong JDK | `SearchServer.java` |
-| JSON | Jackson `jackson-databind` 2.17.2 | |
-| Build | Maven, jar mỏng + `lib/` (**không shade** — 6.7) | `pom.xml` |
+| Lõi tìm kiếm | **Apache Lucene 9.11.1** thuần | `Index.java`, `Fold.java`, `Rank.java`, `Sig.java` |
+| Ngôn ngữ | Java 21, chung tiến trình với API và bóc tách | |
+| HTTP | `com.sun.net.httpserver` có sẵn trong JDK, mỗi yêu cầu một virtual thread | `web/Http.java` |
+| JSON | Jackson `jackson-databind` | |
+| Build | Maven, jar mỏng + `lib/` (**không shade** — 6.7) | `hust-search/pom.xml` |
 
 ### 6.2. Nạp index
 
@@ -814,12 +820,13 @@ lần tải.
 | `section` | `TextField` | có | chuyên mục |
 | `author` | `TextField` | có | tác giả — hiện chỉ lưu và hiển thị, chưa đưa vào truy vấn |
 | `kind` | `StringField` | có | `page` / `document`, lọc được |
+| `ftype` | `StringField` | có | loại tệp: `html` cho trang, đuôi url (`pdf`, `docx`…) cho tệp; lọc được (`fileType()`) |
 | `date` / `date_num` | `StringField` / `LongPoint` + `NumericDocValuesField` | có / không | hiển thị; lọc khoảng và sắp theo ngày (`0` = không rõ) |
 | `sig` | `StoredField` | có | vân tay SimHash 64-bit (6.6) |
 | `html` | `StoredField` | có | HTML đã dọn, chỉ để xem trước |
 
 Mỗi trường chữ index hai lần (còn dấu / bỏ dấu) bằng `PerFieldAnalyzerWrapper`.
-`Fold.bo_dau()` tự viết: chuẩn hoá NFD, bỏ ký tự `NON_SPACING_MARK`, xử lý tay
+`Fold.stripAccents()` tự viết: chuẩn hoá NFD, bỏ ký tự `NON_SPACING_MARK`, xử lý tay
 `đ`/`Đ` (NFD không tách được). Hai bản dùng chung `StandardTokenizer` nên token
 cùng vị trí, truy vấn cụm chạy đúng trên cả hai.
 
@@ -827,16 +834,16 @@ cùng vị trí, truy vấn cụm chạy đúng trên cả hai.
 
 ```mermaid
 flowchart TD
-    Q(["GET /search?q=&ranking=&sort=&host=&kind=&from=&to="]) --> R{"ranking?"}
-    R -- tfidf --> T["dungTruyVanTfidf()<br/>ClassicSimilarity trên title_kd + text_kd,<br/>trọng số bằng nhau, AND"]
-    R -- enhanced --> EN["dungTruyVan(), AND<br/>nhánh còn dấu: title 3,0 · section 1,5 · text 1,0<br/>nhánh bỏ dấu: title_kd 2,0 · text_kd 0,7<br/>+ thưởng cụm liền nhau (themCum)<br/>+ thưởng cặp âm tiết (themCumDoi)"]
-    T & EN --> F["loc(): host, kind, khoảng ngày<br/>bằng FILTER — không góp điểm"]
+    Q(["GET /api/search?q=&ranking=&sort=&host=&kind=&ftype=&date_from=&date_to="]) --> R{"ranking?"}
+    R -- tfidf --> T["buildTfidfQuery()<br/>ClassicSimilarity trên title_kd + text_kd,<br/>trọng số bằng nhau, AND"]
+    R -- enhanced --> EN["buildQuery(), AND<br/>nhánh còn dấu: title 3,0 · section 1,5 · text 1,0<br/>nhánh bỏ dấu: title_kd 2,0 · text_kd 0,7<br/>+ thưởng cụm liền nhau (addPhrase)<br/>+ thưởng cặp âm tiết (addBigramPhrases)"]
+    T & EN --> F["withFilters(): host, kind, ftype, khoảng ngày<br/>bằng FILTER — không góp điểm"]
     F --> S["tìm, cửa sổ = min(1000, max(5 × cần, 50))"]
     S --> Z{"0 kết quả?"}
-    Z -- có --> V["vét lại bằng OR<br/>đòi khớp quá nửa số âm tiết (itNhat 0,5)"] --> X
-    Z -- không --> X["xepLai(): chỉ enhanced mới<br/>nhân điểm nền Rank.diemNen()"]
-    X --> G["gopTrung(): gộp bản trùng nội dung<br/>bằng SimHash, TRƯỚC khi cắt trang"]
-    G --> H["cắt [from, from+size)<br/>doanTrich(): Highlighter + một QueryScorer dùng chung → &lt;mark&gt;"]
+    Z -- có --> V["vét lại bằng OR<br/>đòi khớp quá nửa số âm tiết (relaxMinimumMatch 0,5)"] --> X
+    Z -- không --> X["rerank(): chỉ enhanced mới<br/>nhân điểm nền Rank.baseScore()"]
+    X --> G["mergeDuplicates(): gộp bản trùng nội dung<br/>bằng SimHash, TRƯỚC khi cắt trang"]
+    G --> H["cắt [from_, from_+size)<br/>snippets(): Highlighter + một QueryScorer dùng chung → &lt;mark&gt;"]
     H --> OUT(["hits: url, title, host, date, author, kind,<br/>score, fragments, duplicates"])
 ```
 
@@ -846,7 +853,7 @@ thuật toán, không pha tín hiệu ngoài.
 **Chế độ `enhanced`** thêm: hai nhánh còn dấu / bỏ dấu (gõ đủ dấu thì cả hai cùng
 khớp nên luôn xếp trên); thưởng cụm vì `StandardAnalyzer` cắt tiếng Việt theo âm
 tiết ("kỹ thuật" thành 2 token); thưởng từng cặp âm tiết liền nhau cho câu dài; và
-nhân điểm nền `Rank.diemNen()` theo loại trang (`/page-N/` 0,50 · cửa vào chuyên
+nhân điểm nền `Rank.baseScore()` theo loại trang (`/page-N/` 0,50 · cửa vào chuyên
 mục 0,70 · bài `.html` 1,00), độ dài (`0,75 + 0,25 × min(1, ký_tự/1200)`) và độ mới
 (`0,92 + 0,16 × e^(−tuổi/3)`). Biên độ cố ý nhẹ (~0,35×).
 
@@ -887,11 +894,12 @@ Ngưỡng 3 bit đo thực nghiệm: từ 106 shingle trở lên, hai bản củ
 index. `pom.xml` build jar mỏng + `maven-dependency-plugin` chép jar phụ thuộc vào
 `lib/`, classpath khai trong manifest.
 
-### 6.8. `SearchServer.java`
+### 6.8. Lucene trong cùng tiến trình
 
-`HttpServer` của JDK, `Executors.newFixedThreadPool(8)`. Endpoint: `/bulk`,
-`/search`, `/list`, `/dict`, `/posting`, `/doc`, `/stats`, `/reset`, `/health`.
-Lỗi cú pháp truy vấn trả **400** chứ không phải 500.
+Không còn server Lucene riêng (bản cũ `SearchServer.java`, cổng 8081): `ApiSearch` gọi thẳng `Index`
+(`put`, `search`, `listAll`, `termDictionary`, `getPosting`, `getDocument`, `reset`). Các đường cũ đổi
+thành `/api/search`, `/api/index/list`, `/api/index/dict`, `/api/index/posting`, `/api/preview`,
+`/api/index/stats`. Lỗi cú pháp truy vấn trả **400** `{"error": ...}` (giao diện đọc `d.error`), không phải 500.
 
 ---
 
@@ -900,7 +908,7 @@ Lỗi cú pháp truy vấn trả **400** chứ không phải 500.
 ### 7.1. Job nền và dây chuyền bóc tách
 
 Các việc dài (dựng khuôn, bóc tách, tải tệp, bóc chữ) chạy trên một luồng nền,
-**mỗi lúc một job** (`_chay_nen`, gọi trùng trả 409). Tiến độ đọc ở
+**mỗi lúc một job** (`web/BackgroundJob.run()`, gọi trùng trả 409). Tiến độ đọc ở
 `GET /api/extract/status`; số liệu từng bước ở `GET /api/extract/overview`.
 
 ```mermaid
@@ -935,10 +943,10 @@ flowchart LR
     T2 --> E2["/api/fetch"]
     T3 --> E3["/api/index/list"]
     T4 --> E4["/api/index/dict · /posting"]
-    T5 --> E5["/api/extract/explain"]
+    T5 --> E5["/api/extract/url"]
     T6 --> E6["/api/referrers · /api/graph/out<br/>/api/graph/stats · edges.csv"]
     T7 --> E7["/api/files · /api/images"]
-    T8 --> E8["/api/stats · /api/crawl/*<br/>/api/index/* · /api/extract/*"]
+    T8 --> E8["/api/stats · /api/crawl/* (cả mode=recent)<br/>/api/index/* · /api/extract/*"]
     T1 -. "nút Nguồn giới thiệu" .-> T6
     T1 -. "nút Khối nội dung" .-> T5
     T5 -. "Xem đồ thị quanh trang" .-> T6
@@ -947,18 +955,19 @@ flowchart LR
 
 Ba phần vẽ trực quan cho bóc tách và đồ thị:
 
-- **Bóc tách khối** (`/api/extract/explain`): chạy lại bước chọn khối trên HTML thô
-  trong kho (không gọi lại site; có Mongo thì dùng thêm bảng khuôn). Vẽ ① phễu số
-  ký tự còn lại sau mỗi lớp, ② các bậc đi xuống cây — thanh điểm của cha và từng con,
-  vạch ngưỡng 65%, câu kết luận "đi xuống" / "dừng", ③ thanh chia liên kết trong khối
-  (cạnh nội dung) / ngoài khối (cạnh khuôn). `tim_khoi()` nhận tham số `vet` tuỳ
-  chọn để ghi các bậc này; không truyền thì kết quả như cũ (có test).
+- **Bóc tách khối** (`POST /api/extract/url`): nhận url bất kỳ, lấy HTML trong kho hoặc tải từ web
+  (nhịp ≥ 3 s), bóc tách, ghi Mongo + Lucene, rồi hiện tiêu đề / ngày / tác giả / nguồn (rê chuột
+  xem lấy từ đâu), nội dung ở hai chế độ "Trình bày" (HTML đã dọn, khung cách ly) và "Văn bản",
+  và bảng liên kết trong bài (`veKetQuaTrang()`); url là pdf/docx/… thì bóc chữ vào `documents`
+  (`veKetQuaTep()`). Số liệu từng bậc chọn khối (phễu chữ, điểm cha/con, ngưỡng 65%, cạnh trong /
+  ngoài khối) lấy ở `GET /api/extract/explain?url=`: `ContentBlock.findBlock()` nhận tham số `trace`
+  tuỳ chọn để ghi các bậc; truyền `null` thì kết quả như cũ.
 - **Đồ thị liên kết:** đồ thị hình sao bằng SVG — trái là trang trỏ tới, giữa là url
   đang xem, phải là nơi nó trỏ đi; màu theo loại đích, menu/footer nét đứt; tối đa
   12 ô mỗi cột, phần dư gộp "+N nữa"; bấm một ô để chuyển tâm. Dạng bảng vẫn còn
   trong "Xem dạng bảng".
-- **Bảng điều khiển:** bốn bước ở 7.1 vẽ thành dải ô nối mũi tên, mỗi ô ghi số liệu
-  đã có, sáng viền khi đang chạy.
+- **Bảng điều khiển:** bốn bước ở 7.1 vẽ thành dải ô nối mũi tên (`veDayChuyen()`), mỗi ô ghi
+  số liệu đã có, sáng viền khi đang chạy. Ô chế độ crawl có "Mới nhất theo thời gian" (2.3.1).
 
 Ảnh chụp các phần này đã chạy trên stack với kho thật (API khớp mẫu bản Python);
 giao diện chưa được rà lại bằng mắt sau khi port. `/api/extract/explain` phải quét kho thô để tìm HTML của url
@@ -983,7 +992,7 @@ Image `crawler` không có Playwright. `docker compose down` (không `-v`) giữ
 
 | Bộ test | Số lượng | Công cụ | Việc kiểm |
 |---|---|---|---|
-| Engine crawler | 32 | `pytest` | `norm`, `dedup_key`, `expand_pagination`, nhịp, flush, resume |
+| Engine crawler | 34 | `pytest` | `norm`, `dedup_key`, `expand_pagination`, nhịp, flush, resume, chế độ `recent` |
 | Java (`hust-search`) | 115 | JUnit 5 (+ `-Pstack`: 2 test `ApiGoldenTest`) | `Url` khớp golden 100%; đọc kho; bóc tách khớp bản Python trên 3.438 trang kho thật; Tika; Mongo THẬT (`$jsonSchema`); HTTP (`ApiTest`, `ExtractUrlTest`); index, tìm, highlight, gộp trùng, xếp hạng (`IndexTest` 31) |
 | Tích hợp tìm kiếm | 33 kiểm tra | bash `tests/integration.sh` | đường đi thật trên stack đang chạy |
 | Tích hợp bóc tách | 19 kiểm tra | bash `tests/integration_bt.sh` | job nền, Mongo thật, đồ thị, tệp, validator — đã chạy 19/19 trên kho thật |
@@ -1030,6 +1039,7 @@ overlap@10 của 25 truy vấn × 2 ranking đạt 0,97. **Chưa đo:** độ ch
 | Nhịp tự dò | `hust-crawler/crawl_all.py` | `_wait_turn/_slow_down/_speed_up` |
 | Khử trùng bài | `hust-crawler/crawl_all.py` | `dedup_key()` — KHÔNG dùng `art_id()` |
 | Phân trang | `hust-crawler/crawl_all.py` | `expand_pagination()`, `PAGE_PATTERNS` |
+| Chế độ mới nhất theo ngày | `hust-crawler/crawl_all.py`, `crawlctl.py`, `web/ApiCrawl.java` | `run_recent()`, `RECENT_LISTINGS`, `validateRecent()` |
 | Lưu trữ thô | `hust-crawler/crawl_all.py` | `Store` |
 | Render JS | `hust-crawler/render.py` | `looks_blocked()` |
 | Soát kho | `hust-crawler/read_raw.py` | `--audit/--check/--fix-roots/--verify-links` |
@@ -1042,13 +1052,14 @@ overlap@10 của 25 truy vấn × 2 ranking đạt 0,97. **Chưa đo:** độ ch
 | Chuẩn hoá url (bản sao `crawl_all`) | `store/Url.java` | `norm()`, `dedupKey()`, `kindOf()` |
 | Kho thô | `store/RawStore.java`, `store/Download.java` | `allRecords()`, `findRecord()`, `append()` |
 | Kho thô → Mongo, Mongo → Lucene | `mongo/Pipeline.java` | `runExtract()`, `buildTemplates()`, `luceneFromMongo()` |
-| Lược đồ Mongo | `mongo/Db.java`, `mongo-schema.json`, `SCHEMA.md` | `init()` |
+| Lược đồ Mongo | `mongo/Db.java`, `mongo-schema.json`, `docs/SCHEMA.md` | `init()` |
 | Route bóc tách/đồ thị/tệp | `web/ApiExtract.java` | `/api/extract/*`, `/api/referrers`, `/api/graph/*`, `/api/files` |
 | Route index/tìm/tải lẻ/crawl | `web/ApiSearch.java`, `web/ApiCrawl.java`, `hust-crawler/crawlctl.py` | `indexRun`, `indexDocuments`, `fetch`, `search` |
-| Schema Lucene, xếp hạng | `hust-search/lucene/.../Index.java` | `put()`, `dungTruyVanTfidf/dungTruyVan`, `loc()`, `gopTrung()` |
-| Điểm nền | `hust-search/lucene/.../Rank.java` | `diemNen()` |
-| Bỏ dấu | `hust-search/lucene/.../Fold.java` | `bo_dau()` |
-| SimHash | `hust-search/lucene/.../Sig.java` | `fingerprint()`, `distance()`, `sameArticle()` |
-| HTTP Lucene | `hust-search/lucene/.../SearchServer.java` | — |
-| Giao diện | `hust-search/api/static/index.html` | `veKhoi()`, `veDoThiSao()`, `veDayChuyen()` |
-| Đóng gói | `hust-search/docker-compose.yml`, `lucene/pom.xml` | — |
+| Schema Lucene, xếp hạng | `Index.java` | `put()`, `buildTfidfQuery()/buildQuery()`, `withFilters()`, `rerank()`, `mergeDuplicates()`, `snippets()` |
+| Điểm nền | `Rank.java` | `baseScore()` |
+| Bỏ dấu | `Fold.java` | `stripAccents()` |
+| SimHash | `Sig.java` | `fingerprint()`, `distance()`, `sameArticle()` |
+| HTTP, job nền | `web/Http.java`, `web/BackgroundJob.java`, `Main.java` | `start()`, `run()` |
+| Giao diện | `hust-search/static/index.html` | `veKetQuaTrang()`, `veDoThiSao()`, `veDayChuyen()` |
+| Sơ đồ luồng dữ liệu | `docs/so-do-luong-du-lieu.html` | — |
+| Đóng gói | `docker-compose.yml` (gốc repo), `hust-search/Dockerfile`, `hust-search/pom.xml` | — |

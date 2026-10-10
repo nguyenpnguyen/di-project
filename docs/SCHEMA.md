@@ -1,16 +1,17 @@
 # Lược đồ MongoDB (phần "tự xây dựng lược đồ + mô tả" của đề)
 
-Ràng buộc `$jsonSchema` nằm ở `api/db.py` (`SCHEMAS`), cùng các index (`INDEXES`),
-được tạo lúc `api` khởi động. **Chưa kiểm chứng validator trên MongoDB thật**:
-test dùng mongomock, không thực thi `$jsonSchema`.
+Ràng buộc `$jsonSchema` (khoá `schemas`) và các index (khoá `indexes`) nằm ở
+`hust-search/src/main/resources/mongo-schema.json`; `mongo/Db.java` (`init()`) nạp file này và tạo
+collection lúc service `search` khởi động. Validator đã được MongoDB 7.0 thật kiểm
+(`MongoTest`, `tests/integration_bt.sh`, 03/10/2026), kể cả việc từ chối bản ghi sai.
 
-Luồng ghi (chi tiết và sơ đồ thuật toán ở `../BAO-CAO-KY-THUAT.md` mục 3-5):
+Luồng ghi (chi tiết và sơ đồ thuật toán ở [`BAO-CAO-KY-THUAT.md`](BAO-CAO-KY-THUAT.md) mục 3-5):
 
 ```mermaid
 flowchart LR
     K[("kho thô<br/>data/raw*/")] -->|"POST /api/extract/templates"| T[("templates")]
     T -.->|"khử khuôn theo host"| X
-    K -->|"POST /api/extract/run<br/>boc_tach()"| X["một trang"]
+    K -->|"POST /api/extract/run<br/>Extractor.extract()"| X["một trang"]
     X --> P[("pages")]
     X -->|"cạnh trong khối"| L[("links")]
     X -->|"cạnh ngoài khối,<br/>gộp theo host"| N[("nav_links")]
@@ -20,7 +21,8 @@ flowchart LR
     P & D -->|"POST /api/index/run"| LU["Lucene"]
 ```
 
-Chạy lại `POST /api/extract/run` không nhân đôi bản ghi: `pages` ghi theo `_id`;
+Ghi do `mongo/Pipeline.java` (`buildTemplates`, `runExtract`) và `mongo/DocumentJob.java`
+(`catalog`, `download`, `extractText`) đảm nhận. Chạy lại `POST /api/extract/run` không nhân đôi bản ghi: `pages` ghi theo `_id`;
 `links` xoá theo `src` rồi ghi lại; `nav_links` và `images` dựng lại từ đầu.
 
 ## Quan hệ giữa các collection
@@ -75,15 +77,15 @@ erDiagram
     }
 ```
 
-`dst` của `links` / `nav_links` là url thô đã qua `norm()`, không phải khoá ngoại
+`dst` của `links` / `nav_links` là url đã qua `Url.norm()` (bản sao `crawl_all.norm()`), không phải khoá ngoại
 cứng: một cạnh có thể trỏ tới trang chưa crawl, tệp chưa tải hay site ngoài.
 
 ## pages — một bài / trang
 | Trường | Ý nghĩa |
 |---|---|
-| `_id` | url đã qua `crawl_all.norm()`; bài trùng theo `dedup_key()` gộp về url gặp đầu tiên |
+| `_id` | url đã qua `Url.norm()`; bài trùng theo `Url.dedupKey()` gộp về url gặp đầu tiên |
 | `aliases` | các url khác của cùng bài |
-| `host`, `lang`, `kind` | host; `vi`/`en` theo tiền tố `/en/`; `kind_of()` của crawler |
+| `host`, `lang`, `kind` | host; `vi`/`en` theo tiền tố `/en/`; `Url.kindOf()` (bản sao `kind_of()` của crawler) |
 | `title`, `title_src` | tiêu đề và nguồn lấy: `headline`, `og:title`, `json-ld`, `h1`, `title` |
 | `published_at`, `published_at_src` | `YYYY-MM-DD` hoặc rỗng; nguồn: `datePublished`, `article:published_time`, `json-ld`, `time`, `regex` |
 | `author`, `author_src` | `microdata`, `meta`, `json-ld`, `text-line` (dòng "Tác giả:" cuối bài); bỏ giá trị chung như `admin` |
@@ -128,18 +130,19 @@ không dùng để khử khuôn; khối có mặt trên > 30% số trang là khu
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending: danh_muc()<br/>cạnh nội dung trỏ tới tệp
-    [*] --> unsupported: đuôi doc/xls/ppt cũ
+    [*] --> pending: catalog()<br/>cạnh nội dung trỏ tới tệp<br/>hoặc bản ghi kho là pdf/office
     pending --> error: robots cấm / HTTP ≥ 400 / lỗi mạng
     pending --> skipped_too_large: tệp lớn hơn 50 MB
     pending --> unsupported: định dạng không hỗ trợ
-    pending --> da_tai: tai()<br/>ghi data/files/sha1.ext
-    da_tai --> ok: boc_chu()
+    pending --> da_tai: download()<br/>ghi data/files/sha1.ext
+    da_tai --> ok: extractText()<br/>Apache Tika
     da_tai --> error: lỗi bóc / mất tệp
     ok --> [*]: có chữ → index kind=document
 ```
 
 (`da_tai` là `status = pending` đã có `sha1`; trong Mongo không có trạng thái riêng.)
+Tika đọc được cả doc/xls/ppt cũ; bản ghi cũ còn `unsupported` với đuôi này được
+`DocumentJob.migrateLegacyFormats()` chuyển về `pending`.
 
 Tệp `ok` có chữ được index vào Lucene với `kind = "document"`.
 

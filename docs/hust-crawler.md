@@ -3,6 +3,9 @@
 Bộ công cụ thu thập dữ liệu từ cổng thông tin Đại học Bách khoa Hà Nội, làm cho
 môn Tích hợp dữ liệu (IT5420).
 
+Mã nằm ở `hust-crawler/`; **mọi lệnh và đường dẫn dưới đây (`data/…`, `./hustctl`,
+`.venv/bin/python …`) chạy từ thư mục đó.**
+
 ---
 
 ## 0. LẦN SAU MỞ LÊN THÌ CHẠY GÌ
@@ -84,7 +87,7 @@ flowchart LR
 ```
 
 Sơ đồ chi tiết của vòng crawl, nhịp tự dò, khử trùng và phân trang ở
-`../BAO-CAO-KY-THUAT.md` mục 2.
+[`BAO-CAO-KY-THUAT.md`](BAO-CAO-KY-THUAT.md) mục 2.
 
 Tách ba tầng vì **tải là phần đắt và bị rate-limit, parse thì rẻ và hay phải sửa**.
 Có kho thô rồi thì sửa selector bao nhiêu lần cũng không phải đụng lại mạng —

@@ -1,13 +1,13 @@
 # Thuật toán bóc tách khối nội dung và xây dựng đồ thị liên kết
 
-Tài liệu giải thích cách `hust-search/src/main/java/vn/hust/search/extract/` (bản port Java của `boc_tach/` Python, khớp 100% trên 3.438 trang kho thật) biến **một trang HTML** thành (1) khối nội
+Tài liệu giải thích cách `hust-search/src/main/java/vn/hust/search/extract/` (Java 21 + jsoup; port từ bản Python cũ, khớp 100% trên 3.438 trang kho thật — `PythonParityTest`) biến **một trang HTML** thành (1) khối nội
 dung chính, (2) các trường tiêu đề / ngày / tác giả và (3) các cạnh `nguồn → đích : văn bản mô tả`.
 Mọi con số trong ví dụ ở mục 6 lấy từ một lần chạy thật của chính code này trên một trang mẫu
 nhỏ; mọi biểu đồ là Mermaid, GitHub tự vẽ.
 
 > **Phạm vi trung thực.** Đây là các heuristic tự cài, không dùng học máy. Các hằng số (α, β, γ, δ,
 > ngưỡng 30 %, 20 trang…) là **giá trị khởi điểm chưa được dò trên dữ liệu thật**. Số F1 0,96–0,98
-> trong README chỉ đo trên trang tổng hợp do chúng tôi dựng (bộ mẫu tổng hợp trong `BlockEvaluationTest`), nên chỉ chứng minh
+> do `BlockEvaluationTest` in ra chỉ đo trên trang tổng hợp do chúng tôi dựng (`src/test/resources/html/`), nên chỉ chứng minh
 > thuật toán xử lý được các bố cục đó, không nói gì về độ chính xác trên hust.edu.vn.
 
 Mục lục: [1. Bức tranh chung](#1-bức-tranh-chung) ·
@@ -26,7 +26,7 @@ là cạnh khuôn (menu, footer). Chọn khối sai thì cả chữ đưa vào c
 
 ```mermaid
 flowchart TD
-    A[("Kho thô<br/>HTML base64")] --> B["Parse HTML<br/>(BeautifulSoup + lxml)"]
+    A[("Kho thô<br/>HTML base64")] --> B["Parse HTML<br/>(jsoup)"]
     B --> C["Thu thập mọi cạnh a/img/og:image<br/>TRƯỚC khi dọn cây"]
     B --> D["Đọc JSON-LD, meta<br/>TRƯỚC khi dọn cây"]
     B --> E["<b>Tìm khối nội dung</b><br/>dọn cây → khử khuôn → chấm điểm"]
@@ -51,7 +51,7 @@ Thứ tự "thu thập cạnh và JSON-LD **trước**, dọn cây **sau**" là 
 
 ## 2. Tìm khối nội dung
 
-Hàm `khoi.tim_khoi()`. Ba lớp, chạy tuần tự trên cùng một cây.
+Hàm `ContentBlock.findBlock(doc, host, templateFps, trace)`. Ba lớp, chạy tuần tự trên cùng một cây.
 
 ```mermaid
 flowchart TD
@@ -74,12 +74,12 @@ flowchart TD
     T -- "không: chữ trải đều,<br/>giữ cả khối cha" --> R2(["Khối = nút hiện tại<br/>method = heuristic"])
 ```
 
-### 2.1. Lớp 1 — dọn cây (`don_cay`)
+### 2.1. Lớp 1 — dọn cây (`cleanTree`)
 
 Xoá thẻ không mang nội dung đọc được: `script style noscript iframe form svg button input select nav
 footer aside template`, mọi thẻ có `hidden` hoặc `style="display:none"`, và comment HTML.
 
-### 2.2. Lớp 3 — chấm điểm nút (`_thong_ke`, `_diem`, `_he_so`)
+### 2.2. Lớp 3 — chấm điểm nút (`stats`, `nodeScore`, `weight`)
 
 Với mỗi nút, một lượt duyệt **từ lá lên gốc** tính bốn đặc trưng (cộng dồn từ các con):
 
@@ -96,7 +96,7 @@ $$
 \text{điểm}(n) = \Big[(C-L_C)\cdot\big(1-\tfrac{L_C}{C}\big)^{\alpha} + \beta P + \gamma Q\Big]\times h(n)
 $$
 
-với **α = 2, β = 30, γ = 1**, và hệ số tên lớp `h(n)`:
+với **α = 2, β = 30, γ = 1** (`ALPHA`, `BETA`, `GAMMA` trong `ContentBlock.java`), và hệ số tên lớp `h(n)`:
 
 | Điều kiện (class hoặc id khớp, không phân biệt hoa thường) | `h` |
 |---|---|
@@ -114,7 +114,7 @@ với **α = 2, β = 30, γ = 1**, và hệ số tên lớp `h(n)`:
 ### 2.3. Vòng đi xuống
 
 Bắt đầu ở `<body>`. Mỗi bậc: chấm điểm các con ứng viên, chọn con có điểm cao nhất, và **chỉ đi xuống
-nếu con đó giữ ≥ δ = 65 % điểm của cha**. Nếu không, chữ đang trải đều qua nhiều con (ví dụ trang
+nếu con đó giữ ≥ δ = 65 % điểm của cha** (`DELTA`). Nếu không, chữ đang trải đều qua nhiều con (ví dụ trang
 danh sách) nên giữ nguyên khối cha thay vì chọn một mảnh nhỏ. Vòng dừng khi hết con ứng viên hoặc
 ngưỡng δ không đạt.
 
@@ -140,8 +140,8 @@ flowchart LR
         direction TB
         Q1["Đọc bảng của host"] --> Q2{"n_pages ≥ 20?"}
         Q2 -- không --> Q3["Bỏ qua lớp khử khuôn"]
-        Q2 -- có --> Q4["Khuôn = vân tay có mặt trên<br/>&gt; 30 % số trang"]
-        Q4 --> Q5["Xoá mọi khối lá của trang<br/>có vân tay thuộc khuôn"]
+        Q2 -- có --> Q4["templateSet(): khuôn = vân tay<br/>có mặt trên &gt; 30 % số trang"]
+        Q4 --> Q5["removeTemplate(): xoá mọi khối lá<br/>của trang có vân tay thuộc khuôn"]
     end
     P4 --> Q1
 ```
@@ -179,7 +179,7 @@ flowchart LR
 Chi tiết đáng nhớ:
 - **Bỏ giá trị chung** như `admin`, `administrator`, `webmaster` ở nguồn microdata / meta / JSON-LD
   (đó là tài khoản đăng bài, không phải tác giả).
-- **Dòng tác giả / nguồn bị cắt khỏi nội dung** (`dong_tac_gia_nguon`): tìm ≤ 8 phần tử ngắn (≤ 130 ký
+- **Dòng tác giả / nguồn bị cắt khỏi nội dung** (`authorAndSourceLines`): tìm ≤ 8 phần tử ngắn (≤ 130 ký
   tự) cuối khối khớp `Tác giả:`, `Người viết:`, `Tin, ảnh:`, `Bài, ảnh:`… rồi xoá chúng, để tên người
   viết không lọt vào chỉ mục như chữ của bài.
 - **Nguồn trích dẫn** (`cited_source`) là trường phụ, lấy từ dòng `Nguồn: …` hoặc `Theo …`. Chỉ xét các
@@ -204,15 +204,15 @@ Lớp `Links.java`. Mỗi cạnh là `nguồn → đích : văn bản mô tả`.
 
 ```mermaid
 flowchart TD
-    R["Mọi a[href], img[src|data-src], og:image<br/>của trang gốc (trước khi dọn cây)"] --> N["Chuẩn hoá url qua crawl_all.norm()<br/>(https, bỏ www, bỏ fragment, bỏ tham số rác)"]
+    R["Links.collect(): mọi a[href], img[src|data-src],<br/>og:image của trang gốc (trước khi dọn cây)"] --> N["Chuẩn hoá url qua Url.norm()<br/>(bản sao crawl_all.norm(): https, bỏ www,<br/>bỏ fragment, bỏ tham số rác)"]
     N --> X{"Trỏ về chính trang này?"}
     X -- có --> DROP(["bỏ"])
     X -- không --> Y{"Là ảnh logo / icon?<br/>/themes/ · /templates/ · /assets/<br/>hoặc rộng/cao ≤ 16 px"}
     Y -- có --> NAV
-    Y -- không --> Z{"Phần tử nằm TRONG<br/>khối nội dung đã chọn?"}
+    Y -- không --> Z{"Links.split(): phần tử nằm TRONG<br/>khối nội dung đã chọn?"}
     Z -- "có (hoặc og:image)" --> CONTENT["<b>Cạnh nội dung</b><br/>khử trùng theo (đích, loại, chữ), đếm count"]
     Z -- không --> NAV["<b>Cạnh khuôn</b><br/>menu, footer, sidebar"]
-    CONTENT --> K{"Phân loại đích"}
+    CONTENT --> K{"destKind(): phân loại đích"}
     K --> K1["external — host ngoài họ hust.edu.vn"]
     K --> K2["document — đuôi pdf doc docx xls xlsx ppt pptx<br/>hoặc download=1"]
     K --> K3["image — đuôi jpg png gif webp svg …"]
@@ -255,8 +255,8 @@ db.links.find({dst: "<url>"}, {src: 1, text: 1})                    // người 
 db.nav_links.find({dst: "<url>"}, {host: 1, text: 1, n_pages: 1})   // menu / footer trỏ tới
 ```
 
-Các url bí danh (bài xuất hiện dưới nhiều chuyên mục) được gộp qua `crawl_all.dedup_key()` (đoạn cuối
-đường dẫn) và `/api/referrers` tự đổi bí danh về trang chính trước khi tra.
+Các url bí danh (bài xuất hiện dưới nhiều chuyên mục) được gộp qua `Url.dedupKey()` (bản sao
+`crawl_all.dedup_key()`, đoạn cuối đường dẫn) và `/api/referrers` tự đổi bí danh về trang chính trước khi tra.
 
 ---
 
@@ -276,7 +276,7 @@ Trang mẫu `https://svbk.hust.edu.vn/tin/hb-1.html` (HTML dài 1 kB, tự viế
 <div class="footer"> Copyright Viện CNTT </div>
 ```
 
-Cây DOM và điểm từng nút (số liệu `giai_thich()` trả về):
+Cây DOM và điểm từng nút (số liệu `Extractor.explain()` / `GET /api/extract/explain` trả về):
 
 ```mermaid
 flowchart TD
@@ -333,14 +333,15 @@ Gọi `N` là số nút DOM của một trang, `E` là số cạnh, `B` là số
 
 | Bước | Chi phí | Ghi chú |
 |---|---|---|
-| Parse HTML | O(kích thước HTML) | chiếm phần lớn thời gian |
+| Parse HTML (jsoup) | O(kích thước HTML) | chiếm phần lớn thời gian |
 | Thống kê `C, LC, P, Q` | O(N) | một lượt từ lá lên gốc |
 | Đi xuống cây | O(N) xấu nhất | mỗi bậc chỉ xét con trực tiếp |
 | Khử khuôn một trang | O(B) | băm SHA-1 từng khối lá |
 | Dựng bảng khuôn cả kho | O(tổng B) | một lượt qua kho, chạy một lần |
 | Chia cạnh | O(N + E) | tập `id` của các nút trong khối |
 
-Chưa đo thời gian thật trên kho 6.000 trang; chỉ biết lượt bóc 150 trang mẫu tổng hợp mất vài giây.
+Đo trên stack docker với kho thật (03/10/2026): `POST /api/extract/run` cả kho 3.627 trang mất 12–21 s
+(gồm cả ghi Mongo), tức vài mili giây mỗi trang.
 
 ---
 
@@ -362,7 +363,8 @@ Chưa đo thời gian thật trên kho 6.000 trang; chỉ biết lượt bóc 15
    đến đâu trên kho thật.
 
 Cách kiểm tra từng trang: tab **Bóc tách khối** trên giao diện (`POST /api/extract/url`) cho xem nội
-dung và liên kết đã bóc của một url bất kỳ; `GET /api/extract/explain?url=` trả số liệu từng bậc ở mục 2. Công cụ so chỉ mục bóc cũ với bóc mới (`so_sanh.py`) đã bỏ cùng bản Python.
+dung và liên kết đã bóc của một url bất kỳ; `GET /api/extract/explain?url=` trả số liệu từng bậc ở mục 2.
+Công cụ so chỉ mục bóc cũ với bóc mới (`so_sanh.py`) đã bỏ cùng bản Python.
 
 ---
 
@@ -389,8 +391,7 @@ tưởng; đề bài yêu cầu tự cài thuật toán nên chúng được dù
 | Khử khuôn theo host | `extract/Template.java` |
 | Bóc trường | `extract/Fields.java` |
 | Đồ thị, chia cạnh | `extract/Links.java` |
-| Điều phối một trang | `extract/Extractor.java` (`extract`, `explain`), `HtmlUtil.java` |
-| Lưu Mongo, chạy cả kho | `mongo/Pipeline.java`, `web/ApiExtract.java` |
-| Lược đồ Mongo | `SCHEMA.md`, `mongo/Db.java`, `mongo-schema.json` |
-| Kế hoạch và quyết định | `KE-HOACH-BOC-TACH.md` |
-| Đo và so sánh | `BlockEvaluationTest.java`, `PythonParityTest.java` (so với bản Python) |
+| Điều phối một trang | `extract/Extractor.java` (`extract`, `explain`), `extract/HtmlUtil.java` (văn bản, HTML đã dọn) |
+| Lưu Mongo, chạy cả kho | `mongo/Pipeline.java` (`buildTemplates`, `runExtract`), `web/ApiExtract.java` |
+| Lược đồ Mongo | [`SCHEMA.md`](SCHEMA.md), `mongo/Db.java`, `src/main/resources/mongo-schema.json` |
+| Đo và so sánh | `BlockEvaluationTest.java` (F1 trên trang tổng hợp), `PythonParityTest.java` (so với bản Python), `ExtractorTest.java` |

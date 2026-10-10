@@ -9,7 +9,7 @@ import vn.hust.search.store.Url;
 
 /**
  * Tiện ích HTML dùng chung — bản port của {@code boc_tach/html_sach.py}, cộng các hàm làm jsoup
- * cư xử giống BeautifulSoup + lxml (KE-HOACH-PORT-JAVA.md mục 4). Trong bóc tách KHÔNG dùng
+ * cư xử giống BeautifulSoup + lxml. Trong bóc tách KHÔNG dùng
  * {@code Element.text()}: nó chuẩn hoá khoảng trắng và không chèn dấu cách giữa các mảnh chữ.
  */
 public final class HtmlUtil {

@@ -40,7 +40,7 @@ public final class ApiCrawl {
     }
 
     /**
-     * Chế độ 4 (mục 2.3.1 BAO-CAO-KY-THUAT.md): validate lại since/until phía Java trước khi
+     * Chế độ 4 (mục 2.3.1 docs/BAO-CAO-KY-THUAT.md): validate lại since/until phía Java trước khi
      * chuyển tiếp sang crawlctl.py. crawlctl.py và crawl_all.py cũng validate — ba lớp vì mỗi
      * tầng nhận input từ một nguồn khác nhau (giao diện, Java, rồi chính crawler), không tầng
      * nào tin dữ liệu từ tầng gọi nó.

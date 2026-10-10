@@ -6,19 +6,23 @@ kiếm qua giao diện web. Đóng gói bằng docker compose.
 Tài liệu này viết để **người hoặc AI khác đọc rồi sửa được ngay**: mỗi phần đều
 nói rõ file nào làm gì, vì sao chọn cách đó, và chỗ nào từng hỏng.
 
+Đường dẫn trong tài liệu tính từ thư mục `hust-search/` (vd. `src/main/…`, `static/index.html`),
+trừ lệnh `docker compose` chạy ở gốc repo và lệnh crawler chạy trong `hust-crawler/`.
+
 Tài liệu liên quan:
 
 | File | Nội dung |
 |---|---|
-| `../BAO-CAO-KY-THUAT.md` | báo cáo kỹ thuật: **sơ đồ** luồng dữ liệu và từng thuật toán (crawl, chọn khối, khử khuôn, đồ thị, tệp, tìm kiếm) |
-| `SCHEMA.md` | lược đồ MongoDB, sơ đồ quan hệ, trạng thái tệp |
-| `KE-HOACH-BOC-TACH.md` | kế hoạch bóc tách, các quyết định đã chốt, tiến độ |
-| `KE-HOACH-PORT-JAVA.md` | kế hoạch và quyết định khi port tầng API từ Python sang Java (đã xong) |
-| `../hust-crawler/README.md` | crawler: cách chạy, số liệu kho, những lỗi đã gặp |
+| [`BAO-CAO-KY-THUAT.md`](BAO-CAO-KY-THUAT.md) | báo cáo kỹ thuật: **sơ đồ** luồng dữ liệu và từng thuật toán (crawl, chọn khối, khử khuôn, đồ thị, tệp, tìm kiếm) |
+| [`SCHEMA.md`](SCHEMA.md) | lược đồ MongoDB, sơ đồ quan hệ, trạng thái tệp |
+| [`THUAT-TOAN-BOC-TACH.md`](THUAT-TOAN-BOC-TACH.md) | thuật toán chọn khối, khử khuôn, bóc trường, đồ thị liên kết, có ví dụ chạy thật |
+| [`so-do-luong-du-lieu.html`](so-do-luong-du-lieu.html) | sơ đồ một trang: HTML thô → bóc tách → Mongo → Lucene → kết quả tìm |
+| [`hust-crawler.md`](hust-crawler.md) | crawler: cách chạy, số liệu kho, những lỗi đã gặp |
+| [`CHIA-DU-LIEU.md`](CHIA-DU-LIEU.md) | đóng gói và chuyển kho dữ liệu cho người khác |
 
 ---
 
-## 1. Chạy trong 3 lệnh
+## 1. Chạy trong 2 lệnh
 
 ```bash
 docker compose up -d --build          # từ thư mục gốc repo; lần đầu ~5 phút (build maven)
@@ -54,13 +58,14 @@ Dừng: `docker compose down` (index nằm ở volume `lucene-index`, không m�
 ```
 DI/
 ├── hust-crawler/                  ENGINE CRAWL — chạy được độc lập, không cần docker
-│   ├── crawl_all.py               bò toàn site, lưu HTML thô base64 vào JSONL
+│   ├── crawl_all.py               bò toàn site, lưu HTML thô base64 vào JSONL; --since/--until: chế độ mới nhất theo ngày
+│   ├── crawlctl.py                HTTP start/stop/status (cổng 8090, chỉ trong mạng docker) cho service crawler
 │   ├── read_raw.py                đọc/soát kho: stats, audit, links, rebuild-state…
 │   ├── render.py                  tải bằng Chromium thật khi requests lấy hụt
 │   ├── crawl_hust.py              wrapper có parse (bóc bài ra 17 trường) — độc lập
 │   ├── hustctl                    lệnh gọn: start / stop / status / resume / file
 │   ├── crawl_subdomains.sh        quét lần lượt nhiều subdomain
-│   ├── tests/test_engine.py       32 test cho engine
+│   ├── tests/test_engine.py       34 test cho engine
 │   └── data/                      KHO DỮ LIỆU (gitignored)
 │       ├── raw/                   kho của hust.edu.vn
 │       │   ├── pages-*.jsonl.gz   mỗi dòng một trang, HTML ở trường html_b64
@@ -73,24 +78,23 @@ DI/
 ├── docker-compose.yml             3 dịch vụ: search (Java) + crawler (Python) + mongo
 ├── docker-compose.compass.yml     mở cổng Mongo ra 127.0.0.1 để xem bằng Compass
 │
+├── docs/                          MỌI TÀI LIỆU: báo cáo kỹ thuật, tài liệu này, hust-crawler.md,
+│                                  SCHEMA.md, THUAT-TOAN-BOC-TACH.md, CHIA-DU-LIEU.md, so-do-luong-du-lieu.html
+│
 └── hust-search/                   MỘT PROJECT MAVEN, Java 21 — HTTP API + giao diện + bóc tách + Mongo + Lucene
     ├── pom.xml, Dockerfile        build đa tầng maven → JRE; jar gốc để trong lib/, không shade
-    ├── SCHEMA.md                  lược đồ MongoDB (pages, links, nav_links, images, documents, templates)
-    ├── KE-HOACH-BOC-TACH.md       kế hoạch bóc tách / đồ thị / Mongo và các quyết định đã chốt
-    ├── KE-HOACH-PORT-JAVA.md      kế hoạch port Python → Java
-    ├── THUAT-TOAN-BOC-TACH.md     giải thích thuật toán chọn khối, khử khuôn, bóc trường, đồ thị (có sơ đồ Mermaid)
     ├── static/index.html          giao diện một trang, không framework (mount vào container: sửa không cần build)
     ├── src/main/java/vn/hust/search/
     │   ├── Main.java              mở Index + Mongo, dựng HttpServer :8000
     │   ├── Index.java Fold.java Rank.java Sig.java    Lucene: index/tìm/highlight, bỏ dấu, điểm nền, SimHash
-    │   ├── web/                   Http (router, lỗi {"detail"}) · BackgroundJob (một việc nền một lúc) · Mongo (503 khi chưa lên)
+    │   ├── web/                   Http (router, lỗi {"detail"}, virtual thread) · BackgroundJob (một việc nền một lúc) · Mongo (503 khi chưa lên)
     │   │                          ApiSearch (search, index, fetch, health, stats) · ApiExtract (extract, files, graph)
-    │   │                          ApiCrawl (chuyển tiếp /api/crawl/* sang service crawler)
+    │   │                          ApiCrawl (chuyển tiếp /api/crawl/* sang service crawler, kiểm since/until của mode=recent)
     │   ├── store/                 Url (norm, dedupKey, kindOf — bản sao crawl_all.py) · RawStore (đọc/ghi kho thô) · Download (tải lẻ, nhịp 3 s)
     │   ├── extract/               Extractor (cửa vào) · ContentBlock · Template · Fields · Links · HtmlUtil (jsoup) · DocumentText (Apache Tika)
     │   └── mongo/                 Db (lược đồ + index) · Pipeline (kho → Mongo → Lucene) · DocumentJob (tải/bóc chữ tệp) · Robots
     ├── src/main/resources/mongo-schema.json     $jsonSchema + index của 6 collection
-    ├── src/test/java/…            115+ test JUnit; src/test/resources/{html,tep,golden}
+    ├── src/test/java/…            115 test JUnit (+2 ApiGoldenTest với -Pstack); src/test/resources/{html,tep,golden}
     ├── tests/fixtures/corpus.json corpus mẫu theo schema public
     ├── tests/golden/api/          ảnh chụp phản hồi của bản Python cũ, để ApiGoldenTest so hình dạng
     ├── tests/integration.sh       kiểm tra trên stack đang chạy (đường tìm kiếm)
@@ -121,7 +125,7 @@ flowchart TD
 ```
 
 Sơ đồ chi tiết của từng thuật toán (chọn khối, khử khuôn, chia cạnh, trạng thái
-tệp, một lượt tìm kiếm) ở `../BAO-CAO-KY-THUAT.md`.
+tệp, một lượt tìm kiếm) ở [`BAO-CAO-KY-THUAT.md`](BAO-CAO-KY-THUAT.md).
 
 Ba tầng tách rời có chủ đích: **tải là phần đắt và bị rate-limit, parse thì rẻ
 và hay phải sửa**. Có kho thô rồi thì sửa selector hay index lại bao nhiêu lần
@@ -212,6 +216,17 @@ python read_raw.py --rebuild-state   # CỨU HỘ: dựng lại state.json từ 
 
 Bốn lệnh đầu trả lời bốn câu hỏi khác nhau, đừng nhầm — xem mục 8.
 
+### 4.6. Chế độ mới nhất theo ngày đăng (`recent`)
+
+```bash
+python crawl_all.py --since 2026-10-07 --until 2026-10-10      # rồi --resume để tải các bài vừa lọc
+```
+
+Không tải từng bài để biết ngày: chỉ tải các trang danh sách trong `RECENT_LISTINGS`, bóc ngày
+`dd/mm/yyyy` in kèm mỗi mục, đẩy bài trong khoảng lên **đầu** hàng đợi, và dừng một danh mục khi gặp
+mục cũ hơn `since` (trang được xét là có xếp giảm dần không trước khi cắt). Chi tiết và các lỗi đã gặp
+ở [`BAO-CAO-KY-THUAT.md`](BAO-CAO-KY-THUAT.md) mục 2.3.1. Trên giao diện: tab **Bảng điều khiển**, chọn "Mới nhất theo thời gian".
+
 ---
 
 ## 5. API
@@ -223,7 +238,7 @@ Tất cả dưới `http://localhost:8000`.
 | GET | `/` | giao diện |
 | GET | `/api/health` | `api`, `lucene` (luôn true: cùng tiến trình), `mongo`, `crawler` có trả lời không |
 | GET | `/api/stats` | mỗi site tải/chờ bao nhiêu, dung lượng, số link |
-| POST | `/api/crawl/start` | chạy một mẻ crawl (chuyển tiếp sang service crawler; `render` ≠ `never` → 400; 409 khi đang tải tệp) |
+| POST | `/api/crawl/start` | chạy một mẻ crawl (chuyển tiếp sang service crawler; `mode` = `resume \| listing \| file \| site \| recent`; `render` ≠ `never` → 400; 409 khi đang tải tệp). `mode=recent` cần `since` (và `until`, mặc định = `since`) dạng `YYYY-MM-DD`, `until` không được sau hôm nay, `since ≤ until` — sai → 400 |
 | POST | `/api/crawl/stop` | SIGTERM rồi chờ 30s, cùng lắm mới kill |
 | GET | `/api/crawl/status` | đang chạy không, log 12 dòng cuối |
 | POST | `/api/index/run` | `source=auto\|mongo\|raw`: Mongo (hoặc kho thô) → Lucene (gọi thẳng `Index`, không qua HTTP) |
@@ -239,13 +254,19 @@ Tất cả dưới `http://localhost:8000`.
 | GET | `/api/files`, `/api/images` | danh mục tệp / ảnh kèm số trang giới thiệu |
 | POST | `/api/index/documents` | nhận corpus JSON theo schema public (≤ 5.000 tài liệu; sai schema → 422 `{"detail": "documents[3].url: …"}`) |
 | GET | `/api/index/stats` | số tài liệu, dung lượng index, theo host |
-| GET | `/api/search?q=&size=&host=&kind=&ftype=&ranking=` (`ftype`: html, pdf, docx…; nhiều loại cách nhau dấu phẩy) | kết quả kèm đoạn đã tô `<mark>` |
+| GET | `/api/index/list`, `/api/index/dict`, `/api/index/posting` | duyệt toàn bộ index; từ điển term; danh sách posting của một term (tab "Duyệt tất cả", "Chỉ mục ngược") |
+| GET | `/api/preview?url=` | tài liệu đã lưu trong index (kể cả HTML đã dọn); 404 nếu chưa có |
+| GET | `/api/search?q=&from_=&size=&host=&kind=&ftype=&date_from=&date_to=&ranking=&sort=` (`ftype`: html, pdf, docx…; nhiều loại cách nhau dấu phẩy) | kết quả kèm đoạn đã tô `<mark>` |
 | POST | `/api/fetch` | tải một URL, trả document và index ngay |
 
 ```bash
 # crawl tiếp, trần 200 trang
 curl -X POST localhost:8000/api/crawl/start -H 'content-type: application/json' \
      -d '{"mode":"resume","max_pages":200}'
+
+# chế độ 4: chỉ bài đăng trong khoảng ngày (đọc ngày ngay trên trang danh sách)
+curl -X POST localhost:8000/api/crawl/start -H 'content-type: application/json' \
+     -d '{"mode":"recent","since":"2026-10-07","until":"2026-10-10"}'
 
 # chỉ lấy link của một subdomain
 curl -X POST localhost:8000/api/crawl/start -H 'content-type: application/json' \
@@ -301,14 +322,14 @@ output/hiển thị, chưa đưa vào chỉ mục Lucene.
 `sort=score` mới là thứ tự theo điểm; khi đó UI gọi đúng tên điểm theo chế độ.
 `sort=date` sắp ngày mới trước và không gọi số điểm đó là TF-IDF.
 
-Lucene cũng nghe trực tiếp ở `localhost:8081` (`/bulk`, `/search`, `/list`, `/dict`,
-`/posting`, `/doc`, `/stats`, `/reset`, `/health`) — tiện khi cần gỡ lỗi riêng tầng index.
+Lucene chạy chung tiến trình với API (`Index.java`), không còn cổng riêng: muốn gỡ lỗi
+tầng index thì dùng `/api/index/stats`, `/api/index/dict`, `/api/index/posting`.
 
 ---
 
 ## 6. Giao diện
 
-Một file `api/static/index.html`, không framework, không bước build.
+Một file `static/index.html`, không framework, không bước build.
 
 * **Tìm kiếm** — gõ từ khoá, lọc theo site và chọn `TF-IDF` hoặc `Nâng cao`.
   Phần khớp được **Lucene** tô `<mark>` (màu bơ pastel), bấm tiêu đề mở trang
@@ -327,7 +348,8 @@ Một file `api/static/index.html`, không framework, không bước build.
 * **Tệp & ảnh** — danh sách tệp (trạng thái, cờ `needs_ocr`) và ảnh, mỗi dòng có số trang
   giới thiệu và nút mở đồ thị.
 * **Bảng điều khiển** — số trang crawl, số tài liệu index, số link, dung lượng;
-  bảng từng site; nút chạy/dừng crawl; nút index thêm hoặc dựng lại; log trực tiếp;
+  bảng từng site; nút chạy/dừng crawl (chế độ "Mới nhất theo thời gian" hiện hai ô ngày,
+  không chọn được ngày sau hôm nay); nút index thêm hoặc dựng lại; log trực tiếp;
   bốn bước bóc tách vẽ thành dải ô nối mũi tên, mỗi ô ghi số liệu đã có và sáng lên khi đang chạy.
 
 Tô sáng làm ở **server chứ không phải trình duyệt**: Lucene biết chính xác token
@@ -357,8 +379,9 @@ Màu: nền giấy ấm `#fbf9f6`, chấm phá mint / blush / sky / lilac pastel
    ```
 
    Chỉ ra `ranking`, điểm giảm dần, đoạn `<mark>` và lựa chọn ranking trong UI.
-4. Bấm nút **Khối nội dung** trên một kết quả: tab **Bóc tách khối** cho thấy thuật
-   toán đã bỏ bao nhiêu chữ qua từng lớp và đi xuống cây HTML thế nào.
+4. Bấm nút **Khối nội dung** trên một kết quả: tab **Bóc tách khối** hiện tiêu đề, ngày, tác giả
+   (rê chuột xem nguồn), nội dung đã bóc và liên kết trong bài. Muốn xem từng bậc đi xuống cây HTML
+   thì gọi `GET /api/extract/explain?url=`.
 5. Bấm **Xem đồ thị quanh trang này**: tab **Đồ thị liên kết** hiện ai trỏ tới trang
    và trang trỏ đi đâu; bấm một tệp PDF để xem nguồn giới thiệu của nó.
 
@@ -461,7 +484,7 @@ cd hust-search && mvn -B test         # JUnit, xem mục 7
 ## 7. Test
 
 ```bash
-# engine crawler (32 test pytest)
+# engine crawler (34 test pytest)
 cd hust-crawler && .venv/bin/python -m pytest tests -q
 
 # Java (115 JUnit): url/kho, bóc tách, Tika, Mongo, HTTP. Test Mongo cần MongoDB ở MONGO_URL
@@ -583,6 +606,7 @@ không thêm link nào đi tới được.
 | Thêm kiểu phân trang mới | `crawl_all.py` | `PAGE_PATTERNS` |
 | Đổi luật bỏ qua url | `crawl_all.py` | `SKIP_SEG`, `SKIP_QUERY`, `ASSET` |
 | Đổi cách nhận diện bài viết | `crawl_all.py` | `ART_ID`, `dedup_key()`, `kind_of()` |
+| Thêm danh mục cho chế độ mới nhất theo ngày | `crawl_all.py` | `RECENT_LISTINGS`, `RE_DATE_VN`, `run_recent()` |
 | Đổi ngưỡng "trang cần render" | `render.py` | `looks_blocked()` |
 | Đổi cách chọn khối nội dung | `extract/ContentBlock.java` | `ALPHA/BETA/GAMMA/DELTA`, `SELECTOR_BY_HOST`, `findBlock()` |
 | Đổi ngưỡng khử khuôn | `extract/Template.java` | `PAGE_RATIO_THRESHOLD`, `MIN_PAGES` |
@@ -590,11 +614,11 @@ không thêm link nào đi tới được.
 | Đổi luật cạnh nội dung / cạnh khuôn | `extract/Links.java` | `split()`, `destKind()` |
 | Đổi cách bóc chữ tệp | `extract/DocumentText.java` | `SUPPORTED`, `extractText()` |
 | Đổi cách chuẩn hoá url | `store/Url.java` **và** `hust-crawler/crawl_all.py` | `norm()`, `dedupKey()`, `kindOf()` — hai bản phải giống hệt; sửa xong chạy `UrlGoldenTest` |
-| Đổi lược đồ Mongo | `src/main/resources/mongo-schema.json` + `SCHEMA.md` | `schemas`, `indexes` |
-| Đổi trọng số xếp hạng | `Index.java` | `MultiFieldQueryParser`, map boost |
+| Đổi lược đồ Mongo | `src/main/resources/mongo-schema.json` + `docs/SCHEMA.md` | `schemas`, `indexes` |
+| Đổi trọng số xếp hạng | `Index.java`, `Rank.java` | `standardBoost()`, `foldedBoost()`, `buildQuery()`, `buildTfidfQuery()`; điểm nền `Rank.baseScore()` |
 | Đổi cách tô sáng | `Index.java` | `SimpleHTMLFormatter("<mark>", "</mark>")` |
 | Đổi màu, bố cục | `static/index.html` | khối `:root` ở đầu `<style>` |
-| Đổi giao diện trực quan bóc tách / đồ thị | `static/index.html` | `veKhoi()`, `veBac()`, `veDoThiSao()`, `veDayChuyen()` |
+| Đổi giao diện trực quan bóc tách / đồ thị | `static/index.html` | `veKetQuaTrang()`, `veKetQuaTep()`, `veDoThiSao()`, `veDayChuyen()` |
 | Đổi dữ liệu vết thuật toán | `extract/Extractor.java`, `ContentBlock.java` | `explain()`, `recordStep()` |
 | Thêm endpoint | `web/ApiSearch.java` (index/tìm/tải lẻ) hoặc `web/ApiExtract.java` (bóc tách/đồ thị/tệp) | thêm `h.get/post` trong `register()` |
 
@@ -632,7 +656,7 @@ dừng rồi chạy lại mẻ mới mới nhận code mới).
   kể cả site chỉ có http; khi tải thì dùng url gốc và tự thử lại `http://` nếu `https://` lỗi kết nối.
   Route này tải url bất kỳ từ máy chủ — chỉ chạy stack ở máy cá nhân/mạng nội bộ (stack không có xác thực).
 * **`/api/extract/explain` quét kho thô** để tìm HTML của url (lọc thô bằng chuỗi trước khi giải mã);
-  chưa đo tốc độ trên kho ~200 MB. Giao diện trực quan mới thử trên dữ liệu giả.
+  chưa đo tốc độ trên kho ~200 MB. Giao diện không còn vẽ các bậc này, chỉ có JSON.
 * **`nav_links` có thể phình** vì gồm cả liên kết ngoài khối nội dung nhưng riêng cho từng trang
   (vd. "tin liên quan"); chưa đo số dòng trên kho thật.
 * **Phân tích tiếng Việt ở mức âm tiết**: `StandardAnalyzer` tách theo chuẩn

@@ -23,6 +23,7 @@ OneDrive_*/       tài liệu tải về, để untracked
 | `hust-crawler.md` | crawler: chạy gì tiếp, số liệu kho, khảo sát site (lệnh chạy từ `hust-crawler/`) |
 | `SCHEMA.md` | lược đồ MongoDB — sửa cùng lúc với `hust-search/src/main/resources/mongo-schema.json` |
 | `THUAT-TOAN-BOC-TACH.md` | thuật toán chọn khối, khử khuôn, bóc trường, đồ thị (Mermaid) |
+| `DAC-TA-DOC-NOI-DUNG.md` | đặc tả nháp mô-đun "Đọc nội dung" (N1) trong thiết kế dịch vụ nhỏ: API `/parse`, đẩy sang Tổng hợp, chỗ còn phải chốt |
 | `CHIA-DU-LIEU.md` | đóng gói / chuyển kho dữ liệu (`hustdata`) |
 | `so-do-luong-du-lieu.html` | sơ đồ SVG một trang: HTML thô → kết quả tìm kiếm |
 

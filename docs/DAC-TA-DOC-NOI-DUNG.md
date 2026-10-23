@@ -1,113 +1,117 @@
-# Đặc tả mô-đun "Đọc nội dung" (N1) — bản nháp
+# Đặc tả dịch vụ "Đọc nội dung" (N1)
 
-Nguồn: slide nhóm *"Thiết kế hệ thống thu thập dựa trên kiến trúc dịch vụ nhỏ"* (Google Slides,
-đọc ngày 22/10/2026). Tài liệu chia ba loại, đừng trộn:
+Bản nháp, 23/10/2026. Dịch vụ này đóng gói lõi bóc tách `hust-search/src/main/java/vn/hust/search/extract/`
+thành một microservice, theo thiết kế trong slide nhóm *"Thiết kế hệ thống thu thập dựa trên kiến trúc
+dịch vụ nhỏ"* (Google Slides).
 
-- **[Slide]**: slide ghi đúng như vậy.
-- **[Suy ra]**: slide không ghi chữ, tôi suy từ hình vẽ hoặc từ các slide khác. Có thể sai.
-- **[Đề xuất]**: slide chưa nói. Đây là gợi ý, cần chốt với N5 (Tải về) và N8 (Tổng hợp) trước khi code.
+Mỗi điều trong tài liệu mang một nhãn cho biết nó lấy từ đâu:
 
-## 1. Slide nói gì
+- **[Slide]**: slide ghi như vậy.
+- **[Code]**: hành vi hiện tại của `extract/`, đọc từ mã nguồn. Đường dẫn tính từ `hust-search/src/main/java/vn/hust/search/`.
+- **[Đề xuất]**: chưa ai quyết. Đây là gợi ý để chốt.
+- **[Cần chốt]**: phụ thuộc vào nhóm khác. Danh sách ở mục 9.
 
-**Phân công [Slide]:** Đọc nội dung là N1, Tải về là N5, Điều khiển là BAT, Tổng hợp là N8,
-Lưu trữ là N10, Mongo là "Ctrl + F". Các mô-đun nói chuyện qua HTTP, dữ liệu là JSON.
+---
 
-**Luồng [Slide]:**
-
-1. Khởi động: mọi mô-đun ở trạng thái chờ. Tổng hợp nạp tập url mầm.
-2. Điều khiển gửi url cần thu thập đến Tải về.
-3. Tải về gửi dữ liệu tải được sang **Đọc nội dung**.
-4. **Đọc nội dung** gửi kết quả bóc tách sang Tổng hợp.
-5. Tổng hợp gửi bản ghi sang Lưu trữ.
-6. Tổng hợp gửi url mới sang Điều khiển.
+## 1. Vị trí trong hệ thống [Slide]
 
 ```
 Điều khiển ──2──▶ Tải về ×2 ──3──▶ ĐỌC NỘI DUNG ──4──▶ Tổng hợp ──5──▶ Lưu trữ ──▶ Mongo
-     ▲                                                        │
-     └──────────────────────────6─────────────────────────────┘
+  (BAT,5200)       (N5,8800)        (N1, 6600)         (N8,3300)       (N10,2200)
+     ▲                                                     │
+     └─────────────────────────6───────────────────────────┘
 ```
 
-Hình vẽ có **hai** hộp Tải về, cả hai cùng nối vào Đọc nội dung.
+- Đọc nội dung nhận tài liệu đã tải từ Tải về.
+- Với html, nó bóc **tiêu đề, nội dung văn bản, liên kết đi ra kèm văn bản liên kết** ("câu hoàn
+  thiện chứa thẻ a").
+- Với tài liệu khác (other), nó bóc **nội dung văn bản**.
+- Kết quả được đẩy sang Tổng hợp qua API. Mọi mô-đun nói chuyện bằng HTTP, dữ liệu là JSON.
 
-**Đầu vào / đầu ra của Đọc nội dung [Slide]:**
+Số cổng trên slide không ghi rõ của mô-đun nào. Cổng 6600 cho N1 (và các cổng khác ngoài 5200) là
+tôi ghép theo vị trí trên hình vẽ, nên còn phải xác nhận.
 
-- Đầu vào: định dạng tài liệu (`html`, `other`), nội dung (tài liệu), uri (địa chỉ truy cập).
-- Đầu ra với html: tiêu đề, nội dung văn bản, liên kết đi ra kèm văn bản liên kết.
-  Văn bản liên kết là "câu hoàn thiện chứa thẻ a".
-- Đầu ra với other: nội dung văn bản tách được.
-- Gọi API để đẩy kết quả sang Tổng hợp.
+**Ngoài phạm vi của N1:**
 
-**API [Slide]:**
+| Việc | Ai làm |
+|---|---|
+| Tải trang, chạy JS (Puppeteer) | N5 |
+| Lọc url trong miền hust, loại url đã có | N8 |
+| Ghi Mongo | N10 |
+| Chỉ mục Lucene | `hust-search`, không thuộc thiết kế này |
 
-```
-POST http://ip:cổng/parse
-http content - dữ liệu được tải về
-```
+## 2. Lõi: `extract/` làm gì [Code]
 
-Slide chỉ ghi đúng hai dòng này, không có ví dụ body, không có phản hồi.
+Lõi là thư viện **không trạng thái**. Mỗi lần gọi chỉ xử lý một tài liệu và không đọc hay ghi gì
+bên ngoài. Nó gồm 7 tệp trong `extract/` và một tệp `store/Url.java` mà `extract/` dùng tới. Thư viện
+ngoài cần có: jsoup 1.23.2, jackson-databind 2.17.2 (đọc JSON-LD), Tika 4.1.0. Lõi **không** cần
+Mongo hay Lucene.
 
-**API của Tổng hợp mà N1 phải gọi [Slide]**, bản gốc giữ nguyên (thiếu dấu phẩy sau `"html"`):
+### 2.1 Nhánh html: `Extractor.extract(html, url, templateFps)`
 
-```
-POST http://ip:cổng/add
-{"url": "https://hust.edu.vn/tin-tuc1",
- "format": "html"
- "title": "Tin tức 1",
- "content": "Nội dung tin tức bóc tách được",
- "out-links": ["url đi ra", "văn bản liên kết"]
-}
-```
+Thứ tự trong `Extractor.java`:
 
-**Mô-đun lân cận [Slide]:**
+1. Parse HTML bằng jsoup.
+2. Đọc JSON-LD và thu **mọi** `<a href>` của trang (`Links.collect`). Bước này chạy trước khi dọn
+   cây, nên menu và footer vẫn còn nguyên.
+3. Chọn khối nội dung (`ContentBlock.findBlock`). Cây bị sửa tại chỗ qua ba lớp:
+   - Lớp 1, dọn cây: bỏ comment, các thẻ `script style noscript iframe form svg button input select
+     nav footer aside template`, và mọi phần tử có `hidden` hoặc `display:none`.
+   - Lớp 2, khử khuôn theo host: chỉ chạy khi `templateFps` không rỗng (mục 5).
+   - Lớp 3, chọn khối: với host `hust.edu.vn`, lấy phần tử `.bodytext` nếu có chữ. Các host khác
+     chấm điểm nút theo mật độ chữ, mật độ link, số đoạn văn và dấu câu, rồi đi từ `body` xuống.
+     Chi tiết ở `docs/THUAT-TOAN-BOC-TACH.md` mục 2.
+4. Bóc trường (`Fields`):
+   - Tiêu đề: `itemprop=headline` → `og:title` → JSON-LD `headline` → `h1` trong khối (hoặc tới 4
+     cấp cha) → `h1` đầu trang → `<title>` đã cắt hậu tố tên site.
+   - Còn có ngày đăng, tác giả, nguồn trích dẫn, chuyên mục. Dòng "Tác giả: …" và "Nguồn: …" ở cuối
+     khối bị cắt ra khỏi nội dung.
+5. Nội dung lấy từ chữ của khối. Mọi khoảng trắng, **kể cả xuống dòng**, gộp thành một dấu cách,
+   nên nội dung chỉ là **một dòng**.
+6. Chia link thành **cạnh nội dung** (nằm trong khối) và **cạnh khuôn** (ngoài khối: menu, footer,
+   sidebar). Ảnh `<img>` và `og:image` đi vào loại cạnh `embed`, tách khỏi `href`.
 
-- Tải về: tải trang web bằng Puppeteer + Chrome headless, tải tài liệu thì tải thẳng. Đầu ra "gửi
-  đến mô-đun đọc". API `POST /load {"url"}` và `GET /ping → {"status": "đang chờ"}`.
-- Tổng hợp: nhận uri, định dạng, các trường nội dung. Lọc url trong miền hust, loại url đã có.
-- Mongo: có ba nhóm `html` (url, format, title, content, **intro**), `other` (url, format kiểu
-  `docx`, content) và `graph` (`src`, `dest`, `intro` = văn bản liên kết).
+`extract()` trả `null` khi không có cả tiêu đề lẫn chữ.
 
-## 2. Cổng [Suy ra]
+Giới hạn độ dài: tiêu đề 500 ký tự, nội dung 200.000 ký tự, HTML rút gọn 40.000 ký tự. Đơn vị là
+code point.
 
-Slide 1 có năm số cổng nhưng không ghi chữ nào cho biết số nào của mô-đun nào. Tôi ghép theo toạ độ:
-mỗi số nằm ngay trên một hộp.
+### 2.2 Nhánh tài liệu: `DocumentText.extractText(bytes, ext)`
 
-| Mô-đun | Cổng | Mức chắc |
-|---|---|---|
-| Điều khiển | 5200 | chắc: slide Điều khiển ghi `http://ip:5200/add` |
-| Tải về | 8800 | số nằm giữa hai hộp Tải về |
-| **Đọc nội dung** | **6600** | số nằm ngay trên hộp Đọc nội dung |
-| Tổng hợp | 3300 | số nằm ngay trên hộp |
-| Lưu trữ | 2200 | số nằm ngay trên hộp |
+- Đọc được `pdf docx xlsx pptx doc xls ppt`, dùng **một** `AutoDetectParser` chung. Dựng parser mất
+  khoảng 1 giây, và theo comment trong code thì dùng chung nhiều luồng được.
+- Trạng thái trả về: `ok`, `unsupported` (đuôi không hỗ trợ) hoặc `error` (tệp hỏng, hoặc nội dung
+  thật ra là chữ thường hay octet-stream).
+- Pdf có dưới 20 ký tự mỗi trang thì gắn cờ `needs_ocr` và trả chữ rỗng. Không có OCR.
+- Có cờ `encoding_suspect`, đoán văn bản dùng bảng mã cũ TCVN3/VNI. Đây là heuristic.
+- Chữ giữ xuống dòng, tối đa 500.000 ký tự.
+- Cách chọn `ext` (lấy từ `web/ApiExtract.java`): đuôi trong url trước, không có thì đổi từ MIME qua
+  `DocumentText.MIME_TO_EXT`.
 
-Tôi không xem được ảnh slide, chỉ đọc toạ độ qua API. Nhờ người vẽ slide xác nhận lại.
+### 2.3 Chuẩn hoá url: `Url.norm(href, base)`
 
-## 3. Chỗ slide chưa rõ hoặc lệch nhau
+Mọi link ra đều đi qua hàm này:
 
-Đây là danh sách cần hỏi. Mỗi mục ghi ai phải trả lời.
+| Quy tắc | Ví dụ / ghi chú |
+|---|---|
+| Giải link tương đối theo `base` | |
+| Bỏ link không phải http(s) | `mailto:`, `tel:`, `javascript:`, link chỉ có `#…` |
+| Bỏ fragment | |
+| Gộp `//` trong path | |
+| Bỏ tham số theo dõi | `fbclid utm_source utm_medium utm_campaign gidzl PHPSESSID` |
+| Chữ thường host, xoá mọi chuỗi `www.` | |
+| **Ép mọi link sang `https`** | Site chỉ chạy `http` sẽ nhận link `https` không tải được. `ApiExtract` phải thử lại bằng `http` khi gặp đúng lỗi này. N5 cần biết điều này. |
 
-| # | Vấn đề | Vì sao quan trọng | Hỏi ai |
-|---|---|---|---|
-| 1 | Body của `/parse` là gì? "http content" có thể là JSON `{url, format, content}`, cũng có thể là body HTTP thô kèm header. | Slide 1 nói mọi mô-đun dùng JSON, nhưng slide `/parse` không có JSON. Không có url thì không giải được link tương đối. | N5 |
-| 2 | Tài liệu nhị phân (pdf, docx) đi qua JSON thế nào? | JSON không chở byte thô. Phải base64, hoặc gửi multipart, hoặc chỉ gửi url để N1 tự tải. | N5 |
-| 3 | `/parse` trả gì, đồng bộ hay bất đồng bộ? | N1 phải đẩy sang N8. Nếu `/parse` chờ đẩy xong mới trả, N5 bị giữ lâu với pdf lớn. Nếu trả ngay (202), lỗi phía N8 thì N5 không biết. | N5 |
-| 4 | `out-links` có dạng gì? Ví dụ trên slide là **một** cặp phẳng `["url", "văn bản"]`, không chứa được nhiều link. | N8 phải đọc được. Có hai cách: mảng cặp `[["url","văn bản"], …]` hoặc mảng đối tượng. | N8 |
-| 5 | "Câu hoàn thiện chứa thẻ a" là cả câu bao quanh, hay chỉ chữ trong thẻ `<a>`? Link menu không nằm trong câu nào thì sao? | Đổi định nghĩa là đổi trường `intro` của `graph` trong Mongo. | N8, N10 |
-| 6 | `out-links` lấy từ cả trang hay chỉ từ phần thân bài? | N8 lấy url mới từ `out-links` để gửi Điều khiển (bước 6). Nếu chỉ lấy trong thân bài, link menu và link phân trang mất, nên crawl không lan ra được. | N8 |
-| 7 | `format` mang giá trị gì? Slide Đọc nội dung ghi `html`/`other`, slide Mongo ghi `docx`. | N8 và N10 chia bản ghi vào nhóm `html`/`other` theo trường này. | N8, N10 |
-| 8 | Mongo có `intro` (đoạn giới thiệu), nhưng đầu ra của N1 không có. Ai bóc `intro`? | Thiếu thì trường này luôn rỗng. | N8, N10 |
-| 9 | `content` là toàn bộ chữ trên trang, hay chỉ thân bài (bỏ menu, footer)? | Lấy toàn trang thì trang nào cũng có chung một đoạn menu dài, tìm kiếm sau này bị nhiễu. | cả nhóm |
-| 10 | Url nào là `url`: url được yêu cầu, hay url cuối sau chuyển hướng? Puppeteer có thể đi qua redirect. | N8 khử trùng theo url. | N5, N8 |
-| 11 | N1 trả lời thế nào khi lỗi: trang rỗng, pdf hỏng, pdf chỉ có ảnh (cần OCR), định dạng lạ? Có báo cho N8 không? | Không chốt thì N8 nhận bản ghi rỗng, hoặc url lỗi bị tải lại mãi. | N5, N8 |
-| 12 | N1 có cần `GET /ping` như N5 không? | Điều khiển dùng để biết N1 còn sống. Slide chỉ cho N5 có `/ping`. | BAT |
-| 13 | Url ra phải ở dạng tuyệt đối không, ai chuẩn hoá (bỏ `#…`, `http`↔`https`)? | N8 "loại url đã có". Hai bên chuẩn hoá khác nhau thì trùng lặp hoặc báo thiếu giả. Repo này từng dính lỗi "thiếu 17 link" vì một bên giữ `http://`, bên kia đổi sang `https://`. | N8 |
+Link trỏ về chính trang đang bóc bị bỏ. `Url.java` là bản sao của `crawl_all.norm()` (xem
+`CLAUDE.md`), nên N8 muốn khử trùng khớp với N1 thì nên dùng chung quy tắc này.
 
-## 4. Đặc tả đề xuất [Đề xuất]
+## 3. API
 
-Mọi thứ dưới đây là gợi ý để mang đi chốt, không phải điều slide đã quyết.
+### 3.1 `POST /parse` [Đề xuất trên nền Slide]
 
-### 4.1 `POST /parse` (cổng 6600)
+Slide chỉ ghi `post: http://ip:cổng/parse` và "http content - dữ liệu được tải về". Phần dưới đây là đề xuất.
 
-Phương án A: JSON. Hợp với câu "dùng JSON" ở slide 1.
+**Request**, `Content-Type: application/json`:
 
 ```json
 {
@@ -115,33 +119,40 @@ Phương án A: JSON. Hợp với câu "dùng JSON" ở slide 1.
   "final_url": "https://hust.edu.vn/vi/news/tin-tuc-su-kien/abc-654601.html",
   "format": "html",
   "content_type": "text/html; charset=utf-8",
-  "content": "<!DOCTYPE html>…",
-  "encoding": "text"
+  "encoding": "text",
+  "content": "<!DOCTYPE html>…"
 }
 ```
 
-- `format`: `html` hoặc `other`. Có thể thêm `ext` (`pdf`, `docx`…) để N1 khỏi phải đoán.
-- `encoding`: `text` cho HTML (Puppeteer trả DOM đã dựng, là chuỗi), `base64` cho tài liệu.
-- `final_url` không bắt buộc. Thiếu thì lấy `url`.
+| Khoá | Bắt buộc | Ý nghĩa |
+|---|---|---|
+| `url` | có | url Điều khiển giao. Gửi lại nguyên văn cho N8 để N8 đánh dấu đã xong. |
+| `final_url` | không | url sau chuyển hướng, chỉ gửi khi khác `url`. Dùng làm gốc để giải link tương đối. |
+| `format` | có | `html` hoặc `other` [Slide] |
+| `content_type` | không | Header `Content-Type` của phản hồi. Nhánh other dùng nó để đoán `ext` khi url không có đuôi. |
+| `encoding` | có | `text`: `content` là chuỗi (HTML từ Puppeteer). `base64`: byte của tài liệu. |
+| `content` | có | Nội dung đã tải |
 
-Phương án B: body thô. `Content-Type` là kiểu của tài liệu, url đi trong header `X-Url`. Không phải
-base64 nên nhẹ hơn với tệp lớn, nhưng lệch với quy ước "dùng JSON".
+**Response** [Đề xuất]: đồng bộ. N1 bóc xong, gọi `/add` của N8 xong rồi mới trả lời, để N5 biết
+ngay là thành hay hỏng.
 
-Phản hồi, gợi ý **đồng bộ**: N1 bóc tách, gọi `/add` của N8, rồi mới trả lời. N5 biết ngay thành
-hay hỏng, và không cần thêm hàng đợi.
+| Mã | Khi nào | Body |
+|---|---|---|
+| 200 | Bóc được và N8 đã nhận | `{"status":"ok","url":…,"format":…,"n_out_links":57,"chars":12034}` |
+| 400 | Thiếu khoá, base64 hỏng, `url` không phải http(s) (`Url.norm` trả `null`) | `{"detail":"…"}` |
+| 413 | `content` vượt giới hạn kích thước (mục 6) | `{"detail":"…"}` |
+| 415 | Nhánh other ra `unsupported` | `{"detail":"không đọc được tệp .xyz"}` |
+| 422 | html: `extract()` trả `null`. other: `error`, hoặc `needs_ocr` | `{"detail":"…","url":…}` |
+| 502 | Gọi N8 thất bại | `{"detail":"Tổng hợp không nhận: …"}` |
 
-```json
-200 {"status": "ok", "url": "…", "n_out_links": 57, "aggregator": "ok"}
-422 {"status": "error", "url": "…", "error": "pdf không có lớp chữ (cần OCR)"}
-502 {"status": "error", "url": "…", "error": "Tổng hợp không nhận: …"}
-```
+Lỗi dùng khoá `detail` cho giống quy ước của `hust-search` (`CLAUDE.md`). Không bắt buộc.
 
-Đổi lại, N5 bị giữ trong lúc N1 xử lý. Tika đọc một pdf lớn có thể mất vài giây. Hiện có hai mô-đun
-Tải về cùng gửi vào, nên N1 phải nhận nhiều request song song.
+### 3.2 Gọi `POST /add` của Tổng hợp [Slide + Đề xuất]
 
-### 4.2 Gọi `POST /add` của Tổng hợp (cổng 3300)
+Khoá lấy theo slide. Hai chỗ khác slide:
 
-Giữ đúng khoá trên slide, chỉ sửa `out-links` thành **mảng** cặp:
+- `out-links` là **mảng các cặp**. Ví dụ trên slide chỉ có một cặp phẳng.
+- Thêm `intro`, vì Mongo trên slide có trường này.
 
 ```json
 {
@@ -151,75 +162,146 @@ Giữ đúng khoá trên slide, chỉ sửa `out-links` thành **mảng** cặp:
   "content": "Nội dung tin tức bóc tách được",
   "intro": "Sapo nếu có",
   "out-links": [
-    ["https://hust.edu.vn/tin-tuc2", "Xem thêm thông báo tuyển sinh năm 2026 tại đây."],
-    ["https://hust.edu.vn/files/quyet-dinh.pdf", "Quyết định số 123 (tải về)."]
+    ["https://hust.edu.vn/tin-tuc2", "Xem thông báo tuyển sinh năm 2026 tại đây."],
+    ["https://hust.edu.vn/files/qd-123.pdf", "Quyết định số 123."]
   ]
 }
 ```
 
-Bản ghi `other`: `{"url", "format": "other", "ext": "pdf", "content"}`. Bỏ `title` và `out-links`,
-đúng như slide.
+Bản ghi other:
 
-### 4.3 Quy tắc bóc cho html
+```json
+{"url": "https://hust.edu.vn/files/qd-123.pdf", "format": "other", "ext": "pdf", "content": "…"}
+```
 
-| Trường | Quy tắc gợi ý |
-|---|---|
-| `title` | Thứ tự ưu tiên: `itemprop=headline` → `og:title` → JSON-LD `headline` → `h1` gần khối nội dung → `<title>` bỏ hậu tố tên site (" - ĐH Bách khoa"). |
-| `content` | Chỉ chữ của khối nội dung chính, bỏ menu/header/footer/sidebar. Giữ xuống dòng giữa các đoạn. |
-| `intro` | `meta description` / `og:description`, hoặc đoạn đậm đầu tiên của khối. Rỗng nếu không có. |
-| `out-links` | **Mọi** `<a href>` trong trang, tính cả menu (lý do ở mục 3, dòng 6). Đổi sang url tuyệt đối theo `final_url`, bỏ `#…`. Bỏ `mailto:`, `tel:`, `javascript:`. Khử trùng theo url. **Không** lọc miền: việc đó của N8. |
-| văn bản liên kết | Đi lên phần tử khối gần nhất chứa thẻ a (`p`, `li`, `td`, `h1`–`h6`, `figcaption`). Cắt ra câu chứa thẻ a, ranh giới câu là `.`, `!`, `?`, `…`, `;` hoặc xuống dòng. Link đứng một mình (menu) thì lấy chữ của thẻ a, rồi `title`/`aria-label`, rồi `alt` của ảnh bên trong. |
+### 3.3 `GET /ping` [Đề xuất]
 
-Thẻ `<img src>` **không** vào `out-links`. Repo này từng gộp `src` vào danh sách link, và ảnh nhúng
-`/uploads/` làm danh sách phình từ 14k lên 24k dòng mà không thêm trang nào mới.
+Giống cách N5 làm trên slide: `{"status": "đang chờ"}`, hoặc `{"status": "đang xử lý", "dang_xu_ly": 2}`.
 
-### 4.4 Quy tắc cho other
+## 4. Ánh xạ từ lõi sang JSON
 
-Lấy chữ bằng Apache Tika: pdf, doc/docx, xls/xlsx, ppt/pptx. Pdf có quá ít chữ so với số trang thì
-coi là bản quét và trả lỗi "cần OCR", không gửi chuỗi rỗng sang N8. Kiểu không đọc được thì trả
-`unsupported`.
+| Khoá gửi N8 | Lấy từ | Hiện trạng [Code] | Cần sửa |
+|---|---|---|---|
+| `url` | `url` của request | `extract()` nhận url đã `Url.norm` làm gốc giải link | Gửi N8 url gốc. Dùng `Url.norm(final_url ?? url)` làm gốc giải link. |
+| `format` | request | n/a | |
+| `title` | `Extraction.title()` | Có, tối đa 500 ký tự | |
+| `content` (html) | `Extraction.text()` | Có, một dòng, tối đa 200.000 ký tự | [Cần chốt] Có cần giữ xuống dòng giữa các đoạn không. Muốn giữ thì phải sửa cách lấy chữ. |
+| `content` (other) | `DocumentText.Result.text()` | Có, giữ xuống dòng | |
+| `ext` (other) | `extensionFromUrl` / `MIME_TO_EXT` | Có, nằm trong `ApiExtract` | Chuyển vào lớp dịch vụ |
+| `intro` | `og:description`, `meta name=description` | **Chưa có** | Viết mới. `Fields.meta()` đã đọc được thẻ meta. |
+| `out-links[i][0]` | `Links.collect` → cạnh `href` | Có. Nhưng `Extraction.outgoingLinks()` **chỉ lấy cạnh trong khối**. | Lấy **mọi** cạnh `href` (cạnh nội dung + cạnh khuôn), khử trùng theo url. Lý do ở mục 4.1. |
+| `out-links[i][1]` | `Links.describeAnchor` | Chỉ có chữ trong thẻ a, rồi `title`/`aria-label`, rồi `alt` của ảnh | Lấy **câu** chứa thẻ a (mục 4.2) |
+| có thể thêm: `date`, `author`, `section` | `Extraction` | Có | [Cần chốt] N8 có nhận không |
 
-### 4.5 `GET /ping`
+### 4.1 Vì sao `out-links` phải lấy cả cạnh khuôn
 
-Làm giống N5: `{"status": "đang chờ"}` hoặc `{"status": "đang xử lý", "busy": 2}`.
+Ở bước 6 trên slide, N8 lấy url mới từ `out-links` để gửi Điều khiển. Link chuyên mục, menu và phân
+trang đều nằm ngoài khối nội dung. Nếu chỉ gửi cạnh trong khối thì các link đó không bao giờ tới
+Điều khiển, và crawl không lan ra được.
 
-## 5. Đối chiếu với `hust-search/.../extract/`
+Đây là suy luận từ luồng trên slide, tôi chưa chạy thử. [Đề xuất] Nếu N8 cần phân biệt hai loại
+link (đồ thị nội dung với đồ thị khuôn), thêm phần tử thứ ba vào mỗi cặp: `"noi_dung"` hoặc `"khuon"`.
 
-`extract/` là **phần xử lý** của Đọc nội dung: nhận HTML hoặc byte tài liệu, trả tiêu đề, nội dung,
-link. Nó **chưa phải** mô-đun Đọc nội dung theo slide, vì ba lẽ:
+Ảnh (cạnh `embed`) **không** đưa vào `out-links`. Repo này từng gộp `src` của ảnh vào danh sách link,
+và ảnh nhúng `/uploads/` làm danh sách phình từ 14k lên 24k dòng mà không thêm trang nào tải được
+(`CLAUDE.md`). Link `href` tới pdf/docx thì **giữ**, vì đó là cách tài liệu tới được N5 rồi quay lại
+N1 ở nhánh other.
 
-1. **Không có giao diện HTTP.** `extract/` là thư viện. Hiện chỉ có code trong cùng tiến trình gọi
-   nó: `web/ApiExtract.java`, `mongo/Pipeline.java`, `mongo/DocumentJob.java`, `web/ApiSearch.java`.
-   Chưa có `/parse`.
-2. **Đầu ra đi sai chỗ so với slide.** `Pipeline` lấy kết quả bóc rồi ghi thẳng vào Mongo. Theo
-   slide, N1 phải POST sang Tổng hợp (N8). Lọc url thuộc miền hust là việc của N8, ghi Mongo là
-   việc của Lưu trữ (N10).
-3. **Khử khuôn cần dữ liệu của nhiều trang.** `Extractor.extract(html, url, templateFps)` cần tập
-   vân tay khuôn của cả host. Tập này do `Pipeline.buildTemplates()` đếm trên **toàn kho**
-   (khối lặp trên hơn 30% số trang, host phải có ít nhất 20 trang) rồi lưu vào collection
-   `templates`. Một dịch vụ `/parse` chỉ nhận từng trang một thì không có kho để đếm. Có ba cách
-   (đều là gợi ý):
-   - Truyền tập rỗng. Code chạy được: `ApiSearch` đang gọi với `null`. Khi đó thuật toán bỏ lớp
-     khử khuôn, chỉ còn dọn cây và chọn khối theo mật độ chữ, nên `content` dễ dính menu và
-     footer hơn. Dính nhiều hay ít thì tôi chưa đo.
-   - N1 tự giữ bảng đếm vân tay theo host, cộng dồn mỗi lần nhận trang. Dịch vụ thành có trạng
-     thái, và mấy trang đầu của mỗi host vẫn chưa được khử khuôn.
-   - Nạp sẵn bảng `templates` dựng từ kho hiện có. Host mới thì vẫn chưa có.
+### 4.2 "Câu hoàn thiện chứa thẻ a" [Đề xuất]
 
-Các phần khác so với mục 4:
+Slide không định nghĩa thế nào là câu. Đề xuất:
 
-| Việc | Code sẵn có | Khác với đặc tả |
+1. Đi lên phần tử khối gần nhất chứa thẻ a: `p li td th dd h1–h6 figcaption blockquote`.
+2. Lấy chữ của khối đó bằng `HtmlUtil.textBs4` để cách khoảng giống phần còn lại của lõi.
+3. Cắt ra câu chứa vị trí của thẻ a. Ranh giới câu là `.`, `!`, `?`, `…` hoặc `;`.
+4. Nếu câu tìm được trùng chữ của thẻ a (link đứng một mình, như menu) thì giữ cách cũ của
+   `describeAnchor`.
+5. Cắt câu ở một độ dài tối đa, ví dụ 300 ký tự.
+
+Lưu ý: `Links.collect` chạy trước khi dọn cây, nên khi đó khối cha vẫn còn đủ chữ.
+
+## 5. Khử khuôn và chuyện trạng thái
+
+Lớp 2 cần `templateFps`, tức tập vân tay khuôn của cả host. [Code] Tập này do
+`mongo/Pipeline.buildTemplates()` đếm trên toàn kho: khối lặp trên hơn 30% số trang là khuôn, và host
+phải có ít nhất 20 trang. Kết quả lưu ở collection `templates`. `/parse` chỉ nhận từng trang một
+nên không có sẵn tập này.
+
+[Đề xuất] **Bản đầu truyền tập rỗng.** Dịch vụ không có trạng thái. Lý do:
+
+- Với `hust.edu.vn`, khối được chọn bằng selector `.bodytext`. Selector chạy sau lớp khử khuôn,
+  nhưng chọn ra cùng một phần tử dù có khử khuôn hay không, nên nội dung gần như không đổi.
+  Ngoại lệ: khối lặp nằm ngay trong `.bodytext` thì vẫn bị xoá khi có khử khuôn.
+- Subdomain mới crawl phần lớn chưa tới 20 trang, nên lớp này vốn đã không chạy với chúng
+  (`docs/THUAT-TOAN-BOC-TACH.md` mục 8, điểm 3).
+- `BlockEvaluationTest` (150 trang **tổng hợp**, không phải trang thật) đo F1 = 0,974 khi chỉ có lớp
+  3 và 0,962 khi có lớp 2+3. Tức là trên bộ mẫu này, khử khuôn không làm kết quả tốt hơn. Số này
+  không nói gì về trang thật trên hust.edu.vn.
+
+Nếu sau này cần khử khuôn, có hai hướng:
+
+- **Nạp sẵn:** đọc tệp vân tay theo host dựng từ kho hiện có lúc khởi động (biến môi trường
+  `TEMPLATES_FILE`).
+- **Cộng dồn:** N1 tự đếm vân tay theo host. Dịch vụ thành có trạng thái, và mấy trang đầu của mỗi
+  host vẫn chưa được khử khuôn.
+
+## 6. Yêu cầu phi chức năng [Đề xuất]
+
+| Mục | Đề xuất | Căn cứ |
 |---|---|---|
-| Khối nội dung, khử khuôn | `extract/ContentBlock.java`, `Template.java` | Khớp cột `content` (mục 4.3) |
-| Tiêu đề | `Fields.title()` | Thứ tự ưu tiên giống mục 4.3 |
-| Link | `Links.collect()` thu mọi `<a>` **trước** khi dọn cây | `toPublicLinks()` chỉ lấy cạnh **trong khối nội dung**. Cần thêm `navLinks` thì mới khớp mục 3, dòng 6. |
-| Văn bản liên kết | `Links.describeAnchor()` | Mới chỉ lấy chữ trong thẻ a, **chưa** lấy cả câu |
-| `intro` | không có | Phải viết mới |
-| Tài liệu | `DocumentText.extractText(byte[], ext)` (Tika, có cờ cần OCR) | Khớp mục 4.4 |
-| Chuẩn hoá url | `store/Url.java` (bản sao của `crawl_all.norm`) | Nên dùng chung với N8 (mục 3, dòng 13) |
-| Trường thừa | `Extraction` còn có `date`, `author`, `section`, `citedSource`, `html` | `/add` trên slide không có các trường này. Bỏ đi, hoặc hỏi N8 có muốn nhận không. |
-| Trang rỗng | `extract()` trả `null` khi không có cả tiêu đề lẫn chữ | Phải chọn mã lỗi cho `/parse` (mục 3, dòng 11) |
+| Cổng | 6600, đọc từ biến `PORT` | Ghép từ hình vẽ slide |
+| Đồng thời | Pool luồng cố định (ví dụ 4). Hai N5 cùng gửi vào. | Lõi không trạng thái, jsoup tạo mới mỗi lần gọi, parser Tika dùng chung [Code] |
+| Khởi động | Gọi Tika một lần lúc khởi động để dựng parser, `/ping` chỉ báo sẵn sàng sau đó | Dựng `AutoDetectParser` mất ~1 s [Code] |
+| Kích thước body | Tối đa ví dụ 50 MB, vượt thì trả 413 | Base64 làm tệp to thêm khoảng 33% |
+| Thời gian | Timeout khi gọi N8 (ví dụ 10 s), thử lại một lần | Chưa đo thời gian Tika đọc pdf lớn |
+| Cấu hình | `PORT`, `AGGREGATOR_URL` (vd. `http://n8:3300/add`), `TEMPLATES_FILE` (tuỳ chọn) | |
+| HTTP server | `com.sun.net.httpserver`, giống `web/Http.java` | Không phải thêm thư viện |
+| Đóng gói | Module Maven riêng (`hust-reader`?) chứa `extract/` + `store/Url.java`. Docker image dựng hai tầng giống `hust-search/Dockerfile`. | |
+| Nhật ký | Mỗi request một dòng: url, format, mã trả, thời gian, số link | |
 
-Muốn có mô-đun N1 thì cần thêm: một lớp HTTP nhận `/parse` rồi gọi `Extractor.extract()` hoặc
-`DocumentText.extractText()`, một chỗ quyết định cách lấy `templateFps` (mục 5, điểm 3), sửa phần
-link và văn bản liên kết như bảng trên, và một client POST kết quả sang `/add` của N8.
+Về chia sẻ code [Đề xuất]: chép `extract/` sang module mới sẽ đẻ ra hai bản phải sửa song song.
+Sẵn đã có một cặp phải giữ khớp nhau là `Url.java` ↔ `crawl_all.py`. Gọn hơn là tách `extract/` và
+`Url.java` thành module thư viện, để `hust-search` và dịch vụ mới cùng phụ thuộc vào.
+
+## 7. Kiểm thử
+
+Test sẵn có trên lõi, chạy lại được không cần sửa:
+
+- `ExtractorTest`
+- `PythonParityTest`: khớp bản Python trên kho thật
+- `BlockEvaluationTest`
+- `DocumentTextTest` và `DocumentTextGoldenTest`, với mẫu tệp trong `src/test/resources/tep/`
+- `UrlGoldenTest`
+
+Test cần thêm [Đề xuất]:
+
+- **Hợp đồng `/parse`:** mỗi mã trả ở mục 3.1 có ít nhất một ca, dùng mẫu sẵn có trong
+  `src/test/resources/` (các thư mục `html/*.test/`, `tep/co-chu.pdf`, `tep/khong-chu.pdf`).
+- **Gọi N8:** dựng một server giả nhận `/add`, kiểm tra JSON đúng mục 3.2. Kiểm tra cả lúc server giả
+  trả lỗi thì `/parse` ra 502.
+- **`out-links`:** trang có menu thì link menu phải có mặt (mục 4.1). Link tương đối giải đúng theo
+  `final_url`. Link ảnh không có mặt.
+- **Văn bản liên kết:** link giữa đoạn văn ra đúng cả câu, link menu ra chữ của thẻ a.
+
+## 8. Việc phải làm trên lõi
+
+1. Hàm mới (ví dụ `Links.outLinks`) trả mọi cạnh `href`, khử trùng theo url, kèm văn bản liên kết là
+   câu (mục 4.1, 4.2). Giữ `outgoingLinks()` như cũ để `hust-search` không đổi hành vi.
+2. Bóc `intro`.
+3. Chuyển cách chọn `ext` từ `ApiExtract` vào lõi hoặc lớp dịch vụ.
+4. Lớp dịch vụ: `/parse`, `/ping`, client gọi N8, cấu hình.
+
+## 9. Cần chốt với nhóm khác
+
+| # | Câu hỏi | Hỏi ai |
+|---|---|---|
+| 1 | Body `/parse` theo mục 3.1 (JSON, tài liệu base64) được không? Hay N5 muốn gửi body thô? | N5 |
+| 2 | N5 có gửi `final_url` (`page.url()` của Puppeteer) không? | N5 |
+| 3 | `/parse` đồng bộ (chờ N8 nhận xong) được không? N5 đặt timeout bao lâu? | N5 |
+| 4 | `out-links` là mảng cặp như mục 3.2 có được không? Có cần phần tử thứ ba `noi_dung`/`khuon` không? | N8 |
+| 5 | N8 có muốn nhận `intro`, `date`, `author`, `section` không? | N8, N10 |
+| 6 | `format` của bản ghi other là `other` kèm `ext`, hay là đuôi tệp luôn (slide Mongo ghi `docx`)? | N8, N10 |
+| 7 | N8 khử trùng url theo quy tắc nào? Có dùng chung `Url.norm` (mục 2.3), kể cả việc ép `https` không? | N8 |
+| 8 | Pdf cần OCR, trang rỗng: chỉ trả lỗi cho N5, hay cũng báo N8 để không giao lại url đó? | N5, N8 |
+| 9 | `content` có cần giữ xuống dòng giữa các đoạn không? | N8, N10 |
+| 10 | Xác nhận cổng 6600 | người vẽ slide |

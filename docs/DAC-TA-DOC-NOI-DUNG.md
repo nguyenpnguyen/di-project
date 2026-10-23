@@ -183,10 +183,30 @@ coi là bản quét và trả lỗi "cần OCR", không gửi chuỗi rỗng san
 
 Làm giống N5: `{"status": "đang chờ"}` hoặc `{"status": "đang xử lý", "busy": 2}`.
 
-## 5. Dùng lại được gì trong repo
+## 5. Đối chiếu với `hust-search/.../extract/`
 
-Phần bóc tách trong `hust-search` đã làm gần hết các việc trên. Nó đã chạy trên kho thật, nhưng
-đang nằm trong một tiến trình chung và ghi thẳng vào Mongo.
+`extract/` là **phần xử lý** của Đọc nội dung: nhận HTML hoặc byte tài liệu, trả tiêu đề, nội dung,
+link. Nó **chưa phải** mô-đun Đọc nội dung theo slide, vì ba lẽ:
+
+1. **Không có giao diện HTTP.** `extract/` là thư viện. Hiện chỉ có code trong cùng tiến trình gọi
+   nó: `web/ApiExtract.java`, `mongo/Pipeline.java`, `mongo/DocumentJob.java`, `web/ApiSearch.java`.
+   Chưa có `/parse`.
+2. **Đầu ra đi sai chỗ so với slide.** `Pipeline` lấy kết quả bóc rồi ghi thẳng vào Mongo. Theo
+   slide, N1 phải POST sang Tổng hợp (N8). Lọc url thuộc miền hust là việc của N8, ghi Mongo là
+   việc của Lưu trữ (N10).
+3. **Khử khuôn cần dữ liệu của nhiều trang.** `Extractor.extract(html, url, templateFps)` cần tập
+   vân tay khuôn của cả host. Tập này do `Pipeline.buildTemplates()` đếm trên **toàn kho**
+   (khối lặp trên hơn 30% số trang, host phải có ít nhất 20 trang) rồi lưu vào collection
+   `templates`. Một dịch vụ `/parse` chỉ nhận từng trang một thì không có kho để đếm. Có ba cách
+   (đều là gợi ý):
+   - Truyền tập rỗng. Code chạy được: `ApiSearch` đang gọi với `null`. Khi đó thuật toán bỏ lớp
+     khử khuôn, chỉ còn dọn cây và chọn khối theo mật độ chữ, nên `content` dễ dính menu và
+     footer hơn. Dính nhiều hay ít thì tôi chưa đo.
+   - N1 tự giữ bảng đếm vân tay theo host, cộng dồn mỗi lần nhận trang. Dịch vụ thành có trạng
+     thái, và mấy trang đầu của mỗi host vẫn chưa được khử khuôn.
+   - Nạp sẵn bảng `templates` dựng từ kho hiện có. Host mới thì vẫn chưa có.
+
+Các phần khác so với mục 4:
 
 | Việc | Code sẵn có | Khác với đặc tả |
 |---|---|---|
@@ -197,7 +217,9 @@ Phần bóc tách trong `hust-search` đã làm gần hết các việc trên. N
 | `intro` | không có | Phải viết mới |
 | Tài liệu | `DocumentText.extractText(byte[], ext)` (Tika, có cờ cần OCR) | Khớp mục 4.4 |
 | Chuẩn hoá url | `store/Url.java` (bản sao của `crawl_all.norm`) | Nên dùng chung với N8 (mục 3, dòng 13) |
+| Trường thừa | `Extraction` còn có `date`, `author`, `section`, `citedSource`, `html` | `/add` trên slide không có các trường này. Bỏ đi, hoặc hỏi N8 có muốn nhận không. |
+| Trang rỗng | `extract()` trả `null` khi không có cả tiêu đề lẫn chữ | Phải chọn mã lỗi cho `/parse` (mục 3, dòng 11) |
 
-Nếu tách thành dịch vụ riêng, chỉ cần thêm một lớp HTTP bọc ngoài: nhận `/parse`, gọi
-`Extractor.extract()` hoặc `DocumentText.extractText()`, đổi kết quả sang JSON ở mục 4.2 rồi POST
-sang N8.
+Muốn có mô-đun N1 thì cần thêm: một lớp HTTP nhận `/parse` rồi gọi `Extractor.extract()` hoặc
+`DocumentText.extractText()`, một chỗ quyết định cách lấy `templateFps` (mục 5, điểm 3), sửa phần
+link và văn bản liên kết như bảng trên, và một client POST kết quả sang `/add` của N8.

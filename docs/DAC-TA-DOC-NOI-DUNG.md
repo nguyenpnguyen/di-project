@@ -10,6 +10,7 @@ Mỗi điều trong tài liệu mang một nhãn cho biết nó lấy từ đâu
 - **[Code]**: hành vi hiện tại của `extract/`, đọc từ mã nguồn. Đường dẫn tính từ `hust-search/src/main/java/vn/hust/search/`.
 - **[Đề xuất]**: chưa ai quyết. Đây là gợi ý để chốt.
 - **[Cần chốt]**: phụ thuộc vào nhóm khác. Danh sách ở mục 9.
+- **[Đã chốt]**: nhóm N1 đã quyết.
 
 ---
 
@@ -39,6 +40,24 @@ tôi ghép theo vị trí trên hình vẽ, nên còn phải xác nhận.
 | Lọc url trong miền hust, loại url đã có | N8 |
 | Ghi Mongo | N10 |
 | Chỉ mục Lucene | `hust-search`, không thuộc thiết kế này |
+
+### 1.1 Chia việc về link giữa N1 và N8 [Đã chốt, theo Slide]
+
+Chữ "tổng hợp link" dễ bị hiểu thành một việc, thật ra là hai việc, mỗi bên làm một:
+
+| | **N1, Đọc nội dung: bóc link** | **N8, Tổng hợp: tổng hợp link** |
+|---|---|---|
+| Đầu vào | HTML của **cả trang** | `out-links` do N1 gửi |
+| Làm gì | Tìm mọi `<a href>`, đổi sang url tuyệt đối theo `final_url`, chuẩn hoá (mục 2.3), lấy văn bản liên kết (mục 4.2), khử trùng **trong một trang** | Lọc url thuộc miền hust, loại url đã có (khử trùng **giữa các trang**), gửi url mới cho Điều khiển, gửi cạnh đồ thị sang Lưu trữ |
+| Không làm | Lọc theo miền, quyết định url nào được crawl tiếp | Parse HTML |
+| Slide | "Đầu ra … liên kết đi ra cùng với văn bản liên kết" | "Lọc url - lấy trong miền hust. Loại url đã có", `/add` nhận `out-links` |
+
+Lý do không để N8 tự bóc link từ `content`:
+
+- `content` là chữ thuần, thẻ `<a href>` đã mất (mục 2.1, bước 5).
+- HTML rút gọn của lõi (`Extraction.html()`) chỉ có khối nội dung, không có menu và phân trang
+  (mục 4.1), và bị cắt ở 40.000 ký tự.
+- Muốn N8 bóc thì N1 phải chuyển nguyên HTML thô sang, và N8 phải parse HTML thêm một lần.
 
 ## 2. Lõi: `extract/` làm gì [Code]
 
@@ -203,6 +222,8 @@ Giống cách N5 làm trên slide: `{"status": "đang chờ"}`, hoặc `{"status
 
 ### 4.1 Vì sao `out-links` phải lấy cả cạnh khuôn
 
+Mục này nối tiếp cách chia việc ở mục 1.1: N1 gửi **mọi** link của trang, N8 chọn link nào dùng.
+
 Ở bước 6 trên slide, N8 lấy url mới từ `out-links` để gửi Điều khiển. Link chuyên mục, menu và phân
 trang đều nằm ngoài khối nội dung. Nếu chỉ gửi cạnh trong khối thì các link đó không bao giờ tới
 Điều khiển, và crawl không lan ra được.
@@ -306,7 +327,7 @@ Test cần thêm [Đề xuất]:
 | 1 | Body `/parse` theo mục 3.1 (JSON, tài liệu base64) được không? Hay N5 muốn gửi body thô? | N5 |
 | 2 | N5 có gửi `final_url` (`page.url()` của Puppeteer) không? | N5 |
 | 3 | `/parse` đồng bộ (chờ N8 nhận xong) được không? N5 đặt timeout bao lâu? | N5 |
-| 4 | `out-links` là mảng cặp như mục 3.2 có được không? Có cần phần tử thứ ba `noi_dung`/`khuon` không? | N8 |
+| 4 | N8 xác nhận cách chia ở mục 1.1: N1 gửi mọi link chưa lọc, N8 tự lọc miền và khử trùng. `out-links` là mảng cặp như mục 3.2 có được không? Có cần phần tử thứ ba `noi_dung`/`khuon` không? | N8 |
 | 5 | N8 có muốn nhận `intro`, `date`, `author`, `section` không? | N8, N10 |
 | 6 | `format` của bản ghi other là `other` kèm `ext`, hay là đuôi tệp luôn (slide Mongo ghi `docx`)? | N8, N10 |
 | 7 | N8 khử trùng url theo quy tắc nào? Có dùng chung `Url.norm` (mục 2.3), kể cả việc ép `https` không? | N8 |

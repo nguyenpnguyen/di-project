@@ -111,6 +111,14 @@ Link trỏ về chính trang đang bóc bị bỏ. `Url.java` là bản sao củ
 
 Slide chỉ ghi `post: http://ip:cổng/parse` và "http content - dữ liệu được tải về". Phần dưới đây là đề xuất.
 
+Request chỉ chở **tài liệu thô** do N5 tải về. `title`, `content` và `out-links` là **đầu ra**: N1 tự
+bóc chúng từ `content` của request rồi gửi sang N8 (mục 3.2). Vì vậy chúng không có mặt trong request.
+
+```
+N5 ──POST /parse {url, content: "<html>…"}──▶ N1 ──POST /add {url, title, content, out-links}──▶ N8
+N5 ◀────────────── 200 {status, n_out_links} ── N1
+```
+
 **Request**, `Content-Type: application/json`:
 
 ```json
